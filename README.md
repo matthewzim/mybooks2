@@ -190,6 +190,26 @@ ALTER TABLE public.bookshelves ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.books ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
 
+-- Trigger to auto-create user profile when auth user is created
+-- This bypasses RLS using SECURITY DEFINER
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.users (id, email, name)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'name', '')
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
 -- RLS Policies
 -- Users can insert/read/update their own profile
 CREATE POLICY "Users can insert own profile" ON public.users

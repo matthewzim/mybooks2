@@ -76,27 +76,37 @@ class AuthService {
       if (authError) throw authError;
       if (!authData.user) throw new Error('User creation failed');
 
-      // Create the user profile in the users table
-      // Note: You could also use a Supabase trigger to auto-create profiles
-      const { data: profile, error: profileError } = await supabase
-        .from(TABLES.USERS)
-        .insert({
-          id: authData.user.id,
-          email: credentials.email,
-          name: credentials.name,
-        })
-        .select()
-        .single();
+      // Profile is created automatically by database trigger (handle_new_user)
+      // Wait a moment for the trigger to complete, then fetch the profile
+      // The trigger runs with SECURITY DEFINER to bypass RLS
+      let profile = null;
+      let retries = 3;
 
-      if (profileError) {
-        // If profile creation fails, the user still exists in auth
-        // You may want to handle this case differently
-        console.error('Profile creation failed:', profileError);
+      while (retries > 0 && !profile) {
+        const { data: fetchedProfile, error: profileError } = await supabase
+          .from(TABLES.USERS)
+          .select('*')
+          .eq('id', authData.user.id)
+          .single();
+
+        if (fetchedProfile) {
+          profile = fetchedProfile;
+        } else if (retries === 1) {
+          console.error('Failed to fetch profile after trigger:', profileError);
+        } else {
+          // Wait briefly for trigger to complete
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        retries--;
       }
 
       return {
         data: {
-          user: profile as User,
+          user: (profile || {
+            id: authData.user.id,
+            email: credentials.email,
+            name: credentials.name
+          }) as User,
           session: authData.session as Session,
         },
         error: null,
