@@ -191,7 +191,9 @@ ALTER TABLE public.books ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
--- Users can read/update their own profile
+-- Users can insert/read/update their own profile
+CREATE POLICY "Users can insert own profile" ON public.users
+  FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users can read own profile" ON public.users
   FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Users can update own profile" ON public.users
