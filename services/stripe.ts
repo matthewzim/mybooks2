@@ -51,7 +51,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     interval: 'month',
     features: [
       'Unlimited bookshelves',
-      'Community access',
+      'Home Screen Widget',
       'Priority book scanning',
       'No ads',
     ],
@@ -64,7 +64,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     interval: 'year',
     features: [
       'Unlimited bookshelves',
-      'Community access',
+      'Home Screen Widget',
       'Priority book scanning',
       'No ads',
       '2 months free',
@@ -77,8 +77,9 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
  */
 export const FREE_TIER_LIMITS = {
   MAX_BOOKSHELVES: 3,
-  MAX_BOOKS_PER_SHELF: 20,
-  CAN_ACCESS_COMMUNITY: false,
+  MAX_BOOKS_PER_SHELF: 50,
+  CAN_ACCESS_COMMUNITY: true,
+  CAN_USE_WIDGET: false,
 };
 
 /**

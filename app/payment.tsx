@@ -216,8 +216,8 @@ export default function PaymentScreen() {
                   text={`${FREE_TIER_LIMITS.MAX_BOOKS_PER_SHELF} Books/Shelf`}
                   included
                 />
-                <FeatureRow text="Community Access" included={false} />
-                <FeatureRow text="Priority Support" included={false} />
+                <FeatureRow text="Community Access" included />
+                <FeatureRow text="Home Screen Widget" included={false} />
               </View>
 
               {/* Premium tier */}
@@ -228,7 +228,7 @@ export default function PaymentScreen() {
                 <FeatureRow text="Unlimited" included premium />
                 <FeatureRow text="Unlimited" included premium />
                 <FeatureRow text="Full Access" included premium />
-                <FeatureRow text="Priority Support" included premium />
+                <FeatureRow text="Widget Access" included premium />
               </View>
             </View>
           </View>
