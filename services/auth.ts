@@ -12,7 +12,7 @@
  * const { data, error } = await authService.signIn(email, password);
  */
 
-import { supabase, TABLES, handleSupabaseError } from './supabase';
+import { supabase, TABLES, handleSupabaseError, isSupabaseConfigured } from './supabase';
 import type {
   User,
   LoginCredentials,
@@ -28,6 +28,23 @@ import type { Session, AuthError } from '@supabase/supabase-js';
  */
 class AuthService {
   /**
+   * Check if Supabase is properly configured
+   * Returns an error response if not configured
+   */
+  private checkConfiguration<T>(): ApiResponse<T> | null {
+    if (!isSupabaseConfigured) {
+      return {
+        data: null,
+        error: {
+          message: 'Supabase is not configured. Please add your credentials to the .env file.',
+          code: 'SUPABASE_NOT_CONFIGURED',
+        },
+      };
+    }
+    return null;
+  }
+
+  /**
    * Sign up a new user with email and password
    *
    * Flow:
@@ -41,6 +58,9 @@ class AuthService {
   async signUp(
     credentials: RegisterCredentials
   ): Promise<ApiResponse<{ user: User; session: Session }>> {
+    const configError = this.checkConfiguration<{ user: User; session: Session }>();
+    if (configError) return configError;
+
     try {
       // Create the auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -101,6 +121,9 @@ class AuthService {
   async signIn(
     credentials: LoginCredentials
   ): Promise<ApiResponse<{ user: User; session: Session }>> {
+    const configError = this.checkConfiguration<{ user: User; session: Session }>();
+    if (configError) return configError;
+
     try {
       // Authenticate the user
       const { data: authData, error: authError } =
@@ -146,6 +169,11 @@ class AuthService {
    * Clears local session and invalidates refresh token
    */
   async signOut(): Promise<ApiResponse<null>> {
+    // If not configured, just return success (nothing to sign out from)
+    if (!isSupabaseConfigured) {
+      return { data: null, error: null };
+    }
+
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
@@ -161,9 +189,14 @@ class AuthService {
 
   /**
    * Get the current session
-   * Returns null if no active session
+   * Returns null if no active session or if Supabase is not configured
    */
   async getSession(): Promise<ApiResponse<Session | null>> {
+    // Return null session if not configured (don't throw error)
+    if (!isSupabaseConfigured) {
+      return { data: null, error: null };
+    }
+
     try {
       const { data, error } = await supabase.auth.getSession();
       if (error) throw error;
@@ -182,6 +215,11 @@ class AuthService {
    * Fetches from the users table, not just auth
    */
   async getCurrentUser(): Promise<ApiResponse<User | null>> {
+    // Return null user if not configured (don't throw error)
+    if (!isSupabaseConfigured) {
+      return { data: null, error: null };
+    }
+
     try {
       const { data: session } = await supabase.auth.getSession();
       if (!session.session?.user) {
@@ -211,6 +249,9 @@ class AuthService {
    * @param updates - Fields to update (name, avatar_url, etc.)
    */
   async updateProfile(updates: UpdateUserInput): Promise<ApiResponse<User>> {
+    const configError = this.checkConfiguration<User>();
+    if (configError) return configError;
+
     try {
       const { data: session } = await supabase.auth.getSession();
       if (!session.session?.user) {
@@ -244,6 +285,9 @@ class AuthService {
    * @param email - User's email address
    */
   async resetPassword(email: string): Promise<ApiResponse<null>> {
+    const configError = this.checkConfiguration<null>();
+    if (configError) return configError;
+
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: 'virtuallibrary://reset-password',
@@ -267,6 +311,9 @@ class AuthService {
    * @param newPassword - New password
    */
   async updatePassword(newPassword: string): Promise<ApiResponse<null>> {
+    const configError = this.checkConfiguration<null>();
+    if (configError) return configError;
+
     try {
       const { error } = await supabase.auth.updateUser({
         password: newPassword,
