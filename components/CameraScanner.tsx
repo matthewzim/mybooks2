@@ -7,6 +7,7 @@
  * Features:
  * - Camera preview with capture button
  * - Gallery picker option
+ * - 4-corner crop adjustment for spine selection
  * - Image preview before upload
  * - Loading state during upload
  */
@@ -30,6 +31,7 @@ import {
   BorderRadius,
   Typography,
 } from '@/constants/theme';
+import { SpineCropper } from './SpineCropper';
 
 interface CameraScannerProps {
   onCapture: (imageUri: string) => Promise<void>;
@@ -44,7 +46,8 @@ export function CameraScanner({
 }: CameraScannerProps) {
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [rawCapturedImage, setRawCapturedImage] = useState<string | null>(null);
+  const [croppedImage, setCroppedImage] = useState<string | null>(null);
   const cameraRef = useRef<CameraView>(null);
 
   // Request permissions on mount
@@ -62,12 +65,13 @@ export function CameraScanner({
 
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
+        quality: 0.9,
         skipProcessing: false,
       });
 
       if (photo?.uri) {
-        setCapturedImage(photo.uri);
+        // Show cropper first
+        setRawCapturedImage(photo.uri);
       }
     } catch (error) {
       console.error('Failed to take picture:', error);
@@ -82,13 +86,13 @@ export function CameraScanner({
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.8,
-        allowsEditing: true,
-        aspect: [1, 3], // Book spine aspect ratio
+        quality: 0.9,
+        allowsEditing: false, // We use our own cropper
       });
 
       if (!result.canceled && result.assets[0]) {
-        setCapturedImage(result.assets[0].uri);
+        // Show cropper first
+        setRawCapturedImage(result.assets[0].uri);
       }
     } catch (error) {
       console.error('Failed to pick image:', error);
@@ -97,18 +101,40 @@ export function CameraScanner({
   };
 
   /**
-   * Confirm and upload the captured image
+   * Handle crop completion
    */
-  const confirmCapture = async () => {
-    if (!capturedImage) return;
-    await onCapture(capturedImage);
+  const handleCropComplete = (croppedUri: string) => {
+    setCroppedImage(croppedUri);
   };
 
   /**
-   * Retake/reselect image
+   * Handle crop cancel - go back to camera
+   */
+  const handleCropCancel = () => {
+    setRawCapturedImage(null);
+  };
+
+  /**
+   * Confirm and upload the cropped image
+   */
+  const confirmCapture = async () => {
+    if (!croppedImage) return;
+    await onCapture(croppedImage);
+  };
+
+  /**
+   * Retake/reselect image - go back to cropper
    */
   const retake = () => {
-    setCapturedImage(null);
+    setCroppedImage(null);
+  };
+
+  /**
+   * Start over - go back to camera
+   */
+  const startOver = () => {
+    setRawCapturedImage(null);
+    setCroppedImage(null);
   };
 
   /**
@@ -150,13 +176,24 @@ export function CameraScanner({
     );
   }
 
-  // Image preview mode
-  if (capturedImage) {
+  // Cropping mode - show spine cropper
+  if (rawCapturedImage && !croppedImage) {
+    return (
+      <SpineCropper
+        imageUri={rawCapturedImage}
+        onCropComplete={handleCropComplete}
+        onCancel={handleCropCancel}
+      />
+    );
+  }
+
+  // Image preview mode - show cropped image for confirmation
+  if (croppedImage) {
     return (
       <View style={styles.container}>
         <View style={styles.previewContainer}>
           <Image
-            source={{ uri: capturedImage }}
+            source={{ uri: croppedImage }}
             style={styles.previewImage}
             contentFit="contain"
           />
@@ -172,8 +209,8 @@ export function CameraScanner({
                 style={[styles.previewButton, styles.retakeButton]}
                 onPress={retake}
               >
-                <Ionicons name="refresh" size={24} color={Colors.text} />
-                <Text style={styles.previewButtonText}>Retake</Text>
+                <Ionicons name="crop" size={24} color={Colors.text} />
+                <Text style={styles.previewButtonText}>Adjust Crop</Text>
               </Pressable>
 
               <Pressable
@@ -189,9 +226,9 @@ export function CameraScanner({
           )}
         </View>
 
-        {/* Cancel button */}
-        <Pressable style={styles.cancelButton} onPress={onCancel}>
-          <Text style={styles.cancelButtonText}>Cancel</Text>
+        {/* Start over button */}
+        <Pressable style={styles.cancelButton} onPress={startOver}>
+          <Text style={styles.cancelButtonText}>Start Over</Text>
         </Pressable>
       </View>
     );

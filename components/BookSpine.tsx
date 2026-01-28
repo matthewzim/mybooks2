@@ -49,10 +49,12 @@ export function BookSpine({
   width = BookSpineConstants.width,
   height = BookSpineConstants.height,
 }: BookSpineProps) {
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
 
-  const hasImage = book.image_url && !hasError;
+  // Check if we have a valid image URL
+  const hasValidUrl = Boolean(book.image_url && book.image_url.startsWith('http'));
+  const hasImage = hasValidUrl && !hasError;
   const backgroundColor = getBookColor(book.title);
 
   return (
@@ -74,9 +76,11 @@ export function BookSpine({
             style={styles.image}
             contentFit="cover"
             transition={200}
+            cachePolicy="memory-disk"
             onLoadStart={() => setIsLoading(true)}
             onLoadEnd={() => setIsLoading(false)}
-            onError={() => {
+            onError={(error) => {
+              console.warn('BookSpine image load error:', book.title, error);
               setHasError(true);
               setIsLoading(false);
             }}
