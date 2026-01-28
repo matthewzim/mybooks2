@@ -31,6 +31,7 @@ import {
   Typography,
   Shadows,
 } from '@/constants/theme';
+import { FREE_TIER_LIMITS } from '@/services/stripe';
 
 export default function SettingsScreen() {
   const { user, signOut, updateProfile } = useAuth();
@@ -177,7 +178,7 @@ export default function SettingsScreen() {
                   <Text style={styles.premiumDescription}>
                     {user?.is_premium
                       ? 'Thank you for your support!'
-                      : 'Unlock unlimited bookshelves and community access'}
+                      : 'Unlock unlimited bookshelves and home screen widget'}
                   </Text>
                 </View>
               </View>
@@ -221,13 +222,33 @@ export default function SettingsScreen() {
             <SettingsRow
               icon="apps-outline"
               title="Home Screen Widget"
-              subtitle="Display a bookshelf on your home screen"
+              subtitle={
+                user?.is_premium || FREE_TIER_LIMITS.CAN_USE_WIDGET
+                  ? 'Display a bookshelf on your home screen'
+                  : 'Premium feature - Upgrade to unlock'
+              }
               onPress={() => {
-                Alert.alert(
-                  'Widget Setup',
-                  'To add the widget:\n\n1. Long press on your home screen\n2. Tap the + button\n3. Search for "Virtual Library"\n4. Select the widget size\n5. Choose a bookshelf to display'
-                );
+                if (user?.is_premium || FREE_TIER_LIMITS.CAN_USE_WIDGET) {
+                  Alert.alert(
+                    'Widget Setup',
+                    'To add the widget:\n\n1. Long press on your home screen\n2. Tap the + button\n3. Search for "Virtual Library"\n4. Select the widget size\n5. Choose a bookshelf to display'
+                  );
+                } else {
+                  Alert.alert(
+                    'Premium Feature',
+                    'Home Screen Widget is a premium feature. Upgrade to Premium to display your bookshelf on your home screen.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Upgrade', onPress: () => router.push('/payment') },
+                    ]
+                  );
+                }
               }}
+              trailing={
+                !(user?.is_premium || FREE_TIER_LIMITS.CAN_USE_WIDGET) ? (
+                  <Ionicons name="lock-closed" size={18} color={Colors.textSecondary} />
+                ) : undefined
+              }
             />
           </View>
         </View>
