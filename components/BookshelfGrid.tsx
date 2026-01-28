@@ -52,9 +52,7 @@ export function BookshelfGrid({
 
   // Calculate book dimensions based on screen width
   const availableWidth = screenWidth - Spacing.md * 2;
-  const bookWidth = Math.floor(
-    (availableWidth - (BOOKS_PER_ROW - 1) * Spacing.sm) / BOOKS_PER_ROW
-  );
+  const bookWidth = Math.floor(availableWidth / BOOKS_PER_ROW);
   const bookHeight = Math.min(
     Math.floor(bookWidth * 3.6), // Aspect ratio for book spine
     BookSpineConstants.maxHeight
@@ -206,7 +204,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'flex-start',
-    gap: Spacing.sm,
     paddingHorizontal: Spacing.sm,
     zIndex: 1,
   },

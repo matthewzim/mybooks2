@@ -235,7 +235,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     height: 60,
     paddingHorizontal: Spacing.xs,
-    gap: Spacing.xs,
   },
   shelfSurface: {
     height: 8,
