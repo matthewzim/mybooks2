@@ -22,6 +22,7 @@ import React, {
   useMemo,
 } from 'react';
 import { authService } from '@/services/auth';
+import { isSupabaseConfigured } from '@/services/supabase';
 import type {
   User,
   AuthState,
@@ -35,6 +36,8 @@ import type {
  * Auth context type definition
  */
 interface AuthContextType extends AuthState {
+  // Configuration status
+  isConfigured: boolean;
   // Auth methods
   signIn: (credentials: LoginCredentials) => Promise<ApiResponse<{ user: User }>>;
   signUp: (credentials: RegisterCredentials) => Promise<ApiResponse<{ user: User }>>;
@@ -66,6 +69,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * Check for existing session and restore user data
    */
   useEffect(() => {
+    // Skip auth initialization if Supabase is not configured
+    if (!isSupabaseConfigured) {
+      console.warn('Supabase is not configured. Skipping auth initialization.');
+      setIsLoading(false);
+      return;
+    }
+
     initializeAuth();
 
     // Subscribe to auth state changes
@@ -73,18 +83,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (event, newSession) => {
         console.log('Auth state changed:', event);
 
-        if (event === 'SIGNED_IN' && newSession) {
-          // User signed in - fetch profile
-          const { data: profile } = await authService.getCurrentUser();
-          setUser(profile);
-          setSession(newSession as AuthState['session']);
-        } else if (event === 'SIGNED_OUT') {
-          // User signed out - clear state
+        try {
+          if (event === 'SIGNED_IN' && newSession) {
+            // User signed in - fetch profile
+            const { data: profile } = await authService.getCurrentUser();
+            setUser(profile);
+            setSession(newSession as AuthState['session']);
+          } else if (event === 'SIGNED_OUT') {
+            // User signed out - clear state
+            setUser(null);
+            setSession(null);
+          } else if (event === 'TOKEN_REFRESHED' && newSession) {
+            // Token refreshed - update session
+            setSession(newSession as AuthState['session']);
+          } else if (event === 'INITIAL_SESSION') {
+            // Initial session from storage - handled by initializeAuth
+            // No additional action needed here
+          }
+        } catch (error) {
+          console.error('Error handling auth state change:', error);
+          // Clear auth state on error to prevent stuck loading states
           setUser(null);
           setSession(null);
-        } else if (event === 'TOKEN_REFRESHED' && newSession) {
-          // Token refreshed - update session
-          setSession(newSession as AuthState['session']);
         }
       }
     );
@@ -229,6 +249,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       isLoading,
       isAuthenticated: !!user && !!session,
+      isConfigured: isSupabaseConfigured,
       signIn,
       signUp,
       signOut,
