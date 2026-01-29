@@ -26,9 +26,10 @@ import { useBookshelves } from '@/hooks/useBookshelves';
 import { useBooks } from '@/hooks/useBooks';
 import { EditableBookshelfGrid } from '@/components/EditableBookshelfGrid';
 import { BookDetailModal } from '@/components/BookDetailModal';
+import { BookshelfEditModal } from '@/components/BookshelfEditModal';
 import { LoadingView, EmptyState } from '@/components/ui';
-import { Colors, Spacing, Typography } from '@/constants/theme';
-import type { Book, Bookshelf } from '@/types';
+import { Colors, Spacing, Typography, BorderRadius } from '@/constants/theme';
+import type { Book, Bookshelf, UpdateBookshelfInput } from '@/types';
 
 export default function BookshelfDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -39,6 +40,7 @@ export default function BookshelfDetailScreen() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [isBookModalVisible, setIsBookModalVisible] = useState(false);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
 
   /**
    * Fetch bookshelf data
@@ -117,31 +119,33 @@ export default function BookshelfDetailScreen() {
   };
 
   /**
-   * Show edit bookshelf options
+   * Open edit bookshelf modal
    */
   const handleEditBookshelf = () => {
-    Alert.prompt(
-      'Rename Bookshelf',
-      'Enter a new name for this bookshelf',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Save',
-          onPress: async (newName?: string) => {
-            if (newName && newName.trim() && id) {
-              const result = await updateBookshelf(id, { name: newName.trim() });
-              if (result) {
-                setBookshelf((prev) =>
-                  prev ? { ...prev, name: newName.trim() } : null
-                );
-              }
+    setIsEditModalVisible(true);
+  };
+
+  /**
+   * Handle bookshelf update from edit modal
+   */
+  const handleSaveBookshelf = async (updates: UpdateBookshelfInput): Promise<boolean> => {
+    if (!id) return false;
+
+    const result = await updateBookshelf(id, updates);
+    if (result) {
+      setBookshelf((prev) =>
+        prev
+          ? {
+              ...prev,
+              name: updates.name ?? prev.name,
+              description: updates.description ?? prev.description,
+              is_public: updates.is_public ?? prev.is_public,
             }
-          },
-        },
-      ],
-      'plain-text',
-      bookshelf?.name
-    );
+          : null
+      );
+      return true;
+    }
+    return false;
   };
 
   /**
@@ -240,11 +244,28 @@ export default function BookshelfDetailScreen() {
               </Text>
             </View>
           ) : (
-            bookshelf.description && (
-              <Text style={styles.description} numberOfLines={2}>
-                {bookshelf.description}
-              </Text>
-            )
+            <>
+              <View style={styles.privacyBadge}>
+                <Ionicons
+                  name={bookshelf.is_public ? 'globe-outline' : 'lock-closed-outline'}
+                  size={14}
+                  color={bookshelf.is_public ? Colors.success : Colors.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.privacyBadgeText,
+                    bookshelf.is_public && styles.privacyBadgeTextPublic,
+                  ]}
+                >
+                  {bookshelf.is_public ? 'Public' : 'Private'}
+                </Text>
+              </View>
+              {bookshelf.description && (
+                <Text style={styles.description} numberOfLines={2}>
+                  {bookshelf.description}
+                </Text>
+              )}
+            </>
           )}
         </View>
 
@@ -266,6 +287,14 @@ export default function BookshelfDetailScreen() {
           onClose={handleCloseBookModal}
           onBookUpdated={handleBookUpdated}
           onBookDeleted={handleBookDeleted}
+        />
+
+        {/* Bookshelf Edit Modal */}
+        <BookshelfEditModal
+          visible={isEditModalVisible}
+          bookshelf={bookshelf}
+          onClose={() => setIsEditModalVisible(false)}
+          onSave={handleSaveBookshelf}
         />
       </SafeAreaView>
     </>
@@ -315,6 +344,23 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.md,
     color: Colors.textSecondary,
     fontStyle: 'italic',
+  },
+  privacyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.backgroundDark,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+    marginRight: Spacing.sm,
+  },
+  privacyBadgeText: {
+    fontSize: Typography.sizes.sm,
+    color: Colors.textSecondary,
+    marginLeft: 4,
+  },
+  privacyBadgeTextPublic: {
+    color: Colors.success,
   },
   editModeIndicator: {
     flex: 1,
