@@ -44,6 +44,17 @@ export default function TabsLayout() {
         }}
       />
 
+      {/* Explore Tab - Public Bookshelves */}
+      <Tabs.Screen
+        name="explore"
+        options={{
+          title: 'Explore',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="compass" size={size} color={color} />
+          ),
+        }}
+      />
+
       {/* Community Tab */}
       <Tabs.Screen
         name="community"

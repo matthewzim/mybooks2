@@ -18,7 +18,6 @@ import type {
   CreateBookshelfInput,
   UpdateBookshelfInput,
   ApiResponse,
-  BOOKSHELF_COLORS,
 } from '@/types';
 
 /**
@@ -304,6 +303,82 @@ class BookshelvesService {
       if (error) throw error;
 
       return { data: count || 0, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: { message: handleSupabaseError(error) },
+      };
+    }
+  }
+
+  /**
+   * Get public bookshelves from other users for the Explore page
+   * Returns bookshelves with their first 5 books (top row preview)
+   *
+   * @param page - Page number for pagination (0-indexed)
+   * @param pageSize - Number of items per page
+   * @returns Paginated list of public bookshelves with owner info and books
+   */
+  async getPublicBookshelves(
+    page: number = 0,
+    pageSize: number = 10
+  ): Promise<
+    ApiResponse<{
+      data: (Bookshelf & { books: Book[]; owner_name: string | null })[];
+      hasMore: boolean;
+      page: number;
+      pageSize: number;
+    }>
+  > {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session?.user) {
+        throw new Error('Not authenticated');
+      }
+
+      const currentUserId = session.session.user.id;
+      const offset = page * pageSize;
+
+      // Fetch public bookshelves from other users with their books and owner info
+      const { data, error, count } = await supabase
+        .from(TABLES.BOOKSHELVES)
+        .select(
+          `
+          *,
+          books:books(*),
+          users:user_id(name)
+        `,
+          { count: 'exact' }
+        )
+        .eq('is_public', true)
+        .neq('user_id', currentUserId)
+        .order('updated_at', { ascending: false })
+        .range(offset, offset + pageSize - 1);
+
+      if (error) throw error;
+
+      // Transform the data to include owner_name and limit books to first 5
+      const transformedData = (data || []).map((shelf: any) => ({
+        ...shelf,
+        owner_name: shelf.users?.name || 'Anonymous',
+        books: (shelf.books || [])
+          .sort((a: Book, b: Book) => a.position - b.position)
+          .slice(0, 5), // Only first 5 books for top row preview
+        users: undefined, // Remove the users object from the response
+      }));
+
+      const totalCount = count || 0;
+      const hasMore = offset + pageSize < totalCount;
+
+      return {
+        data: {
+          data: transformedData,
+          hasMore,
+          page,
+          pageSize,
+        },
+        error: null,
+      };
     } catch (error) {
       return {
         data: null,
