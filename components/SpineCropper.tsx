@@ -12,7 +12,7 @@
  * - Applies crop with expo-image-manipulator
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -81,6 +81,10 @@ export function SpineCropper({
   const [activeCorner, setActiveCorner] = useState<number | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
 
+  // Ref to track current corners for synchronous access in gesture handlers
+  const cornersRef = useRef<Point[]>(corners);
+  cornersRef.current = corners;
+
   /**
    * Initialize crop region when image loads
    * Defaults to a centered vertical rectangle (book spine shape)
@@ -132,11 +136,9 @@ export function SpineCropper({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        // Store the initial corner position when drag starts
-        setCorners((prev) => {
-          initialCornerPosition = { ...prev[cornerIndex] };
-          return prev;
-        });
+        // Store the initial corner position synchronously when drag starts
+        // Using ref ensures we get the current value without async state callback
+        initialCornerPosition = { ...cornersRef.current[cornerIndex] };
         setActiveCorner(cornerIndex);
       },
       onPanResponderMove: (
