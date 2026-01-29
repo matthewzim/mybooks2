@@ -5,8 +5,9 @@
  * Supports drag-and-drop reordering and rotation to stack books flat.
  *
  * Features:
- * - Drag gesture handling with visual feedback
- * - Long-press to show rotation option
+ * - Drag gesture handling with visual feedback (requires 10px movement to activate)
+ * - Long-press (500ms) to toggle rotation/stack state
+ * - Rotate button for quick stack toggle
  * - Animated position updates
  * - Stacked (horizontal) display mode
  */
@@ -98,6 +99,7 @@ export function DraggableBookSpine({
 
   const dragGesture = Gesture.Pan()
     .enabled(isEditing)
+    .minDistance(10)
     .onStart(() => {
       isDragging.value = true;
       scale.value = withSpring(1.1);
