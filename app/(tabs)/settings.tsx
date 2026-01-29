@@ -142,6 +142,7 @@ export default function SettingsScreen() {
                   value={name}
                   onChangeText={setName}
                   placeholder="Enter your name"
+                  colors={colors}
                 />
                 <View style={styles.editButtons}>
                   <Button
@@ -152,12 +153,14 @@ export default function SettingsScreen() {
                       setIsEditing(false);
                     }}
                     size="sm"
+                    colors={colors}
                   />
                   <Button
                     title="Save"
                     onPress={handleSaveProfile}
                     loading={isLoading}
                     size="sm"
+                    colors={colors}
                   />
                 </View>
               </View>

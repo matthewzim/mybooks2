@@ -60,13 +60,13 @@ export interface ThemeColors {
 }
 
 /**
- * Light Mode Theme - White/light gray shades
+ * Light Mode Theme - Clean white with slate accents
  */
 export const LightTheme: ThemeColors = {
-  // Primary colors
-  primary: '#2563eb',
-  primaryLight: '#3b82f6',
-  primaryDark: '#1d4ed8',
+  // Primary colors (slate gray)
+  primary: '#475569',
+  primaryLight: '#64748b',
+  primaryDark: '#334155',
 
   // Secondary colors
   secondary: '#64748b',
@@ -97,7 +97,7 @@ export const LightTheme: ThemeColors = {
   success: '#22c55e',
   warning: '#f59e0b',
   error: '#ef4444',
-  info: '#3b82f6',
+  info: '#64748b',
 
   // Border colors
   border: '#e2e8f0',
@@ -112,13 +112,13 @@ export const LightTheme: ThemeColors = {
 };
 
 /**
- * Dark Mode Theme - Black/dark shades
+ * Dark Mode Theme - Deep dark with light gray accents
  */
 export const DarkTheme: ThemeColors = {
-  // Primary colors
-  primary: '#3b82f6',
-  primaryLight: '#60a5fa',
-  primaryDark: '#2563eb',
+  // Primary colors (light gray for dark mode)
+  primary: '#94a3b8',
+  primaryLight: '#cbd5e1',
+  primaryDark: '#64748b',
 
   // Secondary colors
   secondary: '#64748b',
@@ -149,7 +149,7 @@ export const DarkTheme: ThemeColors = {
   success: '#22c55e',
   warning: '#f59e0b',
   error: '#ef4444',
-  info: '#3b82f6',
+  info: '#94a3b8',
 
   // Border colors
   border: '#334155',

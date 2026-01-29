@@ -2,6 +2,7 @@
  * Input Component
  *
  * Reusable text input component with label, error state, and icons.
+ * Supports theme-aware colors via the colors prop.
  */
 
 import React, { useState } from 'react';
@@ -15,7 +16,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, BorderRadius, Typography } from '@/constants/theme';
+import { Colors, Spacing, BorderRadius, Typography, ThemeColors } from '@/constants/theme';
 
 interface InputProps extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -25,6 +26,7 @@ interface InputProps extends Omit<TextInputProps, 'style'> {
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightIconPress?: () => void;
   containerStyle?: ViewStyle;
+  colors?: ThemeColors;
 }
 
 export function Input({
@@ -36,30 +38,33 @@ export function Input({
   onRightIconPress,
   containerStyle,
   secureTextEntry,
+  colors,
   ...props
 }: InputProps) {
   const [isFocused, setIsFocused] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const themeColors = colors || Colors;
 
   const showPasswordToggle = secureTextEntry && !rightIcon;
   const actualSecureTextEntry = secureTextEntry && !isPasswordVisible;
 
   return (
     <View style={[styles.container, containerStyle]}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && <Text style={[styles.label, { color: themeColors.text }]}>{label}</Text>}
 
       <View
         style={[
           styles.inputContainer,
-          isFocused && styles.inputFocused,
-          error && styles.inputError,
+          { backgroundColor: themeColors.backgroundDark, borderColor: themeColors.border },
+          isFocused && { borderColor: themeColors.primary },
+          error && { borderColor: themeColors.error },
         ]}
       >
         {leftIcon && (
           <Ionicons
             name={leftIcon}
             size={20}
-            color={error ? Colors.error : Colors.textSecondary}
+            color={error ? themeColors.error : themeColors.textSecondary}
             style={styles.leftIcon}
           />
         )}
@@ -67,10 +72,11 @@ export function Input({
         <TextInput
           style={[
             styles.input,
+            { color: themeColors.text },
             leftIcon && styles.inputWithLeftIcon,
             (rightIcon || showPasswordToggle) && styles.inputWithRightIcon,
           ]}
-          placeholderTextColor={Colors.textLight}
+          placeholderTextColor={themeColors.textLight}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           secureTextEntry={actualSecureTextEntry}
@@ -86,7 +92,7 @@ export function Input({
             <Ionicons
               name={isPasswordVisible ? 'eye-off' : 'eye'}
               size={20}
-              color={Colors.textSecondary}
+              color={themeColors.textSecondary}
             />
           </Pressable>
         )}
@@ -101,14 +107,14 @@ export function Input({
             <Ionicons
               name={rightIcon}
               size={20}
-              color={Colors.textSecondary}
+              color={themeColors.textSecondary}
             />
           </Pressable>
         )}
       </View>
 
-      {error && <Text style={styles.error}>{error}</Text>}
-      {hint && !error && <Text style={styles.hint}>{hint}</Text>}
+      {error && <Text style={[styles.helperText, { color: themeColors.error }]}>{error}</Text>}
+      {hint && !error && <Text style={[styles.helperText, { color: themeColors.textSecondary }]}>{hint}</Text>}
     </View>
   );
 }
@@ -120,29 +126,19 @@ const styles = StyleSheet.create({
   label: {
     fontSize: Typography.sizes.sm,
     fontWeight: Typography.weights.medium,
-    color: Colors.text,
     marginBottom: Spacing.xs,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundDark,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  inputFocused: {
-    borderColor: Colors.primary,
-  },
-  inputError: {
-    borderColor: Colors.error,
   },
   input: {
     flex: 1,
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.md,
     fontSize: Typography.sizes.md,
-    color: Colors.text,
   },
   inputWithLeftIcon: {
     paddingLeft: 0,
@@ -156,14 +152,8 @@ const styles = StyleSheet.create({
   rightIconButton: {
     padding: Spacing.md,
   },
-  error: {
+  helperText: {
     fontSize: Typography.sizes.sm,
-    color: Colors.error,
-    marginTop: Spacing.xs,
-  },
-  hint: {
-    fontSize: Typography.sizes.sm,
-    color: Colors.textSecondary,
     marginTop: Spacing.xs,
   },
 });

@@ -3,12 +3,13 @@
  *
  * Star rating component for book reviews.
  * Supports interactive (editable) and display-only modes.
+ * Supports theme-aware colors via the colors prop.
  */
 
 import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, Spacing, ThemeColors } from '@/constants/theme';
 
 interface RatingProps {
   value: number;
@@ -16,6 +17,7 @@ interface RatingProps {
   size?: number;
   maxStars?: number;
   readonly?: boolean;
+  colors?: ThemeColors;
 }
 
 export function Rating({
@@ -24,7 +26,10 @@ export function Rating({
   size = 24,
   maxStars = 5,
   readonly = false,
+  colors,
 }: RatingProps) {
+  const themeColors = colors || Colors;
+
   const handlePress = (starIndex: number) => {
     if (readonly || !onChange) return;
 
@@ -47,7 +52,7 @@ export function Rating({
           <Ionicons
             name={iconName}
             size={size}
-            color={isFilled || isHalf ? Colors.starFilled : Colors.starEmpty}
+            color={isFilled || isHalf ? themeColors.starFilled : themeColors.starEmpty}
           />
         );
 
