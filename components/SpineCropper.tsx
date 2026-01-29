@@ -50,6 +50,14 @@ const HANDLE_SIZE = 30;
 const HANDLE_HIT_SLOP = 20;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+// Zoom bubble configuration
+const ZOOM_BUBBLE_SIZE = 120;
+const ZOOM_MAGNIFICATION = 2.5;
+const ZOOM_BUBBLE_OFFSET_Y = 80; // Distance above the finger
+
+// Dampening factor for less sensitive corner dragging (lower = less sensitive)
+const DRAG_DAMPENING = 0.6;
+
 // Calculate display dimensions for the image preview
 const IMAGE_CONTAINER_WIDTH = SCREEN_WIDTH - Spacing.lg * 2;
 const IMAGE_CONTAINER_HEIGHT = SCREEN_HEIGHT * 0.6;
@@ -115,28 +123,42 @@ export function SpineCropper({
   }, []);
 
   /**
-   * Handle corner drag
+   * Handle corner drag with dampening for less sensitivity
    */
   const createPanResponder = useCallback((cornerIndex: number) => {
+    let initialCornerPosition: Point | null = null;
+
     return PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
+        // Store the initial corner position when drag starts
+        setCorners((prev) => {
+          initialCornerPosition = { ...prev[cornerIndex] };
+          return prev;
+        });
         setActiveCorner(cornerIndex);
       },
       onPanResponderMove: (
         _event: GestureResponderEvent,
         gestureState: PanResponderGestureState
       ) => {
+        if (!initialCornerPosition) return;
+
+        // Apply dampening factor for less sensitive movement
+        const dampenedDx = gestureState.dx * DRAG_DAMPENING;
+        const dampenedDy = gestureState.dy * DRAG_DAMPENING;
+
         setCorners((prev) => {
           const newCorners = [...prev];
-          const newX = Math.max(0, Math.min(displaySize.width, prev[cornerIndex].x + gestureState.dx));
-          const newY = Math.max(0, Math.min(displaySize.height, prev[cornerIndex].y + gestureState.dy));
+          const newX = Math.max(0, Math.min(displaySize.width, initialCornerPosition!.x + dampenedDx));
+          const newY = Math.max(0, Math.min(displaySize.height, initialCornerPosition!.y + dampenedDy));
           newCorners[cornerIndex] = { x: newX, y: newY };
           return newCorners;
         });
       },
       onPanResponderRelease: () => {
+        initialCornerPosition = null;
         setActiveCorner(null);
       },
     });
@@ -203,6 +225,45 @@ export function SpineCropper({
     if (!isInitialized) return '';
     return corners.map((c) => `${c.x},${c.y}`).join(' ');
   }, [corners, isInitialized]);
+
+  /**
+   * Calculate zoom bubble position and clipping for the magnified view
+   */
+  const zoomBubbleData = useMemo(() => {
+    if (activeCorner === null || !displaySize.width || !displaySize.height) {
+      return null;
+    }
+
+    const corner = corners[activeCorner];
+
+    // Position the zoom bubble above the corner
+    let bubbleX = corner.x - ZOOM_BUBBLE_SIZE / 2;
+    let bubbleY = corner.y - ZOOM_BUBBLE_SIZE - ZOOM_BUBBLE_OFFSET_Y;
+
+    // Keep bubble within screen bounds horizontally
+    bubbleX = Math.max(10, Math.min(displaySize.width - ZOOM_BUBBLE_SIZE - 10, bubbleX));
+
+    // If bubble would go above image, position it below the corner instead
+    if (bubbleY < 10) {
+      bubbleY = corner.y + ZOOM_BUBBLE_OFFSET_Y;
+    }
+
+    // Calculate the portion of the image to show in the magnified view
+    // The source region in the original display coordinates
+    const sourceSize = ZOOM_BUBBLE_SIZE / ZOOM_MAGNIFICATION;
+    const sourceX = corner.x - sourceSize / 2;
+    const sourceY = corner.y - sourceSize / 2;
+
+    return {
+      bubbleX,
+      bubbleY,
+      cornerX: corner.x,
+      cornerY: corner.y,
+      sourceX,
+      sourceY,
+      sourceSize,
+    };
+  }, [activeCorner, corners, displaySize]);
 
   return (
     <View style={styles.container}>
@@ -297,6 +358,41 @@ export function SpineCropper({
                   ]}
                 />
               ))}
+
+              {/* Zoom bubble - shows magnified view when dragging a corner */}
+              {zoomBubbleData && (
+                <View
+                  style={[
+                    styles.zoomBubble,
+                    {
+                      left: zoomBubbleData.bubbleX,
+                      top: zoomBubbleData.bubbleY,
+                      width: ZOOM_BUBBLE_SIZE,
+                      height: ZOOM_BUBBLE_SIZE,
+                    },
+                  ]}
+                  pointerEvents="none"
+                >
+                  <View style={styles.zoomBubbleInner}>
+                    <Image
+                      source={{ uri: imageUri }}
+                      style={{
+                        width: displaySize.width * ZOOM_MAGNIFICATION,
+                        height: displaySize.height * ZOOM_MAGNIFICATION,
+                        position: 'absolute',
+                        left: -zoomBubbleData.cornerX * ZOOM_MAGNIFICATION + ZOOM_BUBBLE_SIZE / 2,
+                        top: -zoomBubbleData.cornerY * ZOOM_MAGNIFICATION + ZOOM_BUBBLE_SIZE / 2,
+                      }}
+                      contentFit="contain"
+                    />
+                    {/* Crosshair to show exact corner position */}
+                    <View style={styles.crosshairHorizontal} />
+                    <View style={styles.crosshairVertical} />
+                    {/* Corner indicator dot */}
+                    <View style={styles.zoomCornerDot} />
+                  </View>
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -403,6 +499,59 @@ const styles = StyleSheet.create({
   },
   confirmText: {
     color: Colors.textInverse,
+  },
+  // Zoom bubble styles
+  zoomBubble: {
+    position: 'absolute',
+    borderRadius: ZOOM_BUBBLE_SIZE / 2,
+    borderWidth: 3,
+    borderColor: Colors.accent,
+    backgroundColor: Colors.primaryDark,
+    overflow: 'hidden',
+    zIndex: 100,
+    // Add shadow for depth
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  zoomBubbleInner: {
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden',
+    borderRadius: ZOOM_BUBBLE_SIZE / 2,
+  },
+  crosshairHorizontal: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '50%',
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    marginTop: -0.5,
+  },
+  crosshairVertical: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: '50%',
+    width: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    marginLeft: -0.5,
+  },
+  zoomCornerDot: {
+    position: 'absolute',
+    left: '50%',
+    top: '50%',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.accent,
+    marginLeft: -4,
+    marginTop: -4,
+    borderWidth: 1,
+    borderColor: Colors.textInverse,
   },
 });
 
