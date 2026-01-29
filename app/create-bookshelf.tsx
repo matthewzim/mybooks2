@@ -19,6 +19,7 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from 'react-native';
 import { router, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,6 +40,7 @@ export default function CreateBookshelfScreen() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedColor, setSelectedColor] = useState(BOOKSHELF_COLORS[0]);
+  const [isPublic, setIsPublic] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,6 +75,7 @@ export default function CreateBookshelfScreen() {
         name: name.trim(),
         description: description.trim() || undefined,
         cover_color: selectedColor,
+        is_public: isPublic,
       });
 
       if (result) {
@@ -176,6 +179,35 @@ export default function CreateBookshelfScreen() {
                 </View>
               </View>
 
+              {/* Privacy Toggle */}
+              <View style={styles.privacySection}>
+                <View style={styles.privacyHeader}>
+                  <Ionicons
+                    name={isPublic ? 'globe-outline' : 'lock-closed-outline'}
+                    size={20}
+                    color={Colors.text}
+                  />
+                  <Text style={styles.privacyLabel}>
+                    {isPublic ? 'Public Shelf' : 'Private Shelf'}
+                  </Text>
+                </View>
+                <View style={styles.privacyRow}>
+                  <View style={styles.privacyInfo}>
+                    <Text style={styles.privacyDescription}>
+                      {isPublic
+                        ? 'Anyone can view this bookshelf'
+                        : 'Only you can view this bookshelf'}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={isPublic}
+                    onValueChange={setIsPublic}
+                    trackColor={{ false: Colors.border, true: Colors.success }}
+                    thumbColor={Colors.background}
+                  />
+                </View>
+              </View>
+
               {/* Submit Button */}
               <View style={styles.buttonContainer}>
                 <Button
@@ -270,6 +302,36 @@ const styles = StyleSheet.create({
   },
   colorSelected: {
     borderColor: Colors.text,
+  },
+  privacySection: {
+    marginBottom: Spacing.lg,
+    backgroundColor: Colors.backgroundDark,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+  },
+  privacyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  privacyLabel: {
+    fontSize: Typography.sizes.md,
+    fontWeight: Typography.weights.medium,
+    color: Colors.text,
+    marginLeft: Spacing.sm,
+  },
+  privacyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  privacyInfo: {
+    flex: 1,
+    marginRight: Spacing.md,
+  },
+  privacyDescription: {
+    fontSize: Typography.sizes.sm,
+    color: Colors.textSecondary,
   },
   buttonContainer: {
     marginTop: Spacing.lg,
