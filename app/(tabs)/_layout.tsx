@@ -4,7 +4,7 @@
  * Main tab navigation for the authenticated app.
  * Includes:
  * - Home (My Shelves)
- * - Community
+ * - Explore
  * - Settings
  */
 
@@ -46,11 +46,11 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* Community Tab */}
+      {/* Explore Tab */}
       <Tabs.Screen
         name="community"
         options={{
-          title: 'Community',
+          title: 'Explore',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="people" size={size} color={color} />
           ),
