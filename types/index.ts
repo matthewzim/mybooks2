@@ -72,6 +72,15 @@ export interface CommunityBookSpine {
   created_at: string;
 }
 
+/**
+ * Public user profile - used when viewing another user's profile
+ */
+export interface PublicUserProfile {
+  id: string;
+  name: string | null;
+  bookshelves: (Bookshelf & { books: Book[] })[];
+}
+
 // ============================================
 // Input Types (for creating/updating records)
 // ============================================
@@ -169,6 +178,7 @@ export type RootStackParamList = {
   '(tabs)': undefined;
   'bookshelf/[id]': { id: string };
   'book/[id]': { id: string; shelfId: string };
+  'user/[id]': { id: string };
   'scan': { shelfId: string };
   'community': undefined;
   'payment': undefined;

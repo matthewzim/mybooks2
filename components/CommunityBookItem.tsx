@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import {
   Colors,
   Spacing,
@@ -75,16 +76,34 @@ export function CommunityBookItem({ book, onAddToShelf }: CommunityBookItemProps
         </Text>
 
         {book.uploader_name && (
-          <View style={styles.uploaderContainer}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.uploaderContainer,
+              pressed && styles.uploaderPressed,
+            ]}
+            onPress={() => {
+              router.push({
+                pathname: '/user/[id]',
+                params: { id: book.uploaded_by_user_id },
+              });
+            }}
+            accessibilityRole="link"
+            accessibilityLabel={`View ${book.uploader_name}'s profile`}
+          >
             <Ionicons
               name="person-circle-outline"
               size={14}
-              color={Colors.textSecondary}
+              color={Colors.primary}
             />
             <Text style={styles.uploaderText}>
-              Uploaded by {book.uploader_name}
+              Uploaded by <Text style={styles.uploaderName}>{book.uploader_name}</Text>
             </Text>
-          </View>
+            <Ionicons
+              name="chevron-forward"
+              size={12}
+              color={Colors.primary}
+            />
+          </Pressable>
         )}
 
         {/* Times added badge */}
@@ -171,10 +190,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     marginTop: Spacing.xs,
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+    marginLeft: -4,
+    borderRadius: BorderRadius.sm,
+  },
+  uploaderPressed: {
+    backgroundColor: Colors.backgroundDark,
   },
   uploaderText: {
     fontSize: Typography.sizes.xs,
     color: Colors.textSecondary,
+  },
+  uploaderName: {
+    color: Colors.primary,
+    fontWeight: Typography.weights.medium,
   },
   badgeContainer: {
     flexDirection: 'row',
