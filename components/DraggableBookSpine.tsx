@@ -38,9 +38,11 @@ interface DraggableBookSpineProps {
   onDragEnd: (fromIndex: number, toIndex: number) => void;
   onDragMove: (index: number, translationX: number, translationY: number) => void;
   onToggleStack: (book: Book) => void;
+  onStackOnBook?: (bookId: string, targetBookId: string) => void;
   positions: { x: number; y: number }[];
   totalBooks: number;
   booksPerRow: number;
+  stackableBooks?: Book[]; // Other stacked books that can be stacked upon
 }
 
 /**
@@ -65,9 +67,11 @@ export function DraggableBookSpine({
   onDragEnd,
   onDragMove,
   onToggleStack,
+  onStackOnBook,
   positions,
   totalBooks,
   booksPerRow,
+  stackableBooks = [],
 }: DraggableBookSpineProps) {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);

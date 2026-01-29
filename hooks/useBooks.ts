@@ -25,6 +25,9 @@ interface UseBooksReturn {
   // Utility operations
   moveBook: (bookId: string, newShelfId: string) => Promise<boolean>;
   reorderBooks: (orderedIds: string[]) => Promise<boolean>;
+  // Stack operations
+  stackBookOnTop: (bookId: string, targetBookId: string) => Promise<boolean>;
+  unstackBook: (bookId: string) => Promise<boolean>;
 }
 
 export function useBooks(shelfId: string): UseBooksReturn {
@@ -199,6 +202,54 @@ export function useBooks(shelfId: string): UseBooksReturn {
     [shelfId, books, fetchBooks]
   );
 
+  /**
+   * Stack a book on top of another book (vertical stacking)
+   */
+  const stackBookOnTop = useCallback(
+    async (bookId: string, targetBookId: string): Promise<boolean> => {
+      try {
+        const result = await booksService.stackBookOnTop(bookId, targetBookId);
+
+        if (result.error) {
+          setError(result.error.message);
+          return false;
+        }
+
+        // Refresh books to get updated stack state
+        await fetchBooks();
+        return true;
+      } catch (err) {
+        setError('Failed to stack book');
+        return false;
+      }
+    },
+    [fetchBooks]
+  );
+
+  /**
+   * Remove a book from its stack
+   */
+  const unstackBook = useCallback(
+    async (bookId: string): Promise<boolean> => {
+      try {
+        const result = await booksService.unstackBook(bookId);
+
+        if (result.error) {
+          setError(result.error.message);
+          return false;
+        }
+
+        // Refresh books to get updated stack state
+        await fetchBooks();
+        return true;
+      } catch (err) {
+        setError('Failed to unstack book');
+        return false;
+      }
+    },
+    [fetchBooks]
+  );
+
   // Fetch books when shelfId changes
   useEffect(() => {
     fetchBooks();
@@ -215,6 +266,8 @@ export function useBooks(shelfId: string): UseBooksReturn {
     deleteBook,
     moveBook,
     reorderBooks,
+    stackBookOnTop,
+    unstackBook,
   };
 }
 

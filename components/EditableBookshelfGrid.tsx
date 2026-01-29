@@ -25,6 +25,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { DraggableBookSpine } from './DraggableBookSpine';
 import { BookSpine } from './BookSpine';
+import { VerticalBookStack } from './VerticalBookStack';
 import {
   Colors,
   Spacing,
@@ -41,19 +42,26 @@ interface EditableBookshelfGridProps {
   isEditing: boolean;
   onReorderBooks: (orderedIds: string[]) => Promise<boolean>;
   onToggleBookStack: (book: Book) => Promise<void>;
+  onStackBooks?: (bookId: string, targetBookId: string) => Promise<boolean>;
+  onUnstackBook?: (book: Book) => Promise<boolean>;
 }
 
 // Number of books per row
 const BOOKS_PER_ROW = 5;
 
-// Type for shelf items - can be a book or "add" button
-type ShelfItem = Book | 'add';
+// Vertical offset between books in a stack
+const STACK_OFFSET = 4;
+
+// Type for shelf items - can be a book, a vertical stack, or "add" button
+type ShelfItem = Book | Book[] | 'add';
 
 // Track which row each item belongs to, accounting for stacked books taking more width
 interface LayoutItem {
   item: ShelfItem;
   width: number;
+  height: number;
   isStacked: boolean;
+  isVerticalStack: boolean;
 }
 
 export function EditableBookshelfGrid({
@@ -64,6 +72,8 @@ export function EditableBookshelfGrid({
   isEditing,
   onReorderBooks,
   onToggleBookStack,
+  onStackBooks,
+  onUnstackBook,
 }: EditableBookshelfGridProps) {
   const { width: screenWidth } = useWindowDimensions();
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
@@ -96,30 +106,89 @@ export function EditableBookshelfGrid({
     });
   }, [localBooks, bookWidth, bookHeight]);
 
-  // Group books into rows, accounting for stacked books' different dimensions
+  // Group books by stack_id and organize into layout items
+  const processedItems = useMemo(() => {
+    const stackGroups = new Map<string, Book[]>();
+    const standaloneBooks: Book[] = [];
+
+    // Group books by stack_id
+    localBooks.forEach((book) => {
+      if (book.stack_id) {
+        const existing = stackGroups.get(book.stack_id) || [];
+        existing.push(book);
+        stackGroups.set(book.stack_id, existing);
+      } else {
+        standaloneBooks.push(book);
+      }
+    });
+
+    // Sort books within each stack by stack_position
+    stackGroups.forEach((stackBooks, stackId) => {
+      stackBooks.sort((a, b) => (a.stack_position || 0) - (b.stack_position || 0));
+    });
+
+    // Build layout items based on position order
+    const items: { position: number; layoutItem: LayoutItem }[] = [];
+    const processedStackIds = new Set<string>();
+
+    localBooks.forEach((book) => {
+      if (book.stack_id) {
+        // Only process each stack once (using the lowest position book in the stack)
+        if (processedStackIds.has(book.stack_id)) return;
+        processedStackIds.add(book.stack_id);
+
+        const stackBooks = stackGroups.get(book.stack_id)!;
+        const stackHeight = bookWidth + (stackBooks.length - 1) * STACK_OFFSET;
+
+        items.push({
+          position: Math.min(...stackBooks.map((b) => b.position)),
+          layoutItem: {
+            item: stackBooks,
+            width: bookHeight, // Stacked books use height as width
+            height: stackHeight,
+            isStacked: true,
+            isVerticalStack: true,
+          },
+        });
+      } else {
+        // Standalone book
+        const isStacked = book.is_stacked || false;
+        items.push({
+          position: book.position,
+          layoutItem: {
+            item: book,
+            width: isStacked ? bookHeight : bookWidth,
+            height: isStacked ? bookWidth : bookHeight,
+            isStacked,
+            isVerticalStack: false,
+          },
+        });
+      }
+    });
+
+    // Sort by position
+    items.sort((a, b) => a.position - b.position);
+
+    return items.map((i) => i.layoutItem);
+  }, [localBooks, bookWidth, bookHeight]);
+
+  // Group processed items into rows
   const rows = useMemo(() => {
     const result: LayoutItem[][] = [];
     let currentRow: LayoutItem[] = [];
     let currentRowWidth = 0;
 
-    // Add books
-    localBooks.forEach((book) => {
-      // Stacked books are rotated, so height becomes width
-      const itemWidth = book.is_stacked ? bookHeight : bookWidth;
-
+    // Add items (books and stacks)
+    processedItems.forEach((layoutItem) => {
       // Check if this item fits in the current row
-      if (currentRowWidth + itemWidth > availableWidth && currentRow.length > 0) {
+      if (currentRowWidth + layoutItem.width > availableWidth && currentRow.length > 0) {
         result.push(currentRow);
         currentRow = [];
         currentRowWidth = 0;
       }
 
-      currentRow.push({
-        item: book,
-        width: itemWidth,
-        isStacked: book.is_stacked || false,
-      });
-      currentRowWidth += itemWidth;
+      currentRow.push(layoutItem);
+      currentRowWidth += layoutItem.width;
     });
 
     // Add the "add" button
@@ -132,7 +201,9 @@ export function EditableBookshelfGrid({
       currentRow.push({
         item: 'add' as const,
         width: addButtonWidth,
+        height: bookHeight,
         isStacked: false,
+        isVerticalStack: false,
       });
     }
 
@@ -147,7 +218,7 @@ export function EditableBookshelfGrid({
     }
 
     return result;
-  }, [localBooks, bookWidth, bookHeight, availableWidth, isEditing]);
+  }, [processedItems, bookWidth, bookHeight, availableWidth, isEditing]);
 
   // Handle drag start
   const handleDragStart = useCallback((index: number) => {
@@ -196,17 +267,23 @@ export function EditableBookshelfGrid({
   const getRowHeight = useCallback(
     (row: LayoutItem[]): number => {
       // Find the maximum height in the row
-      // Stacked books use bookWidth as height, regular books use bookHeight
       let maxHeight = bookHeight;
       row.forEach((item) => {
-        if (item.item !== 'add' && item.isStacked) {
-          // Stacked book height is the bookWidth
-          maxHeight = Math.max(maxHeight, bookWidth);
-        }
+        maxHeight = Math.max(maxHeight, item.height);
       });
       return maxHeight;
     },
-    [bookHeight, bookWidth]
+    [bookHeight]
+  );
+
+  // Handle unstacking a book from a vertical stack
+  const handleUnstackBook = useCallback(
+    async (book: Book) => {
+      if (onUnstackBook) {
+        await onUnstackBook(book);
+      }
+    },
+    [onUnstackBook]
   );
 
   if (isLoading) {
@@ -238,7 +315,8 @@ export function EditableBookshelfGrid({
 
             {/* Books row */}
             <View style={[styles.booksRow, { minHeight: rowHeight }]}>
-              {row.map((layoutItem, bookIndex) => {
+              {row.map((layoutItem, itemIndex) => {
+                // Handle "add" button
                 if (layoutItem.item === 'add') {
                   return (
                     <AddBookButton
@@ -250,7 +328,27 @@ export function EditableBookshelfGrid({
                   );
                 }
 
-                const book = layoutItem.item;
+                // Handle vertical stack (array of books)
+                if (layoutItem.isVerticalStack && Array.isArray(layoutItem.item)) {
+                  const stackBooks = layoutItem.item;
+                  const stackKey = stackBooks[0].stack_id || stackBooks[0].id;
+
+                  return (
+                    <View key={stackKey} style={styles.bookWrapper}>
+                      <VerticalBookStack
+                        books={stackBooks}
+                        stackWidth={bookHeight}
+                        stackHeight={bookWidth}
+                        onBookPress={onBookPress}
+                        isEditing={isEditing}
+                        onUnstackBook={handleUnstackBook}
+                      />
+                    </View>
+                  );
+                }
+
+                // Handle single book
+                const book = layoutItem.item as Book;
                 const currentIndex = flatIndex++;
 
                 if (isEditing) {

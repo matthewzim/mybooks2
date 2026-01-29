@@ -34,7 +34,7 @@ import type { Book, Bookshelf, UpdateBookshelfInput } from '@/types';
 export default function BookshelfDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getBookshelf, updateBookshelf } = useBookshelves();
-  const { books, isLoading: booksLoading, fetchBooks, deleteBook, reorderBooks, updateBook } = useBooks(id || '');
+  const { books, isLoading: booksLoading, fetchBooks, deleteBook, reorderBooks, updateBook, stackBookOnTop, unstackBook } = useBooks(id || '');
   const [bookshelf, setBookshelf] = useState<Bookshelf | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -176,6 +176,26 @@ export default function BookshelfDetailScreen() {
     [updateBook]
   );
 
+  /**
+   * Stack a book on top of another book (vertical stacking)
+   */
+  const handleStackBooks = useCallback(
+    async (bookId: string, targetBookId: string): Promise<boolean> => {
+      return stackBookOnTop(bookId, targetBookId);
+    },
+    [stackBookOnTop]
+  );
+
+  /**
+   * Remove a book from its vertical stack
+   */
+  const handleUnstackBook = useCallback(
+    async (book: Book): Promise<boolean> => {
+      return unstackBook(book.id);
+    },
+    [unstackBook]
+  );
+
   // Loading state
   if (isLoading) {
     return <LoadingView message="Loading bookshelf..." />;
@@ -240,7 +260,7 @@ export default function BookshelfDetailScreen() {
             <View style={styles.editModeIndicator}>
               <Ionicons name="information-circle" size={16} color={Colors.primary} />
               <Text style={styles.editModeText}>
-                Drag to reorder. Tap rotate button or long-press to stack flat.
+                Drag to reorder. Long-press to stack flat. Drop stacked books on each other to pile.
               </Text>
             </View>
           ) : (
@@ -278,6 +298,8 @@ export default function BookshelfDetailScreen() {
           isEditing={isEditMode}
           onReorderBooks={handleReorderBooks}
           onToggleBookStack={handleToggleBookStack}
+          onStackBooks={handleStackBooks}
+          onUnstackBook={handleUnstackBook}
         />
 
         {/* Book Detail Modal */}

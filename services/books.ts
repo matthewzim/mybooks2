@@ -119,6 +119,8 @@ class BooksService {
           uploaded_by_user_id: session.session.user.id,
           is_community: input.is_community ?? true, // Default to sharing with community
           is_stacked: input.is_stacked ?? false, // Default to upright position
+          stack_id: input.stack_id || null, // Stack group ID for vertical stacking
+          stack_position: input.stack_position ?? 0, // Position within stack (0 = bottom)
         })
         .select()
         .single();
@@ -396,6 +398,160 @@ class BooksService {
     rating: number | null
   ): Promise<ApiResponse<Book>> {
     return this.updateBook(id, { review, rating });
+  }
+
+  /**
+   * Stack a book on top of another book
+   * Creates or joins a vertical stack of books
+   *
+   * @param bookId - Book to stack
+   * @param targetBookId - Book to stack on top of
+   * @returns Updated book
+   */
+  async stackBookOnTop(
+    bookId: string,
+    targetBookId: string
+  ): Promise<ApiResponse<Book>> {
+    try {
+      // Get the target book to find its stack
+      const { data: targetBook, error: targetError } = await supabase
+        .from(TABLES.BOOKS)
+        .select('*')
+        .eq('id', targetBookId)
+        .single();
+
+      if (targetError) throw targetError;
+
+      // Determine the stack_id - use existing or create new from target book id
+      const stackId = targetBook.stack_id || targetBookId;
+
+      // Get the current max stack_position in this stack
+      const { data: stackBooks } = await supabase
+        .from(TABLES.BOOKS)
+        .select('stack_position')
+        .or(`id.eq.${targetBookId},stack_id.eq.${stackId}`)
+        .order('stack_position', { ascending: false })
+        .limit(1);
+
+      const nextStackPosition =
+        stackBooks && stackBooks.length > 0
+          ? (stackBooks[0].stack_position || 0) + 1
+          : 1;
+
+      // If target book doesn't have a stack_id, update it first
+      if (!targetBook.stack_id) {
+        await supabase
+          .from(TABLES.BOOKS)
+          .update({
+            stack_id: stackId,
+            stack_position: 0,
+            is_stacked: true,
+          })
+          .eq('id', targetBookId);
+      }
+
+      // Update the book being stacked
+      const { data, error } = await supabase
+        .from(TABLES.BOOKS)
+        .update({
+          stack_id: stackId,
+          stack_position: nextStackPosition,
+          is_stacked: true,
+          position: targetBook.position, // Same position as the stack
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', bookId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return { data: data as Book, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: { message: handleSupabaseError(error) },
+      };
+    }
+  }
+
+  /**
+   * Remove a book from its stack
+   * If it's the last book in the stack, clears the stack_id
+   *
+   * @param bookId - Book to unstack
+   * @returns Updated book
+   */
+  async unstackBook(bookId: string): Promise<ApiResponse<Book>> {
+    try {
+      // Get the book's current stack info
+      const { data: book, error: bookError } = await supabase
+        .from(TABLES.BOOKS)
+        .select('*')
+        .eq('id', bookId)
+        .single();
+
+      if (bookError) throw bookError;
+
+      if (!book.stack_id) {
+        // Book is not in a stack
+        return { data: book as Book, error: null };
+      }
+
+      // Check how many books are left in this stack
+      const { data: stackBooks, error: countError } = await supabase
+        .from(TABLES.BOOKS)
+        .select('id, stack_position')
+        .eq('stack_id', book.stack_id);
+
+      if (countError) throw countError;
+
+      // Remove this book from the stack
+      const { data: updatedBook, error: updateError } = await supabase
+        .from(TABLES.BOOKS)
+        .update({
+          stack_id: null,
+          stack_position: 0,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', bookId)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      // If only one book left in stack, clear its stack_id too
+      const remainingBooks = stackBooks.filter((b) => b.id !== bookId);
+      if (remainingBooks.length === 1) {
+        await supabase
+          .from(TABLES.BOOKS)
+          .update({
+            stack_id: null,
+            stack_position: 0,
+          })
+          .eq('id', remainingBooks[0].id);
+      } else if (remainingBooks.length > 1) {
+        // Reorder stack positions for remaining books
+        const sortedRemaining = remainingBooks.sort(
+          (a, b) => (a.stack_position || 0) - (b.stack_position || 0)
+        );
+        await Promise.all(
+          sortedRemaining.map((b, index) =>
+            supabase
+              .from(TABLES.BOOKS)
+              .update({ stack_position: index })
+              .eq('id', b.id)
+          )
+        );
+      }
+
+      return { data: updatedBook as Book, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: { message: handleSupabaseError(error) },
+      };
+    }
   }
 }
 
