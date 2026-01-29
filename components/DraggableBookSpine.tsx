@@ -25,6 +25,7 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Colors, BookSpine as BookSpineConstants, Shadows } from '@/constants/theme';
+import { getSpineImageUrl } from '@/services/storage';
 import type { Book } from '@/types';
 
 interface DraggableBookSpineProps {
@@ -145,8 +146,9 @@ export function DraggableBookSpine({
     };
   });
 
-  // Check if we have a valid image URL
-  const hasValidUrl = Boolean(book.image_url && book.image_url.startsWith('http'));
+  // Get the book spine image URL from the book-spines bucket
+  const spineImageUrl = getSpineImageUrl(book.image_url);
+  const hasValidUrl = Boolean(spineImageUrl);
   const backgroundColor = getBookColor(book.title);
 
   // Dimensions for stacked (horizontal) books
@@ -160,7 +162,7 @@ export function DraggableBookSpine({
         <View style={[styles.stackedContainer, { width: stackedWidth, height: stackedHeight }]}>
           {hasValidUrl ? (
             <Image
-              source={{ uri: book.image_url! }}
+              source={{ uri: spineImageUrl! }}
               style={[styles.stackedImage, { transform: [{ rotate: '-90deg' }] }]}
               contentFit="cover"
               cachePolicy="memory-disk"
@@ -178,12 +180,12 @@ export function DraggableBookSpine({
       );
     }
 
-    // Regular upright spine view
+    // Regular upright spine view - book spine image from book-spines bucket
     return (
       <View style={[styles.spineContainer, { width, height }]}>
         {hasValidUrl ? (
           <Image
-            source={{ uri: book.image_url! }}
+            source={{ uri: spineImageUrl! }}
             style={styles.image}
             contentFit="cover"
             cachePolicy="memory-disk"

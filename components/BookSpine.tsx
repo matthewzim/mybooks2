@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Colors, BookSpine as BookSpineConstants, Shadows } from '@/constants/theme';
+import { getSpineImageUrl } from '@/services/storage';
 import type { Book } from '@/types';
 
 interface BookSpineProps {
@@ -52,9 +53,9 @@ export function BookSpine({
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
 
-  // Check if we have a valid image URL
-  const hasValidUrl = Boolean(book.image_url && book.image_url.startsWith('http'));
-  const hasImage = hasValidUrl && !hasError;
+  // Get the book spine image URL from the book-spines bucket
+  const spineImageUrl = getSpineImageUrl(book.image_url);
+  const hasImage = Boolean(spineImageUrl) && !hasError;
   const backgroundColor = getBookColor(book.title);
 
   return (
@@ -69,10 +70,10 @@ export function BookSpine({
       accessibilityLabel={`${book.title} by ${book.author}`}
     >
       {hasImage ? (
-        // Book spine image
+        // Book spine image from book-spines bucket
         <View style={[styles.imageContainer, { backgroundColor }]}>
           <Image
-            source={{ uri: book.image_url! }}
+            source={{ uri: spineImageUrl! }}
             style={styles.image}
             contentFit="cover"
             transition={200}

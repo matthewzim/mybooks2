@@ -276,4 +276,29 @@ class StorageService {
 // Export a singleton instance
 export const storageService = new StorageService();
 
+/**
+ * Get the public URL for a book spine image from the book-spines bucket
+ * Handles both full URLs and relative paths within the bucket
+ *
+ * @param imageUrlOrPath - Full URL or path within the bucket
+ * @returns Full public URL for the image, or null if input is invalid
+ */
+export function getSpineImageUrl(imageUrlOrPath: string | null | undefined): string | null {
+  if (!imageUrlOrPath) {
+    return null;
+  }
+
+  // If it's already a full URL (from the bucket or elsewhere), return as-is
+  if (imageUrlOrPath.startsWith('http://') || imageUrlOrPath.startsWith('https://')) {
+    return imageUrlOrPath;
+  }
+
+  // Otherwise, construct the public URL from the bucket path
+  const { data: { publicUrl } } = supabase.storage
+    .from(STORAGE_BUCKETS.BOOK_SPINES)
+    .getPublicUrl(imageUrlOrPath);
+
+  return publicUrl;
+}
+
 export default storageService;
