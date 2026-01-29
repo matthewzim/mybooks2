@@ -22,11 +22,13 @@ import {
 import { Link, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { Button, Input } from '@/components/ui';
-import { Colors, Spacing, Typography, BorderRadius } from '@/constants/theme';
+import { Spacing, Typography, BorderRadius } from '@/constants/theme';
 
 export default function LoginScreen() {
   const { signIn, resetPassword } = useAuth();
+  const { colors } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -109,7 +111,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.primary }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -120,14 +122,14 @@ export default function LoginScreen() {
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.title, { color: colors.textInverse }]}>Welcome Back</Text>
+            <Text style={[styles.subtitle, { color: colors.textInverse }]}>
               Sign in to access your virtual library
             </Text>
           </View>
 
           {/* Form */}
-          <View style={styles.form}>
+          <View style={[styles.form, { backgroundColor: colors.background }]}>
             <Input
               label="Email"
               placeholder="Enter your email"
@@ -138,6 +140,7 @@ export default function LoginScreen() {
               autoComplete="email"
               leftIcon="mail-outline"
               error={errors.email}
+              colors={colors}
             />
 
             <Input
@@ -150,6 +153,7 @@ export default function LoginScreen() {
               autoComplete="password"
               leftIcon="lock-closed-outline"
               error={errors.password}
+              colors={colors}
             />
 
             {/* Forgot Password Link */}
@@ -157,7 +161,7 @@ export default function LoginScreen() {
               style={styles.forgotPassword}
               onPress={handleForgotPassword}
             >
-              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+              <Text style={[styles.forgotPasswordText, { color: colors.primary }]}>Forgot password?</Text>
             </Pressable>
 
             {/* Login Button */}
@@ -167,15 +171,16 @@ export default function LoginScreen() {
               loading={isLoading}
               fullWidth
               size="lg"
+              colors={colors}
             />
           </View>
 
           {/* Register Link */}
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account? </Text>
+            <Text style={[styles.footerText, { color: colors.textInverse }]}>Don't have an account? </Text>
             <Link href="/(auth)/register" asChild>
               <Pressable>
-                <Text style={styles.linkText}>Sign Up</Text>
+                <Text style={[styles.linkText, { color: colors.accent }]}>Sign Up</Text>
               </Pressable>
             </Link>
           </View>
@@ -188,7 +193,6 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.primary,
   },
   keyboardView: {
     flex: 1,
@@ -204,16 +208,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: Typography.sizes.xxxl,
     fontWeight: Typography.weights.bold,
-    color: Colors.textInverse,
     marginBottom: Spacing.sm,
   },
   subtitle: {
     fontSize: Typography.sizes.lg,
-    color: Colors.textInverse,
     opacity: 0.8,
   },
   form: {
-    backgroundColor: Colors.background,
     borderRadius: BorderRadius.xl,
     padding: Spacing.xl,
     marginBottom: Spacing.xl,
@@ -224,7 +225,6 @@ const styles = StyleSheet.create({
     marginTop: -Spacing.sm,
   },
   forgotPasswordText: {
-    color: Colors.primary,
     fontSize: Typography.sizes.sm,
   },
   footer: {
@@ -233,11 +233,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   footerText: {
-    color: Colors.textInverse,
     fontSize: Typography.sizes.md,
   },
   linkText: {
-    color: Colors.accent,
     fontSize: Typography.sizes.md,
     fontWeight: Typography.weights.semibold,
   },

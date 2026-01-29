@@ -3,12 +3,13 @@
  *
  * Display when there's no content to show.
  * Includes icon, title, description, and optional action button.
+ * Supports theme-aware colors via the colors prop.
  */
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, Typography } from '@/constants/theme';
+import { Colors, Spacing, Typography, ThemeColors } from '@/constants/theme';
 import { Button } from './Button';
 
 interface EmptyStateProps {
@@ -17,6 +18,7 @@ interface EmptyStateProps {
   description?: string;
   actionLabel?: string;
   onAction?: () => void;
+  colors?: ThemeColors;
 }
 
 export function EmptyState({
@@ -25,15 +27,18 @@ export function EmptyState({
   description,
   actionLabel,
   onAction,
+  colors,
 }: EmptyStateProps) {
+  const themeColors = colors || Colors;
+
   return (
     <View style={styles.container}>
-      <Ionicons name={icon} size={64} color={Colors.textLight} />
-      <Text style={styles.title}>{title}</Text>
-      {description && <Text style={styles.description}>{description}</Text>}
+      <Ionicons name={icon} size={64} color={themeColors.textLight} />
+      <Text style={[styles.title, { color: themeColors.text }]}>{title}</Text>
+      {description && <Text style={[styles.description, { color: themeColors.textSecondary }]}>{description}</Text>}
       {actionLabel && onAction && (
         <View style={styles.buttonContainer}>
-          <Button title={actionLabel} onPress={onAction} />
+          <Button title={actionLabel} onPress={onAction} colors={themeColors} />
         </View>
       )}
     </View>
@@ -50,13 +55,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: Typography.sizes.xl,
     fontWeight: Typography.weights.semibold,
-    color: Colors.text,
     marginTop: Spacing.lg,
     textAlign: 'center',
   },
   description: {
     fontSize: Typography.sizes.md,
-    color: Colors.textSecondary,
     marginTop: Spacing.sm,
     textAlign: 'center',
     maxWidth: 280,

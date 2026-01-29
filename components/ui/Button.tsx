@@ -2,6 +2,7 @@
  * Button Component
  *
  * Reusable button component with various variants and states.
+ * Supports theme-aware colors via the colors prop.
  */
 
 import React from 'react';
@@ -13,7 +14,7 @@ import {
   ViewStyle,
   TextStyle,
 } from 'react-native';
-import { Colors, Spacing, BorderRadius, Typography } from '@/constants/theme';
+import { Colors, Spacing, BorderRadius, Typography, ThemeColors } from '@/constants/theme';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 type ButtonSize = 'sm' | 'md' | 'lg';
@@ -29,6 +30,7 @@ interface ButtonProps {
   style?: ViewStyle;
   textStyle?: TextStyle;
   accessibilityLabel?: string;
+  colors?: ThemeColors;
 }
 
 export function Button({
@@ -42,14 +44,49 @@ export function Button({
   style,
   textStyle,
   accessibilityLabel,
+  colors,
 }: ButtonProps) {
   const isDisabled = disabled || loading;
+  const themeColors = colors || Colors;
+
+  const getVariantStyle = (): ViewStyle => {
+    switch (variant) {
+      case 'primary':
+        return { backgroundColor: themeColors.primary };
+      case 'secondary':
+        return { backgroundColor: themeColors.secondary };
+      case 'outline':
+        return { backgroundColor: 'transparent', borderWidth: 1, borderColor: themeColors.primary };
+      case 'ghost':
+        return { backgroundColor: 'transparent' };
+      case 'danger':
+        return { backgroundColor: themeColors.error };
+      default:
+        return { backgroundColor: themeColors.primary };
+    }
+  };
+
+  const getTextColor = (): string => {
+    switch (variant) {
+      case 'outline':
+      case 'ghost':
+        return themeColors.primary;
+      default:
+        return themeColors.textInverse;
+    }
+  };
+
+  const getLoaderColor = (): string => {
+    return variant === 'outline' || variant === 'ghost'
+      ? themeColors.primary
+      : themeColors.textInverse;
+  };
 
   return (
     <Pressable
       style={({ pressed }) => [
         styles.base,
-        styles[variant],
+        getVariantStyle(),
         styles[`size_${size}`],
         fullWidth && styles.fullWidth,
         isDisabled && styles.disabled,
@@ -65,13 +102,13 @@ export function Button({
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={variant === 'outline' || variant === 'ghost' ? Colors.primary : Colors.textInverse}
+          color={getLoaderColor()}
         />
       ) : (
         <Text
           style={[
             styles.text,
-            styles[`text_${variant}`],
+            { color: getTextColor() },
             styles[`text_${size}`],
             textStyle,
           ]}
@@ -99,24 +136,6 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.8,
   },
-  // Variants
-  primary: {
-    backgroundColor: Colors.primary,
-  },
-  secondary: {
-    backgroundColor: Colors.secondary,
-  },
-  outline: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: Colors.primary,
-  },
-  ghost: {
-    backgroundColor: 'transparent',
-  },
-  danger: {
-    backgroundColor: Colors.error,
-  },
   // Sizes
   size_sm: {
     paddingVertical: Spacing.xs,
@@ -136,21 +155,6 @@ const styles = StyleSheet.create({
   // Text styles
   text: {
     fontWeight: Typography.weights.semibold,
-  },
-  text_primary: {
-    color: Colors.textInverse,
-  },
-  text_secondary: {
-    color: Colors.textInverse,
-  },
-  text_outline: {
-    color: Colors.primary,
-  },
-  text_ghost: {
-    color: Colors.primary,
-  },
-  text_danger: {
-    color: Colors.textInverse,
   },
   text_sm: {
     fontSize: Typography.sizes.sm,

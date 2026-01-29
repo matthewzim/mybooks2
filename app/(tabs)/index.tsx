@@ -24,20 +24,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBookshelves } from '@/hooks/useBookshelves';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { BookshelfPreview } from '@/components/BookshelfPreview';
 import { LoadingView, EmptyState } from '@/components/ui';
 import { FREE_TIER_LIMITS } from '@/services/stripe';
 import {
-  Colors,
   Spacing,
   BorderRadius,
   Typography,
-  Shadows,
 } from '@/constants/theme';
 import type { Bookshelf } from '@/types';
 
 export default function HomeScreen() {
   const { user } = useAuth();
+  const { colors } = useTheme();
   const {
     bookshelves,
     isLoading,
@@ -98,11 +98,11 @@ export default function HomeScreen() {
 
   // Loading state
   if (isLoading && bookshelves.length === 0) {
-    return <LoadingView message="Loading your library..." />;
+    return <LoadingView message="Loading your library..." colors={colors} />;
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right']}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -110,7 +110,7 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={Colors.primary}
+            tintColor={colors.primary}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -118,10 +118,10 @@ export default function HomeScreen() {
         {/* Welcome Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>
+            <Text style={[styles.greeting, { color: colors.text }]}>
               Hello, {user?.name || 'Book Lover'}!
             </Text>
-            <Text style={styles.subGreeting}>
+            <Text style={[styles.subGreeting, { color: colors.textSecondary }]}>
               {bookshelves.length > 0
                 ? `You have ${bookshelves.length} ${
                     bookshelves.length === 1 ? 'bookshelf' : 'bookshelves'
@@ -132,9 +132,9 @@ export default function HomeScreen() {
 
           {/* Premium badge */}
           {user?.is_premium && (
-            <View style={styles.premiumBadge}>
-              <Ionicons name="star" size={14} color={Colors.starFilled} />
-              <Text style={styles.premiumText}>Premium</Text>
+            <View style={[styles.premiumBadge, { backgroundColor: colors.primaryLight }]}>
+              <Ionicons name="star" size={14} color={colors.starFilled} />
+              <Text style={[styles.premiumText, { color: colors.textInverse }]}>Premium</Text>
             </View>
           )}
         </View>
@@ -159,6 +159,7 @@ export default function HomeScreen() {
             description="Create your first bookshelf to start organizing your book collection."
             actionLabel="Create Bookshelf"
             onAction={handleAddBookshelf}
+            colors={colors}
           />
         )}
 
@@ -167,12 +168,13 @@ export default function HomeScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.addButton,
-              pressed && styles.addButtonPressed,
+              { backgroundColor: colors.backgroundDark, borderColor: colors.border },
+              pressed && { backgroundColor: colors.border },
             ]}
             onPress={handleAddBookshelf}
           >
-            <Ionicons name="add-circle" size={24} color={Colors.primary} />
-            <Text style={styles.addButtonText}>Add New Bookshelf</Text>
+            <Ionicons name="add-circle" size={24} color={colors.primary} />
+            <Text style={[styles.addButtonText, { color: colors.primary }]}>Add New Bookshelf</Text>
           </Pressable>
         )}
 
@@ -186,7 +188,6 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   scrollView: {
     flex: 1,
@@ -205,24 +206,20 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: Typography.sizes.xl,
     fontWeight: Typography.weights.bold,
-    color: Colors.text,
   },
   subGreeting: {
     fontSize: Typography.sizes.md,
-    color: Colors.textSecondary,
     marginTop: 4,
   },
   premiumBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Colors.primaryLight,
     paddingVertical: Spacing.xs,
     paddingHorizontal: Spacing.sm,
     borderRadius: BorderRadius.full,
   },
   premiumText: {
-    color: Colors.textInverse,
     fontSize: Typography.sizes.xs,
     fontWeight: Typography.weights.semibold,
   },
@@ -237,19 +234,13 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.md,
     marginTop: Spacing.md,
     padding: Spacing.lg,
-    backgroundColor: Colors.backgroundDark,
     borderRadius: BorderRadius.lg,
     borderWidth: 2,
-    borderColor: Colors.border,
     borderStyle: 'dashed',
-  },
-  addButtonPressed: {
-    backgroundColor: Colors.border,
   },
   addButtonText: {
     fontSize: Typography.sizes.md,
     fontWeight: Typography.weights.semibold,
-    color: Colors.primary,
   },
   bottomPadding: {
     height: 40,

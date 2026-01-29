@@ -24,18 +24,20 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { booksService, FREE_TIER_LIMITS, bookshelvesService } from '@/services';
 import { useBookshelves } from '@/hooks/useBookshelves';
 import { CommunityBookItem } from '@/components/CommunityBookItem';
 import { UserSearchResult } from '@/components/UserSearchResult';
 import { Input, EmptyState, Button } from '@/components/ui';
-import { Colors, Spacing, Typography, BorderRadius } from '@/constants/theme';
+import { Spacing, Typography, BorderRadius } from '@/constants/theme';
 import type { CommunityBookSpine, PaginatedResponse } from '@/types';
 
 const PAGE_SIZE = 20;
 
 export default function CommunityScreen() {
   const { user } = useAuth();
+  const { colors } = useTheme();
   const { bookshelves, fetchBookshelves } = useBookshelves();
   const [books, setBooks] = useState<CommunityBookSpine[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -222,17 +224,19 @@ export default function CommunityScreen() {
    */
   if (!canAccessCommunity) {
     return (
-      <SafeAreaView style={styles.container} edges={['left', 'right']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right']}>
         <View style={styles.premiumGate}>
           <EmptyState
             icon="lock-closed"
             title="Premium Feature"
             description="Access the community book collection with a Premium subscription. Browse thousands of book spines uploaded by other readers."
+            colors={colors}
           />
           <Button
             title="Upgrade to Premium"
             onPress={() => router.push('/payment')}
             size="lg"
+            colors={colors}
           />
         </View>
       </SafeAreaView>
@@ -246,7 +250,7 @@ export default function CommunityScreen() {
     if (!isLoadingMore) return null;
     return (
       <View style={styles.footer}>
-        <ActivityIndicator size="small" color={Colors.primary} />
+        <ActivityIndicator size="small" color={colors.primary} />
       </View>
     );
   };
@@ -265,17 +269,18 @@ export default function CommunityScreen() {
             ? 'Try a different search term.'
             : 'Be the first to add a book to the community!'
         }
+        colors={colors}
       />
     );
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right']}>
       {/* User Search Bar */}
-      <View style={styles.userSearchContainer}>
+      <View style={[styles.userSearchContainer, { backgroundColor: colors.background }]}>
         <View style={styles.userSearchHeader}>
-          <Ionicons name="people" size={18} color={Colors.primary} />
-          <Text style={styles.userSearchLabel}>Find Users</Text>
+          <Ionicons name="people" size={18} color={colors.primary} />
+          <Text style={[styles.userSearchLabel, { color: colors.primary }]}>Find Users</Text>
         </View>
         <Input
           placeholder="Search by user name..."
@@ -288,15 +293,16 @@ export default function CommunityScreen() {
             setUserSearchResults([]);
           }}
           containerStyle={styles.searchInput}
+          colors={colors}
         />
 
         {/* User Search Results */}
         {(userSearchResults.length > 0 || isSearchingUsers) && (
-          <View style={styles.userSearchResults}>
+          <View style={[styles.userSearchResults, { backgroundColor: colors.backgroundDark }]}>
             {isSearchingUsers ? (
               <View style={styles.searchingIndicator}>
-                <ActivityIndicator size="small" color={Colors.primary} />
-                <Text style={styles.searchingText}>Searching users...</Text>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[styles.searchingText, { color: colors.textSecondary }]}>Searching users...</Text>
               </View>
             ) : userSearchResults.length > 0 ? (
               userSearchResults.map((resultUser) => (
@@ -313,19 +319,19 @@ export default function CommunityScreen() {
         {/* No results message */}
         {userSearchQuery.trim() && !isSearchingUsers && userSearchResults.length === 0 && (
           <View style={styles.noResultsContainer}>
-            <Text style={styles.noResultsText}>No users found</Text>
+            <Text style={[styles.noResultsText, { color: colors.textSecondary }]}>No users found</Text>
           </View>
         )}
       </View>
 
       {/* Divider */}
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
       {/* Book Search Bar */}
-      <View style={styles.searchContainer}>
+      <View style={[styles.searchContainer, { backgroundColor: colors.background }]}>
         <View style={styles.userSearchHeader}>
-          <Ionicons name="book" size={18} color={Colors.primary} />
-          <Text style={styles.userSearchLabel}>Browse Books</Text>
+          <Ionicons name="book" size={18} color={colors.primary} />
+          <Text style={[styles.userSearchLabel, { color: colors.primary }]}>Browse Books</Text>
         </View>
         <Input
           placeholder="Search by title or author..."
@@ -335,14 +341,15 @@ export default function CommunityScreen() {
           rightIcon={searchQuery ? 'close-circle' : undefined}
           onRightIconPress={() => setSearchQuery('')}
           containerStyle={styles.searchInput}
+          colors={colors}
         />
       </View>
 
       {/* Books List */}
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Loading community books...</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading community books...</Text>
         </View>
       ) : (
         <FlatList
@@ -355,7 +362,7 @@ export default function CommunityScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={Colors.primary}
+              tintColor={colors.primary}
             />
           }
           onEndReached={handleLoadMore}
@@ -376,12 +383,10 @@ export default function CommunityScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   userSearchContainer: {
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.md,
-    backgroundColor: Colors.background,
   },
   userSearchHeader: {
     flexDirection: 'row',
@@ -392,11 +397,9 @@ const styles = StyleSheet.create({
   userSearchLabel: {
     fontSize: Typography.sizes.sm,
     fontWeight: Typography.weights.semibold,
-    color: Colors.primary,
   },
   userSearchResults: {
     marginTop: Spacing.xs,
-    backgroundColor: Colors.backgroundDark,
     borderRadius: BorderRadius.md,
     overflow: 'hidden',
     maxHeight: 200,
@@ -410,7 +413,6 @@ const styles = StyleSheet.create({
   },
   searchingText: {
     fontSize: Typography.sizes.sm,
-    color: Colors.textSecondary,
   },
   noResultsContainer: {
     padding: Spacing.md,
@@ -418,18 +420,15 @@ const styles = StyleSheet.create({
   },
   noResultsText: {
     fontSize: Typography.sizes.sm,
-    color: Colors.textSecondary,
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.border,
     marginHorizontal: Spacing.md,
     marginVertical: Spacing.sm,
   },
   searchContainer: {
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.sm,
-    backgroundColor: Colors.background,
   },
   searchInput: {
     marginBottom: 0,
@@ -441,7 +440,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: Spacing.md,
-    color: Colors.textSecondary,
     fontSize: Typography.sizes.md,
   },
   listContent: {
