@@ -98,6 +98,15 @@ export default function RootLayout() {
               }}
             />
 
+            {/* User profile screen */}
+            <Stack.Screen
+              name="user/[id]"
+              options={{
+                title: 'User Profile',
+                presentation: 'card',
+              }}
+            />
+
             {/* Book detail screen */}
             <Stack.Screen
               name="book/[id]"

@@ -286,6 +286,64 @@ class BookshelvesService {
   }
 
   /**
+   * Get a user's public bookshelves by user ID
+   * Used for viewing another user's public library
+   *
+   * @param userId - The user ID to fetch public bookshelves for
+   * @returns Array of public bookshelves with preview books and user info
+   */
+  async getPublicBookshelvesForUser(
+    userId: string
+  ): Promise<ApiResponse<{ user: { id: string; name: string | null }; bookshelves: (Bookshelf & { books: Book[] })[] }>> {
+    try {
+      // First, get the user's name
+      const { data: userData, error: userError } = await supabase
+        .from(TABLES.USERS)
+        .select('id, name')
+        .eq('id', userId)
+        .single();
+
+      if (userError) throw userError;
+
+      // Get public bookshelves for this user with their books
+      const { data, error } = await supabase
+        .from(TABLES.BOOKSHELVES)
+        .select(
+          `
+          *,
+          books:books(*)
+        `
+        )
+        .eq('user_id', userId)
+        .eq('is_public', true)
+        .order('position', { ascending: true });
+
+      if (error) throw error;
+
+      // Sort books by position within each shelf
+      const shelves = (data as (Bookshelf & { books: Book[] })[]).map(
+        (shelf) => ({
+          ...shelf,
+          books: shelf.books.sort((a, b) => a.position - b.position),
+        })
+      );
+
+      return {
+        data: {
+          user: userData as { id: string; name: string | null },
+          bookshelves: shelves,
+        },
+        error: null,
+      };
+    } catch (error) {
+      return {
+        data: null,
+        error: { message: handleSupabaseError(error) },
+      };
+    }
+  }
+
+  /**
    * Get the count of user's bookshelves
    * Useful for checking premium limits
    */
