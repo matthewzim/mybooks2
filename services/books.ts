@@ -118,6 +118,7 @@ class BooksService {
           isbn: input.isbn || null,
           uploaded_by_user_id: session.session.user.id,
           is_community: input.is_community ?? true, // Default to sharing with community
+          is_stacked: input.is_stacked ?? false, // Default to upright position
         })
         .select()
         .single();

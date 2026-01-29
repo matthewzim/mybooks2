@@ -11,6 +11,8 @@ export { BookshelfPreview } from './BookshelfPreview';
 export { CameraScanner } from './CameraScanner';
 export { CommunityBookItem } from './CommunityBookItem';
 export { SpineCropper } from './SpineCropper';
+export { DraggableBookSpine } from './DraggableBookSpine';
+export { EditableBookshelfGrid } from './EditableBookshelfGrid';
 
 // UI components
 export * from './ui';

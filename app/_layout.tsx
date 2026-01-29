@@ -16,6 +16,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { StripeProvider } from '@stripe/stripe-react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { stripeService } from '@/services/stripe';
 import { Colors } from '@/constants/theme';
@@ -43,106 +44,108 @@ export default function RootLayout() {
   }
 
   return (
-    <StripeProvider
-      publishableKey={stripeService.getPublishableKey()}
-      merchantIdentifier="merchant.com.yourcompany.virtuallibrary"
-    >
-      <AuthProvider>
-        <StatusBar style="auto" />
-        <Stack
-          screenOptions={{
-            headerStyle: {
-              backgroundColor: Colors.primary,
-            },
-            headerTintColor: Colors.textInverse,
-            headerTitleStyle: {
-              fontWeight: '600',
-            },
-            contentStyle: {
-              backgroundColor: Colors.background,
-            },
-          }}
-        >
-          {/* Main entry point - handles auth routing */}
-          <Stack.Screen
-            name="index"
-            options={{
-              headerShown: false,
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <StripeProvider
+        publishableKey={stripeService.getPublishableKey()}
+        merchantIdentifier="merchant.com.yourcompany.virtuallibrary"
+      >
+        <AuthProvider>
+          <StatusBar style="auto" />
+          <Stack
+            screenOptions={{
+              headerStyle: {
+                backgroundColor: Colors.primary,
+              },
+              headerTintColor: Colors.textInverse,
+              headerTitleStyle: {
+                fontWeight: '600',
+              },
+              contentStyle: {
+                backgroundColor: Colors.background,
+              },
             }}
-          />
+          >
+            {/* Main entry point - handles auth routing */}
+            <Stack.Screen
+              name="index"
+              options={{
+                headerShown: false,
+              }}
+            />
 
-          {/* Auth screens group */}
-          <Stack.Screen
-            name="(auth)"
-            options={{
-              headerShown: false,
-            }}
-          />
+            {/* Auth screens group */}
+            <Stack.Screen
+              name="(auth)"
+              options={{
+                headerShown: false,
+              }}
+            />
 
-          {/* Main app tabs */}
-          <Stack.Screen
-            name="(tabs)"
-            options={{
-              headerShown: false,
-            }}
-          />
+            {/* Main app tabs */}
+            <Stack.Screen
+              name="(tabs)"
+              options={{
+                headerShown: false,
+              }}
+            />
 
-          {/* Bookshelf detail screen */}
-          <Stack.Screen
-            name="bookshelf/[id]"
-            options={{
-              title: 'Bookshelf',
-              presentation: 'card',
-            }}
-          />
+            {/* Bookshelf detail screen */}
+            <Stack.Screen
+              name="bookshelf/[id]"
+              options={{
+                title: 'Bookshelf',
+                presentation: 'card',
+              }}
+            />
 
-          {/* Book detail screen */}
-          <Stack.Screen
-            name="book/[id]"
-            options={{
-              title: 'Book Details',
-              presentation: 'card',
-            }}
-          />
+            {/* Book detail screen */}
+            <Stack.Screen
+              name="book/[id]"
+              options={{
+                title: 'Book Details',
+                presentation: 'card',
+              }}
+            />
 
-          {/* Camera/Scanner modal */}
-          <Stack.Screen
-            name="scan"
-            options={{
-              title: 'Scan Book',
-              presentation: 'fullScreenModal',
-              headerShown: false,
-            }}
-          />
+            {/* Camera/Scanner modal */}
+            <Stack.Screen
+              name="scan"
+              options={{
+                title: 'Scan Book',
+                presentation: 'fullScreenModal',
+                headerShown: false,
+              }}
+            />
 
-          {/* Payment screen */}
-          <Stack.Screen
-            name="payment"
-            options={{
-              title: 'Premium',
-              presentation: 'modal',
-            }}
-          />
+            {/* Payment screen */}
+            <Stack.Screen
+              name="payment"
+              options={{
+                title: 'Premium',
+                presentation: 'modal',
+              }}
+            />
 
-          {/* Add book modal */}
-          <Stack.Screen
-            name="add-book"
-            options={{
-              title: 'Add Book',
-              presentation: 'modal',
-            }}
-          />
+            {/* Add book modal */}
+            <Stack.Screen
+              name="add-book"
+              options={{
+                title: 'Add Book',
+                presentation: 'modal',
+              }}
+            />
 
-          {/* Create bookshelf modal */}
-          <Stack.Screen
-            name="create-bookshelf"
-            options={{
-              title: 'New Bookshelf',
-              presentation: 'modal',
-            }}
-          />
-        </Stack>
-      </AuthProvider>
-    </StripeProvider>
+            {/* Create bookshelf modal */}
+            <Stack.Screen
+              name="create-bookshelf"
+              options={{
+                title: 'New Bookshelf',
+                presentation: 'modal',
+              }}
+            />
+          </Stack>
+        </AuthProvider>
+      </StripeProvider>
+    </GestureHandlerRootView>
   );
 }

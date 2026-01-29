@@ -53,6 +53,7 @@ export interface Book {
   uploaded_by_user_id: string;
   is_community: boolean;
   isbn: string | null;
+  is_stacked: boolean; // Whether the book is rotated 90 degrees to lay flat
   created_at: string;
   updated_at: string;
 }
@@ -111,6 +112,7 @@ export interface CreateBookInput {
   rating?: number;
   isbn?: string;
   is_community?: boolean;
+  is_stacked?: boolean;
 }
 
 export interface UpdateBookInput {
@@ -122,6 +124,7 @@ export interface UpdateBookInput {
   review?: string;
   rating?: number;
   isbn?: string;
+  is_stacked?: boolean;
 }
 
 // ============================================
