@@ -166,6 +166,7 @@ CREATE TABLE public.books (
   rating INTEGER CHECK (rating >= 1 AND rating <= 5),
   uploaded_by_user_id UUID REFERENCES public.users(id) NOT NULL,
   is_community BOOLEAN DEFAULT true,
+  is_stacked BOOLEAN DEFAULT false,
   isbn TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
