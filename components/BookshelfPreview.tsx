@@ -28,6 +28,7 @@ import {
   Shadows,
   Typography,
 } from '@/constants/theme';
+import { getSpineImageUrl } from '@/services/storage';
 import type { Bookshelf, Book } from '@/types';
 
 interface BookshelfPreviewProps {
@@ -146,7 +147,9 @@ interface BookPreviewSpineProps {
 }
 
 function BookPreviewSpine({ book }: BookPreviewSpineProps) {
-  const hasImage = !!book.image_url;
+  // Get the book spine image URL from the book-spines bucket
+  const spineImageUrl = getSpineImageUrl(book.image_url);
+  const hasImage = !!spineImageUrl;
 
   // Generate a color based on book title
   const getBookColor = (title: string): string => {
@@ -170,7 +173,7 @@ function BookPreviewSpine({ book }: BookPreviewSpineProps) {
     >
       {hasImage ? (
         <Image
-          source={{ uri: book.image_url! }}
+          source={{ uri: spineImageUrl }}
           style={styles.bookImage}
           contentFit="cover"
         />
