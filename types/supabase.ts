@@ -92,6 +92,7 @@ export interface Database {
           uploaded_by_user_id: string;
           is_community: boolean;
           isbn: string | null;
+          is_stacked: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -107,6 +108,7 @@ export interface Database {
           uploaded_by_user_id: string;
           is_community?: boolean;
           isbn?: string | null;
+          is_stacked?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -122,6 +124,7 @@ export interface Database {
           uploaded_by_user_id?: string;
           is_community?: boolean;
           isbn?: string | null;
+          is_stacked?: boolean;
           created_at?: string;
           updated_at?: string;
         };
