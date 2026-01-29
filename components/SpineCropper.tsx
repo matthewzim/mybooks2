@@ -151,10 +151,15 @@ export function SpineCropper({
         const dampenedDx = gestureState.dx * DRAG_DAMPENING;
         const dampenedDy = gestureState.dy * DRAG_DAMPENING;
 
+        // Capture position values before async setCorners to avoid race condition
+        // where onPanResponderRelease sets initialCornerPosition to null
+        const initialX = initialCornerPosition.x;
+        const initialY = initialCornerPosition.y;
+
         setCorners((prev) => {
           const newCorners = [...prev];
-          const newX = Math.max(0, Math.min(displaySize.width, initialCornerPosition!.x + dampenedDx));
-          const newY = Math.max(0, Math.min(displaySize.height, initialCornerPosition!.y + dampenedDy));
+          const newX = Math.max(0, Math.min(displaySize.width, initialX + dampenedDx));
+          const newY = Math.max(0, Math.min(displaySize.height, initialY + dampenedDy));
           newCorners[cornerIndex] = { x: newX, y: newY };
           return newCorners;
         });
