@@ -3,6 +3,7 @@
  *
  * Browse book spines uploaded by other users.
  * Features:
+ * - User search to find other users' profiles
  * - Paginated list of community books
  * - Search functionality
  * - Add to shelf action
@@ -21,12 +22,14 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { booksService, FREE_TIER_LIMITS } from '@/services';
+import { booksService, FREE_TIER_LIMITS, bookshelvesService } from '@/services';
 import { useBookshelves } from '@/hooks/useBookshelves';
 import { CommunityBookItem } from '@/components/CommunityBookItem';
+import { UserSearchResult } from '@/components/UserSearchResult';
 import { Input, EmptyState, Button } from '@/components/ui';
-import { Colors, Spacing, Typography } from '@/constants/theme';
+import { Colors, Spacing, Typography, BorderRadius } from '@/constants/theme';
 import type { CommunityBookSpine, PaginatedResponse } from '@/types';
 
 const PAGE_SIZE = 20;
@@ -41,6 +44,11 @@ export default function CommunityScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+
+  // User search state
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userSearchResults, setUserSearchResults] = useState<{ id: string; name: string | null }[]>([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
 
   // Check if user can access community
   const canAccessCommunity =
@@ -88,7 +96,7 @@ export default function CommunityScreen() {
   }, [canAccessCommunity, fetchBooks]);
 
   /**
-   * Handle search
+   * Handle book search
    */
   useEffect(() => {
     if (canAccessCommunity) {
@@ -97,6 +105,30 @@ export default function CommunityScreen() {
       fetchBooks(0);
     }
   }, [searchQuery]);
+
+  /**
+   * Handle user search
+   */
+  useEffect(() => {
+    const searchUsers = async () => {
+      if (!userSearchQuery.trim()) {
+        setUserSearchResults([]);
+        setIsSearchingUsers(false);
+        return;
+      }
+
+      setIsSearchingUsers(true);
+      const result = await bookshelvesService.searchUsers(userSearchQuery);
+      if (result.data) {
+        setUserSearchResults(result.data);
+      }
+      setIsSearchingUsers(false);
+    };
+
+    // Debounce user search
+    const timeoutId = setTimeout(searchUsers, 300);
+    return () => clearTimeout(timeoutId);
+  }, [userSearchQuery]);
 
   /**
    * Handle pull to refresh
@@ -173,6 +205,19 @@ export default function CommunityScreen() {
   };
 
   /**
+   * Handle user search result press - navigate to user profile
+   */
+  const handleUserPress = (selectedUser: { id: string; name: string | null }) => {
+    // Clear search and navigate to user profile
+    setUserSearchQuery('');
+    setUserSearchResults([]);
+    router.push({
+      pathname: '/user/[id]',
+      params: { id: selectedUser.id },
+    });
+  };
+
+  /**
    * Render premium gate for non-premium users
    */
   if (!canAccessCommunity) {
@@ -226,8 +271,62 @@ export default function CommunityScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      {/* Search Bar */}
+      {/* User Search Bar */}
+      <View style={styles.userSearchContainer}>
+        <View style={styles.userSearchHeader}>
+          <Ionicons name="people" size={18} color={Colors.primary} />
+          <Text style={styles.userSearchLabel}>Find Users</Text>
+        </View>
+        <Input
+          placeholder="Search by user name..."
+          value={userSearchQuery}
+          onChangeText={setUserSearchQuery}
+          leftIcon="person-outline"
+          rightIcon={userSearchQuery ? 'close-circle' : undefined}
+          onRightIconPress={() => {
+            setUserSearchQuery('');
+            setUserSearchResults([]);
+          }}
+          containerStyle={styles.searchInput}
+        />
+
+        {/* User Search Results */}
+        {(userSearchResults.length > 0 || isSearchingUsers) && (
+          <View style={styles.userSearchResults}>
+            {isSearchingUsers ? (
+              <View style={styles.searchingIndicator}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.searchingText}>Searching users...</Text>
+              </View>
+            ) : userSearchResults.length > 0 ? (
+              userSearchResults.map((resultUser) => (
+                <UserSearchResult
+                  key={resultUser.id}
+                  user={resultUser}
+                  onPress={handleUserPress}
+                />
+              ))
+            ) : null}
+          </View>
+        )}
+
+        {/* No results message */}
+        {userSearchQuery.trim() && !isSearchingUsers && userSearchResults.length === 0 && (
+          <View style={styles.noResultsContainer}>
+            <Text style={styles.noResultsText}>No users found</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Divider */}
+      <View style={styles.divider} />
+
+      {/* Book Search Bar */}
       <View style={styles.searchContainer}>
+        <View style={styles.userSearchHeader}>
+          <Ionicons name="book" size={18} color={Colors.primary} />
+          <Text style={styles.userSearchLabel}>Browse Books</Text>
+        </View>
         <Input
           placeholder="Search by title or author..."
           value={searchQuery}
@@ -279,9 +378,56 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  searchContainer: {
+  userSearchContainer: {
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.md,
+    backgroundColor: Colors.background,
+  },
+  userSearchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  userSearchLabel: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.semibold,
+    color: Colors.primary,
+  },
+  userSearchResults: {
+    marginTop: Spacing.xs,
+    backgroundColor: Colors.backgroundDark,
+    borderRadius: BorderRadius.md,
+    overflow: 'hidden',
+    maxHeight: 200,
+  },
+  searchingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.md,
+    gap: Spacing.sm,
+  },
+  searchingText: {
+    fontSize: Typography.sizes.sm,
+    color: Colors.textSecondary,
+  },
+  noResultsContainer: {
+    padding: Spacing.md,
+    alignItems: 'center',
+  },
+  noResultsText: {
+    fontSize: Typography.sizes.sm,
+    color: Colors.textSecondary,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginHorizontal: Spacing.md,
+    marginVertical: Spacing.sm,
+  },
+  searchContainer: {
+    paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.sm,
     backgroundColor: Colors.background,
   },

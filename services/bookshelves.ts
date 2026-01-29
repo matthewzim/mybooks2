@@ -344,6 +344,52 @@ class BookshelvesService {
   }
 
   /**
+   * Search for users by name
+   * Returns users with public bookshelves matching the search query
+   *
+   * @param query - Search query for user name
+   * @param limit - Maximum number of results to return
+   * @returns Array of matching users
+   */
+  async searchUsers(
+    query: string,
+    limit: number = 10
+  ): Promise<ApiResponse<{ id: string; name: string | null }[]>> {
+    try {
+      if (!query.trim()) {
+        return { data: [], error: null };
+      }
+
+      // Get the current user to exclude from search results
+      const { data: session } = await supabase.auth.getSession();
+      const currentUserId = session.session?.user?.id;
+
+      // Search users by name (case-insensitive)
+      let queryBuilder = supabase
+        .from(TABLES.USERS)
+        .select('id, name')
+        .ilike('name', `%${query}%`)
+        .limit(limit);
+
+      // Exclude current user from results
+      if (currentUserId) {
+        queryBuilder = queryBuilder.neq('id', currentUserId);
+      }
+
+      const { data, error } = await queryBuilder;
+
+      if (error) throw error;
+
+      return { data: data as { id: string; name: string | null }[], error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: { message: handleSupabaseError(error) },
+      };
+    }
+  }
+
+  /**
    * Get the count of user's bookshelves
    * Useful for checking premium limits
    */
