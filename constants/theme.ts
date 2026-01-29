@@ -5,15 +5,72 @@
  * Includes colors, spacing, typography, and other design tokens.
  */
 
-export const Colors = {
+/**
+ * Theme types
+ */
+export type ThemeType = 'light' | 'dark' | 'standard';
+
+export interface ThemeColors {
   // Primary colors
-  primary: '#1a1a2e',
-  primaryLight: '#16213e',
-  primaryDark: '#0f0f1a',
+  primary: string;
+  primaryLight: string;
+  primaryDark: string;
 
   // Secondary colors
-  secondary: '#0f3460',
-  secondaryLight: '#1a5276',
+  secondary: string;
+  secondaryLight: string;
+
+  // Accent colors
+  accent: string;
+  accentLight: string;
+
+  // Background colors
+  background: string;
+  backgroundDark: string;
+  card: string;
+  cardDark: string;
+
+  // Text colors
+  text: string;
+  textSecondary: string;
+  textLight: string;
+  textInverse: string;
+
+  // Bookshelf colors (wood tones)
+  bookshelfWood: string;
+  bookshelfDark: string;
+  bookshelfLight: string;
+
+  // Status colors
+  success: string;
+  warning: string;
+  error: string;
+  info: string;
+
+  // Border colors
+  border: string;
+  borderLight: string;
+
+  // Rating star colors
+  starFilled: string;
+  starEmpty: string;
+
+  // Overlay
+  overlay: string;
+}
+
+/**
+ * Light Mode Theme - White/light gray shades
+ */
+export const LightTheme: ThemeColors = {
+  // Primary colors
+  primary: '#2563eb',
+  primaryLight: '#3b82f6',
+  primaryDark: '#1d4ed8',
+
+  // Secondary colors
+  secondary: '#64748b',
+  secondaryLight: '#94a3b8',
 
   // Accent colors
   accent: '#e94560',
@@ -21,14 +78,14 @@ export const Colors = {
 
   // Background colors
   background: '#ffffff',
-  backgroundDark: '#f5f5f5',
+  backgroundDark: '#f8fafc',
   card: '#ffffff',
-  cardDark: '#f8f9fa',
+  cardDark: '#f1f5f9',
 
   // Text colors
-  text: '#1a1a2e',
-  textSecondary: '#6c757d',
-  textLight: '#adb5bd',
+  text: '#1e293b',
+  textSecondary: '#64748b',
+  textLight: '#94a3b8',
   textInverse: '#ffffff',
 
   // Bookshelf colors (wood tones)
@@ -37,22 +94,141 @@ export const Colors = {
   bookshelfLight: '#DEB887',
 
   // Status colors
-  success: '#28a745',
-  warning: '#ffc107',
-  error: '#dc3545',
-  info: '#17a2b8',
+  success: '#22c55e',
+  warning: '#f59e0b',
+  error: '#ef4444',
+  info: '#3b82f6',
 
   // Border colors
-  border: '#dee2e6',
-  borderLight: '#e9ecef',
+  border: '#e2e8f0',
+  borderLight: '#f1f5f9',
 
   // Rating star colors
-  starFilled: '#ffc107',
-  starEmpty: '#e4e5e9',
+  starFilled: '#f59e0b',
+  starEmpty: '#e2e8f0',
 
   // Overlay
   overlay: 'rgba(0, 0, 0, 0.5)',
-} as const;
+};
+
+/**
+ * Dark Mode Theme - Black/dark shades
+ */
+export const DarkTheme: ThemeColors = {
+  // Primary colors
+  primary: '#3b82f6',
+  primaryLight: '#60a5fa',
+  primaryDark: '#2563eb',
+
+  // Secondary colors
+  secondary: '#64748b',
+  secondaryLight: '#94a3b8',
+
+  // Accent colors
+  accent: '#f472b6',
+  accentLight: '#fb7185',
+
+  // Background colors
+  background: '#0f172a',
+  backgroundDark: '#020617',
+  card: '#1e293b',
+  cardDark: '#0f172a',
+
+  // Text colors
+  text: '#f1f5f9',
+  textSecondary: '#94a3b8',
+  textLight: '#64748b',
+  textInverse: '#0f172a',
+
+  // Bookshelf colors (wood tones)
+  bookshelfWood: '#78350f',
+  bookshelfDark: '#451a03',
+  bookshelfLight: '#a16207',
+
+  // Status colors
+  success: '#22c55e',
+  warning: '#f59e0b',
+  error: '#ef4444',
+  info: '#3b82f6',
+
+  // Border colors
+  border: '#334155',
+  borderLight: '#1e293b',
+
+  // Rating star colors
+  starFilled: '#f59e0b',
+  starEmpty: '#334155',
+
+  // Overlay
+  overlay: 'rgba(0, 0, 0, 0.7)',
+};
+
+/**
+ * Standard Theme - Light brown/dark brown (warm wood tones)
+ */
+export const StandardTheme: ThemeColors = {
+  // Primary colors
+  primary: '#78350f',
+  primaryLight: '#92400e',
+  primaryDark: '#451a03',
+
+  // Secondary colors
+  secondary: '#a16207',
+  secondaryLight: '#ca8a04',
+
+  // Accent colors
+  accent: '#dc2626',
+  accentLight: '#ef4444',
+
+  // Background colors
+  background: '#fef3c7',
+  backgroundDark: '#fde68a',
+  card: '#fffbeb',
+  cardDark: '#fef3c7',
+
+  // Text colors
+  text: '#451a03',
+  textSecondary: '#78350f',
+  textLight: '#a16207',
+  textInverse: '#fffbeb',
+
+  // Bookshelf colors (wood tones)
+  bookshelfWood: '#8B4513',
+  bookshelfDark: '#654321',
+  bookshelfLight: '#DEB887',
+
+  // Status colors
+  success: '#15803d',
+  warning: '#ca8a04',
+  error: '#dc2626',
+  info: '#0369a1',
+
+  // Border colors
+  border: '#d97706',
+  borderLight: '#fbbf24',
+
+  // Rating star colors
+  starFilled: '#f59e0b',
+  starEmpty: '#fde68a',
+
+  // Overlay
+  overlay: 'rgba(69, 26, 3, 0.5)',
+};
+
+/**
+ * Theme collection
+ */
+export const Themes: Record<ThemeType, ThemeColors> = {
+  light: LightTheme,
+  dark: DarkTheme,
+  standard: StandardTheme,
+};
+
+/**
+ * Default theme colors (for backwards compatibility)
+ * This will be overridden by ThemeContext in runtime
+ */
+export const Colors = LightTheme;
 
 export const Spacing = {
   xs: 4,

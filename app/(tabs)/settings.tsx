@@ -5,6 +5,7 @@
  * Features:
  * - Profile management
  * - Premium subscription
+ * - Theme selection
  * - App settings
  * - Sign out
  */
@@ -23,18 +24,30 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { Input, Button } from '@/components/ui';
 import {
-  Colors,
   Spacing,
   BorderRadius,
   Typography,
   Shadows,
+  ThemeType,
+  ThemeColors,
 } from '@/constants/theme';
 import { FREE_TIER_LIMITS } from '@/services/stripe';
 
+/**
+ * Theme option configuration
+ */
+const THEME_OPTIONS: { value: ThemeType; label: string; icon: keyof typeof Ionicons.glyphMap; description: string }[] = [
+  { value: 'light', label: 'Light Mode', icon: 'sunny-outline', description: 'Clean white background' },
+  { value: 'dark', label: 'Dark Mode', icon: 'moon-outline', description: 'Easy on the eyes' },
+  { value: 'standard', label: 'Standard', icon: 'leaf-outline', description: 'Warm brown tones' },
+];
+
 export default function SettingsScreen() {
   const { user, signOut, updateProfile } = useAuth();
+  const { theme, setTheme, colors } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
   const [isLoading, setIsLoading] = useState(false);
@@ -89,8 +102,15 @@ export default function SettingsScreen() {
     router.push('/payment');
   };
 
+  /**
+   * Handle theme change
+   */
+  const handleThemeChange = async (newTheme: ThemeType) => {
+    await setTheme(newTheme);
+  };
+
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.backgroundDark }]} edges={['left', 'right']}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -98,18 +118,18 @@ export default function SettingsScreen() {
       >
         {/* Profile Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Profile</Text>
-          <View style={styles.card}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Profile</Text>
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
             {/* Avatar */}
             <View style={styles.avatarContainer}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
+              <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+                <Text style={[styles.avatarText, { color: colors.textInverse }]}>
                   {(user?.name || user?.email || 'U')[0].toUpperCase()}
                 </Text>
               </View>
               {user?.is_premium && (
-                <View style={styles.premiumBadge}>
-                  <Ionicons name="star" size={12} color={Colors.starFilled} />
+                <View style={[styles.premiumBadge, { backgroundColor: colors.primary, borderColor: colors.card }]}>
+                  <Ionicons name="star" size={12} color={colors.starFilled} />
                 </View>
               )}
             </View>
@@ -143,14 +163,14 @@ export default function SettingsScreen() {
               </View>
             ) : (
               <View style={styles.profileInfo}>
-                <Text style={styles.userName}>{user?.name || 'No name set'}</Text>
-                <Text style={styles.userEmail}>{user?.email}</Text>
+                <Text style={[styles.userName, { color: colors.text }]}>{user?.name || 'No name set'}</Text>
+                <Text style={[styles.userEmail, { color: colors.textSecondary }]}>{user?.email}</Text>
                 <Pressable
                   style={styles.editButton}
                   onPress={() => setIsEditing(true)}
                 >
-                  <Ionicons name="pencil" size={16} color={Colors.primary} />
-                  <Text style={styles.editButtonText}>Edit Profile</Text>
+                  <Ionicons name="pencil" size={16} color={colors.primary} />
+                  <Text style={[styles.editButtonText, { color: colors.primary }]}>Edit Profile</Text>
                 </Pressable>
               </View>
             )}
@@ -159,9 +179,9 @@ export default function SettingsScreen() {
 
         {/* Premium Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Subscription</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Subscription</Text>
           <Pressable
-            style={[styles.card, styles.premiumCard]}
+            style={[styles.card, styles.premiumCard, { backgroundColor: colors.card }]}
             onPress={handleUpgrade}
           >
             <View style={styles.premiumContent}>
@@ -169,13 +189,13 @@ export default function SettingsScreen() {
                 <Ionicons
                   name={user?.is_premium ? 'star' : 'star-outline'}
                   size={28}
-                  color={user?.is_premium ? Colors.starFilled : Colors.primary}
+                  color={user?.is_premium ? colors.starFilled : colors.primary}
                 />
                 <View style={styles.premiumText}>
-                  <Text style={styles.premiumTitle}>
+                  <Text style={[styles.premiumTitle, { color: colors.text }]}>
                     {user?.is_premium ? 'Premium Member' : 'Go Premium'}
                   </Text>
-                  <Text style={styles.premiumDescription}>
+                  <Text style={[styles.premiumDescription, { color: colors.textSecondary }]}>
                     {user?.is_premium
                       ? 'Thank you for your support!'
                       : 'Unlock unlimited bookshelves and home screen widget'}
@@ -186,28 +206,70 @@ export default function SettingsScreen() {
                 <Ionicons
                   name="chevron-forward"
                   size={20}
-                  color={Colors.textSecondary}
+                  color={colors.textSecondary}
                 />
               )}
             </View>
           </Pressable>
         </View>
 
+        {/* Appearance Section - Theme Selection */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Appearance</Text>
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
+            {THEME_OPTIONS.map((option, index) => (
+              <Pressable
+                key={option.value}
+                style={({ pressed }) => [
+                  styles.themeOption,
+                  { borderBottomColor: colors.border },
+                  index === THEME_OPTIONS.length - 1 && styles.lastThemeOption,
+                  pressed && { backgroundColor: colors.backgroundDark },
+                ]}
+                onPress={() => handleThemeChange(option.value)}
+              >
+                <View style={styles.themeOptionLeft}>
+                  <View style={[
+                    styles.themeIconContainer,
+                    { backgroundColor: theme === option.value ? colors.primary : colors.backgroundDark }
+                  ]}>
+                    <Ionicons
+                      name={option.icon}
+                      size={20}
+                      color={theme === option.value ? colors.textInverse : colors.primary}
+                    />
+                  </View>
+                  <View style={styles.themeOptionText}>
+                    <Text style={[styles.themeOptionTitle, { color: colors.text }]}>{option.label}</Text>
+                    <Text style={[styles.themeOptionDescription, { color: colors.textSecondary }]}>
+                      {option.description}
+                    </Text>
+                  </View>
+                </View>
+                {theme === option.value && (
+                  <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+                )}
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
         {/* Preferences Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Preferences</Text>
-          <View style={styles.card}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Preferences</Text>
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
             <SettingsRow
               icon="notifications-outline"
               title="Push Notifications"
               subtitle="Receive updates about your library"
+              colors={colors}
               trailing={
                 <Switch
                   value={notifications}
                   onValueChange={setNotifications}
                   trackColor={{
-                    false: Colors.border,
-                    true: Colors.primary,
+                    false: colors.border,
+                    true: colors.primary,
                   }}
                 />
               }
@@ -217,8 +279,8 @@ export default function SettingsScreen() {
 
         {/* Widget Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>iOS Widget</Text>
-          <View style={styles.card}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>iOS Widget</Text>
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
             <SettingsRow
               icon="apps-outline"
               title="Home Screen Widget"
@@ -227,6 +289,7 @@ export default function SettingsScreen() {
                   ? 'Display a bookshelf on your home screen'
                   : 'Premium feature - Upgrade to unlock'
               }
+              colors={colors}
               onPress={() => {
                 if (user?.is_premium || FREE_TIER_LIMITS.CAN_USE_WIDGET) {
                   Alert.alert(
@@ -246,7 +309,7 @@ export default function SettingsScreen() {
               }}
               trailing={
                 !(user?.is_premium || FREE_TIER_LIMITS.CAN_USE_WIDGET) ? (
-                  <Ionicons name="lock-closed" size={18} color={Colors.textSecondary} />
+                  <Ionicons name="lock-closed" size={18} color={colors.textSecondary} />
                 ) : undefined
               }
             />
@@ -255,21 +318,24 @@ export default function SettingsScreen() {
 
         {/* About Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About</Text>
-          <View style={styles.card}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>About</Text>
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
             <SettingsRow
               icon="information-circle-outline"
               title="App Version"
               subtitle="1.0.0"
+              colors={colors}
             />
             <SettingsRow
               icon="document-text-outline"
               title="Terms of Service"
+              colors={colors}
               onPress={() => {}}
             />
             <SettingsRow
               icon="shield-outline"
               title="Privacy Policy"
+              colors={colors}
               onPress={() => {}}
             />
           </View>
@@ -278,11 +344,11 @@ export default function SettingsScreen() {
         {/* Sign Out */}
         <View style={styles.section}>
           <Pressable
-            style={[styles.card, styles.signOutCard]}
+            style={[styles.card, styles.signOutCard, { backgroundColor: colors.card }]}
             onPress={handleSignOut}
           >
-            <Ionicons name="log-out-outline" size={20} color={Colors.error} />
-            <Text style={styles.signOutText}>Sign Out</Text>
+            <Ionicons name="log-out-outline" size={20} color={colors.error} />
+            <Text style={[styles.signOutText, { color: colors.error }]}>Sign Out</Text>
           </Pressable>
         </View>
 
@@ -301,6 +367,7 @@ interface SettingsRowProps {
   subtitle?: string;
   onPress?: () => void;
   trailing?: React.ReactNode;
+  colors: ThemeColors;
 }
 
 function SettingsRow({
@@ -309,14 +376,15 @@ function SettingsRow({
   subtitle,
   onPress,
   trailing,
+  colors,
 }: SettingsRowProps) {
   const content = (
     <View style={styles.rowContainer}>
       <View style={styles.rowLeft}>
-        <Ionicons name={icon} size={22} color={Colors.primary} />
+        <Ionicons name={icon} size={22} color={colors.primary} />
         <View style={styles.rowText}>
-          <Text style={styles.rowTitle}>{title}</Text>
-          {subtitle && <Text style={styles.rowSubtitle}>{subtitle}</Text>}
+          <Text style={[styles.rowTitle, { color: colors.text }]}>{title}</Text>
+          {subtitle && <Text style={[styles.rowSubtitle, { color: colors.textSecondary }]}>{subtitle}</Text>}
         </View>
       </View>
       {trailing ||
@@ -324,7 +392,7 @@ function SettingsRow({
           <Ionicons
             name="chevron-forward"
             size={20}
-            color={Colors.textSecondary}
+            color={colors.textSecondary}
           />
         ))}
     </View>
@@ -335,7 +403,8 @@ function SettingsRow({
       <Pressable
         style={({ pressed }) => [
           styles.row,
-          pressed && styles.rowPressed,
+          { borderBottomColor: colors.border },
+          pressed && { backgroundColor: colors.backgroundDark },
         ]}
         onPress={onPress}
       >
@@ -344,13 +413,12 @@ function SettingsRow({
     );
   }
 
-  return <View style={styles.row}>{content}</View>;
+  return <View style={[styles.row, { borderBottomColor: colors.border }]}>{content}</View>;
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.backgroundDark,
   },
   scrollView: {
     flex: 1,
@@ -365,13 +433,11 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: Typography.sizes.sm,
     fontWeight: Typography.weights.semibold,
-    color: Colors.textSecondary,
     textTransform: 'uppercase',
     marginBottom: Spacing.sm,
     marginLeft: Spacing.sm,
   },
   card: {
-    backgroundColor: Colors.background,
     borderRadius: BorderRadius.lg,
     overflow: 'hidden',
     ...Shadows.sm,
@@ -385,24 +451,20 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
     fontSize: Typography.sizes.xxxl,
     fontWeight: Typography.weights.bold,
-    color: Colors.textInverse,
   },
   premiumBadge: {
     position: 'absolute',
     bottom: 0,
     right: '35%',
-    backgroundColor: Colors.primary,
     borderRadius: 12,
     padding: 4,
     borderWidth: 2,
-    borderColor: Colors.background,
   },
   profileInfo: {
     alignItems: 'center',
@@ -411,12 +473,10 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: Typography.sizes.xl,
     fontWeight: Typography.weights.semibold,
-    color: Colors.text,
     marginBottom: 4,
   },
   userEmail: {
     fontSize: Typography.sizes.md,
-    color: Colors.textSecondary,
     marginBottom: Spacing.md,
   },
   editButton: {
@@ -425,7 +485,6 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   editButtonText: {
-    color: Colors.primary,
     fontSize: Typography.sizes.md,
   },
   editForm: {
@@ -456,19 +515,49 @@ const styles = StyleSheet.create({
   premiumTitle: {
     fontSize: Typography.sizes.lg,
     fontWeight: Typography.weights.semibold,
-    color: Colors.text,
   },
   premiumDescription: {
     fontSize: Typography.sizes.sm,
-    color: Colors.textSecondary,
     marginTop: 2,
   },
+  // Theme selection styles
+  themeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  lastThemeOption: {
+    borderBottomWidth: 0,
+  },
+  themeOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    flex: 1,
+  },
+  themeIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  themeOptionText: {
+    flex: 1,
+  },
+  themeOptionTitle: {
+    fontSize: Typography.sizes.md,
+    fontWeight: Typography.weights.medium,
+  },
+  themeOptionDescription: {
+    fontSize: Typography.sizes.sm,
+    marginTop: 2,
+  },
+  // Row styles
   row: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  rowPressed: {
-    backgroundColor: Colors.backgroundDark,
   },
   rowContainer: {
     flexDirection: 'row',
@@ -487,11 +576,9 @@ const styles = StyleSheet.create({
   },
   rowTitle: {
     fontSize: Typography.sizes.md,
-    color: Colors.text,
   },
   rowSubtitle: {
     fontSize: Typography.sizes.sm,
-    color: Colors.textSecondary,
     marginTop: 2,
   },
   signOutCard: {
@@ -504,7 +591,6 @@ const styles = StyleSheet.create({
   signOutText: {
     fontSize: Typography.sizes.md,
     fontWeight: Typography.weights.semibold,
-    color: Colors.error,
   },
   bottomPadding: {
     height: 40,
