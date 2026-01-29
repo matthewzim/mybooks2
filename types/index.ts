@@ -54,6 +54,8 @@ export interface Book {
   is_community: boolean;
   isbn: string | null;
   is_stacked: boolean; // Whether the book is rotated 90 degrees to lay flat
+  stack_id: string | null; // ID of the stack this book belongs to (for vertical stacking)
+  stack_position: number; // Position within the stack (0 = bottom, higher = on top)
   created_at: string;
   updated_at: string;
 }
@@ -122,6 +124,8 @@ export interface CreateBookInput {
   isbn?: string;
   is_community?: boolean;
   is_stacked?: boolean;
+  stack_id?: string;
+  stack_position?: number;
 }
 
 export interface UpdateBookInput {
@@ -134,6 +138,8 @@ export interface UpdateBookInput {
   rating?: number;
   isbn?: string;
   is_stacked?: boolean;
+  stack_id?: string;
+  stack_position?: number;
 }
 
 // ============================================
