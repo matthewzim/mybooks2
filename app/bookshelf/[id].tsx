@@ -25,6 +25,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBookshelves } from '@/hooks/useBookshelves';
 import { useBooks } from '@/hooks/useBooks';
 import { EditableBookshelfGrid } from '@/components/EditableBookshelfGrid';
+import { BookDetailModal } from '@/components/BookDetailModal';
 import { LoadingView, EmptyState } from '@/components/ui';
 import { Colors, Spacing, Typography } from '@/constants/theme';
 import type { Book, Bookshelf } from '@/types';
@@ -36,6 +37,8 @@ export default function BookshelfDetailScreen() {
   const [bookshelf, setBookshelf] = useState<Bookshelf | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [isBookModalVisible, setIsBookModalVisible] = useState(false);
 
   /**
    * Fetch bookshelf data
@@ -61,13 +64,35 @@ export default function BookshelfDetailScreen() {
   }, [loadBookshelf]);
 
   /**
-   * Navigate to book detail
+   * Open book detail modal
    */
   const handleBookPress = (book: Book) => {
-    router.push({
-      pathname: '/book/[id]',
-      params: { id: book.id, shelfId: id },
-    });
+    setSelectedBook(book);
+    setIsBookModalVisible(true);
+  };
+
+  /**
+   * Close book detail modal
+   */
+  const handleCloseBookModal = () => {
+    setIsBookModalVisible(false);
+    // Small delay before clearing selected book to allow close animation
+    setTimeout(() => setSelectedBook(null), 400);
+  };
+
+  /**
+   * Handle book updated from modal
+   */
+  const handleBookUpdated = (updatedBook: Book) => {
+    setSelectedBook(updatedBook);
+    fetchBooks(); // Refresh the books list
+  };
+
+  /**
+   * Handle book deleted from modal
+   */
+  const handleBookDeleted = (bookId: string) => {
+    fetchBooks(); // Refresh the books list
   };
 
   /**
@@ -232,6 +257,15 @@ export default function BookshelfDetailScreen() {
           isEditing={isEditMode}
           onReorderBooks={handleReorderBooks}
           onToggleBookStack={handleToggleBookStack}
+        />
+
+        {/* Book Detail Modal */}
+        <BookDetailModal
+          visible={isBookModalVisible}
+          book={selectedBook}
+          onClose={handleCloseBookModal}
+          onBookUpdated={handleBookUpdated}
+          onBookDeleted={handleBookDeleted}
         />
       </SafeAreaView>
     </>
