@@ -22,6 +22,7 @@ import {
   ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { DraggableBookSpine } from './DraggableBookSpine';
 import { BookSpine } from './BookSpine';
@@ -32,6 +33,7 @@ import {
   BookSpine as BookSpineConstants,
   BookshelfDimensions,
 } from '@/constants/theme';
+import { getSpineImageUrl } from '@/services/storage';
 import type { Book } from '@/types';
 
 interface EditableBookshelfGridProps {
@@ -422,7 +424,8 @@ interface StackedBookSpineProps {
 }
 
 function StackedBookSpine({ book, onPress, width, height }: StackedBookSpineProps) {
-  const hasValidUrl = Boolean(book.image_url && book.image_url.startsWith('http'));
+  const spineImageUrl = getSpineImageUrl(book.image_url);
+  const hasValidUrl = Boolean(spineImageUrl);
   const backgroundColor = getBookColor(book.title);
 
   return (
@@ -439,13 +442,12 @@ function StackedBookSpine({ book, onPress, width, height }: StackedBookSpineProp
       {hasValidUrl ? (
         <View style={[styles.stackedImageContainer, { backgroundColor }]}>
           {/* For stacked books, we show the spine rotated */}
-          <View style={styles.stackedImageWrapper}>
-            <View style={{ width: height, height: width, transform: [{ rotate: '-90deg' }] }}>
-              <View style={{ width: width, height: height, backgroundColor }}>
-                {/* Show a portion of the cover */}
-              </View>
-            </View>
-          </View>
+          <Image
+            source={{ uri: spineImageUrl! }}
+            style={[styles.stackedImage, { transform: [{ rotate: '-90deg' }] }]}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
         </View>
       ) : (
         <View style={[styles.stackedPlaceholder, { backgroundColor }]}>
@@ -570,6 +572,10 @@ const styles = StyleSheet.create({
   stackedImageContainer: {
     flex: 1,
     overflow: 'hidden',
+  },
+  stackedImage: {
+    width: '100%',
+    height: '100%',
   },
   stackedImageWrapper: {
     flex: 1,
