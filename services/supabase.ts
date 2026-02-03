@@ -76,6 +76,7 @@ export const TABLES = {
   USERS: 'users',
   BOOKSHELVES: 'bookshelves',
   BOOKS: 'books',
+  BOOKSHELF_ITEMS: 'bookshelf_items',
   SUBSCRIPTIONS: 'subscriptions',
 } as const;
 

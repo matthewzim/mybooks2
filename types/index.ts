@@ -38,11 +38,48 @@ export interface Bookshelf {
 }
 
 /**
- * Book - represents a book on a bookshelf
- * Contains book details and user's personal notes
+ * DbBook - a global book record shared across all users.
+ * Contains only the book's intrinsic data (title, author, spine image, etc.)
+ */
+export interface DbBook {
+  id: string;
+  title: string;
+  author: string;
+  image_url: string | null;
+  uploaded_by_user_id: string;
+  is_community: boolean;
+  isbn: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * BookshelfItem - per-user placement of a book on a shelf.
+ * Stores shelf position, review, rating, and stack state.
+ */
+export interface BookshelfItem {
+  id: string;
+  book_id: string;
+  shelf_id: string;
+  position: number;
+  review: string | null;
+  rating: number | null;
+  is_stacked: boolean;
+  stack_id: string | null;
+  stack_position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Book - combined view used throughout the UI.
+ * Merges global book data with per-user bookshelf placement.
+ * `id` is the bookshelf_items.id (unique per user-shelf placement).
+ * `book_id` is the books.id (global, shared across users).
  */
 export interface Book {
-  id: string;
+  id: string;           // bookshelf_items.id
+  book_id: string;      // books.id (global book reference)
   title: string;
   author: string;
   image_url: string | null;
@@ -53,9 +90,9 @@ export interface Book {
   uploaded_by_user_id: string;
   is_community: boolean;
   isbn: string | null;
-  is_stacked: boolean; // Whether the book is rotated 90 degrees to lay flat
-  stack_id: string | null; // ID of the stack this book belongs to (for vertical stacking)
-  stack_position: number; // Position within the stack (0 = bottom, higher = on top)
+  is_stacked: boolean;
+  stack_id: string | null;
+  stack_position: number;
   created_at: string;
   updated_at: string;
 }
@@ -126,6 +163,8 @@ export interface CreateBookInput {
   is_stacked?: boolean;
   stack_id?: string;
   stack_position?: number;
+  /** Optionally reference an existing global book instead of creating a new one */
+  book_id?: string;
 }
 
 export interface UpdateBookInput {
@@ -134,11 +173,11 @@ export interface UpdateBookInput {
   image_url?: string;
   shelf_id?: string;
   position?: number;
-  review?: string;
-  rating?: number;
+  review?: string | null;
+  rating?: number | null;
   isbn?: string;
   is_stacked?: boolean;
-  stack_id?: string;
+  stack_id?: string | null;
   stack_position?: number;
 }
 

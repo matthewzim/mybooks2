@@ -4,7 +4,7 @@
  * Handles all CRUD operations for bookshelves:
  * - Create, read, update, delete bookshelves
  * - Manage bookshelf positions
- * - Get bookshelves with their books
+ * - Get bookshelves with their books (via bookshelf_items join)
  *
  * Usage:
  * import { bookshelvesService } from '@/services/bookshelves';
@@ -20,6 +20,45 @@ import type {
   ApiResponse,
   BOOKSHELF_COLORS,
 } from '@/types';
+
+/**
+ * Transform a bookshelf_items row (with nested book) into the combined Book type.
+ */
+function itemToBook(item: any): Book {
+  const book = item.book || {};
+  return {
+    id: item.id,
+    book_id: item.book_id || book.id,
+    title: book.title ?? '',
+    author: book.author ?? '',
+    image_url: book.image_url ?? null,
+    isbn: book.isbn ?? null,
+    uploaded_by_user_id: book.uploaded_by_user_id ?? '',
+    is_community: book.is_community ?? false,
+    shelf_id: item.shelf_id,
+    position: item.position,
+    review: item.review ?? null,
+    rating: item.rating ?? null,
+    is_stacked: item.is_stacked ?? false,
+    stack_id: item.stack_id ?? null,
+    stack_position: item.stack_position ?? 0,
+    created_at: item.created_at,
+    updated_at: item.updated_at,
+  };
+}
+
+/**
+ * Transform a raw shelf row (with nested bookshelf_items) into Bookshelf & { books: Book[] }
+ */
+function shelfWithBooks(raw: any): Bookshelf & { books: Book[] } {
+  const items = raw.bookshelf_items || [];
+  const books: Book[] = items
+    .map(itemToBook)
+    .sort((a: Book, b: Book) => a.position - b.position);
+
+  const { bookshelf_items: _, ...shelfData } = raw;
+  return { ...shelfData, books };
+}
 
 /**
  * Bookshelves Service Class
@@ -59,7 +98,7 @@ class BookshelvesService {
 
   /**
    * Get a single bookshelf by ID
-   * Includes all books on the shelf
+   * Includes all books on the shelf (joined via bookshelf_items → books)
    *
    * @param id - Bookshelf ID
    * @returns Bookshelf with books
@@ -68,13 +107,12 @@ class BookshelvesService {
     id: string
   ): Promise<ApiResponse<Bookshelf & { books: Book[] }>> {
     try {
-      // Fetch the bookshelf with its books using a join
       const { data, error } = await supabase
         .from(TABLES.BOOKSHELVES)
         .select(
           `
           *,
-          books:books(*)
+          bookshelf_items(*, book:books(*))
         `
         )
         .eq('id', id)
@@ -82,11 +120,7 @@ class BookshelvesService {
 
       if (error) throw error;
 
-      // Sort books by position
-      const bookshelf = data as Bookshelf & { books: Book[] };
-      bookshelf.books = bookshelf.books.sort((a, b) => a.position - b.position);
-
-      return { data: bookshelf, error: null };
+      return { data: shelfWithBooks(data), error: null };
     } catch (error) {
       return {
         data: null,
@@ -110,13 +144,13 @@ class BookshelvesService {
         throw new Error('Not authenticated');
       }
 
-      // Get bookshelves with all their books
+      // Get bookshelves with their bookshelf_items and nested book data
       const { data, error } = await supabase
         .from(TABLES.BOOKSHELVES)
         .select(
           `
           *,
-          books:books(*)
+          bookshelf_items(*, book:books(*))
         `
         )
         .eq('user_id', session.session.user.id)
@@ -124,15 +158,14 @@ class BookshelvesService {
 
       if (error) throw error;
 
-      // Limit books to first 3 for preview and sort by position
-      const shelves = (data as (Bookshelf & { books: Book[] })[]).map(
-        (shelf) => ({
+      // Transform and limit books to first 3 for preview
+      const shelves = (data || []).map((raw: any) => {
+        const shelf = shelfWithBooks(raw);
+        return {
           ...shelf,
-          books: shelf.books
-            .sort((a, b) => a.position - b.position)
-            .slice(0, 3),
-        })
-      );
+          books: shelf.books.slice(0, 3),
+        };
+      });
 
       return { data: shelves, error: null };
     } catch (error) {
@@ -230,16 +263,16 @@ class BookshelvesService {
   }
 
   /**
-   * Delete a bookshelf and all its books
-   * Uses cascade delete in database
+   * Delete a bookshelf and all its bookshelf_items.
+   * Global book records are preserved (other users may still reference them).
+   * bookshelf_items cascade-delete via FK, but we explicitly delete for safety.
    *
    * @param id - Bookshelf ID to delete
    */
   async deleteBookshelf(id: string): Promise<ApiResponse<null>> {
     try {
-      // First delete all books on this shelf
-      // Note: You could also set up cascade delete in Supabase
-      await supabase.from(TABLES.BOOKS).delete().eq('shelf_id', id);
+      // Delete all bookshelf_items on this shelf
+      await supabase.from(TABLES.BOOKSHELF_ITEMS).delete().eq('shelf_id', id);
 
       // Then delete the bookshelf
       const { error } = await supabase
@@ -305,13 +338,13 @@ class BookshelvesService {
 
       if (userError) throw userError;
 
-      // Get public bookshelves for this user with their books
+      // Get public bookshelves for this user with their books via bookshelf_items
       const { data, error } = await supabase
         .from(TABLES.BOOKSHELVES)
         .select(
           `
           *,
-          books:books(*)
+          bookshelf_items(*, book:books(*))
         `
         )
         .eq('user_id', userId)
@@ -320,13 +353,7 @@ class BookshelvesService {
 
       if (error) throw error;
 
-      // Sort books by position within each shelf
-      const shelves = (data as (Bookshelf & { books: Book[] })[]).map(
-        (shelf) => ({
-          ...shelf,
-          books: shelf.books.sort((a, b) => a.position - b.position),
-        })
-      );
+      const shelves = (data || []).map(shelfWithBooks);
 
       return {
         data: {
