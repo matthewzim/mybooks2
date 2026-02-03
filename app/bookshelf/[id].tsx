@@ -30,7 +30,7 @@ import { BookshelfEditModal } from '@/components/BookshelfEditModal';
 import { LoadingView, EmptyState } from '@/components/ui';
 import { Spacing, Typography, BorderRadius } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
-import type { Book, Bookshelf, UpdateBookshelfInput } from '@/types';
+import type { Book, Bookshelf, ShelfStyle, UpdateBookshelfInput } from '@/types';
 
 export default function BookshelfDetailScreen() {
   const { colors } = useTheme();
@@ -54,7 +54,8 @@ export default function BookshelfDetailScreen() {
     try {
       const result = await getBookshelf(id);
       if (result) {
-        setBookshelf(result);
+        // Ensure shelf_style has a default for pre-migration data
+        setBookshelf({ ...result, shelf_style: result.shelf_style || 'full' });
       }
     } catch (error) {
       console.error('Failed to load bookshelf:', error);
@@ -142,6 +143,7 @@ export default function BookshelfDetailScreen() {
               name: updates.name ?? prev.name,
               description: updates.description ?? prev.description,
               is_public: updates.is_public ?? prev.is_public,
+              shelf_style: updates.shelf_style ?? prev.shelf_style,
             }
           : null
       );
@@ -156,6 +158,22 @@ export default function BookshelfDetailScreen() {
   const toggleEditMode = () => {
     setIsEditMode((prev) => !prev);
   };
+
+  /**
+   * Toggle shelf display style between 'bottom' and 'full'
+   */
+  const handleToggleShelfStyle = useCallback(
+    async (style: ShelfStyle) => {
+      if (!id || !bookshelf || bookshelf.shelf_style === style) return;
+
+      // Update local state immediately
+      setBookshelf((prev) => (prev ? { ...prev, shelf_style: style } : null));
+
+      // Persist to database
+      await updateBookshelf(id, { shelf_style: style });
+    },
+    [id, bookshelf, updateBookshelf]
+  );
 
   /**
    * Handle book reordering via drag-and-drop
@@ -259,11 +277,60 @@ export default function BookshelfDetailScreen() {
             </Text>
           </View>
           {isEditMode ? (
-            <View style={[styles.editModeIndicator, { backgroundColor: colors.backgroundDark }]}>
-              <Ionicons name="information-circle" size={16} color={colors.primary} />
-              <Text style={[styles.editModeText, { color: colors.primary }]}>
-                Drag to reorder. Long-press to stack flat. Drop stacked books on each other to pile.
-              </Text>
+            <View style={styles.editModeControls}>
+              <View style={[styles.editModeIndicator, { backgroundColor: colors.backgroundDark }]}>
+                <Ionicons name="information-circle" size={16} color={colors.primary} />
+                <Text style={[styles.editModeText, { color: colors.primary }]}>
+                  Drag to reorder. Long-press to stack flat. Drop stacked books on each other to pile.
+                </Text>
+              </View>
+              <View style={[styles.shelfStyleToggle, { backgroundColor: colors.backgroundDark }]}>
+                <Text style={[styles.shelfStyleLabel, { color: colors.textSecondary }]}>Shelf:</Text>
+                <Pressable
+                  onPress={() => handleToggleShelfStyle('bottom')}
+                  style={[
+                    styles.shelfStyleOption,
+                    { borderColor: colors.border },
+                    bookshelf.shelf_style === 'bottom' && { backgroundColor: colors.primary },
+                  ]}
+                >
+                  <Ionicons
+                    name="remove-outline"
+                    size={14}
+                    color={bookshelf.shelf_style === 'bottom' ? colors.textInverse : colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.shelfStyleOptionText,
+                      { color: bookshelf.shelf_style === 'bottom' ? colors.textInverse : colors.textSecondary },
+                    ]}
+                  >
+                    Bottom Line
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => handleToggleShelfStyle('full')}
+                  style={[
+                    styles.shelfStyleOption,
+                    { borderColor: colors.border },
+                    bookshelf.shelf_style === 'full' && { backgroundColor: colors.primary },
+                  ]}
+                >
+                  <Ionicons
+                    name="square-outline"
+                    size={14}
+                    color={bookshelf.shelf_style === 'full' ? colors.textInverse : colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.shelfStyleOptionText,
+                      { color: bookshelf.shelf_style === 'full' ? colors.textInverse : colors.textSecondary },
+                    ]}
+                  >
+                    Full Shelf
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           ) : (
             <>
@@ -299,6 +366,7 @@ export default function BookshelfDetailScreen() {
           onAddBook={handleAddBook}
           isLoading={booksLoading}
           isEditing={isEditMode}
+          shelfStyle={bookshelf.shelf_style}
           onReorderBooks={handleReorderBooks}
           onToggleBookStack={handleToggleBookStack}
           onStackBooks={handleStackBooks}
@@ -373,8 +441,11 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.sm,
     marginLeft: 4,
   },
-  editModeIndicator: {
+  editModeControls: {
     flex: 1,
+    gap: Spacing.xs,
+  },
+  editModeIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.sm,
@@ -385,5 +456,30 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Typography.sizes.sm,
     marginLeft: Spacing.xs,
+  },
+  shelfStyleToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: 4,
+    gap: Spacing.xs,
+  },
+  shelfStyleLabel: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.medium,
+  },
+  shelfStyleOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    gap: 3,
+  },
+  shelfStyleOptionText: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: Typography.weights.medium,
   },
 });

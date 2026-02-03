@@ -213,6 +213,7 @@ class BookshelvesService {
           description: input.description || null,
           cover_color: input.cover_color || '#8B4513', // Default wood color
           is_public: input.is_public || false,
+          shelf_style: input.shelf_style || 'full',
           position: nextPosition,
         })
         .select()
