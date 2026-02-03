@@ -28,11 +28,11 @@ import { Image } from 'expo-image';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  Colors,
   Spacing,
   BorderRadius,
   Typography,
 } from '@/constants/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 import Svg, { Polygon, Circle, Line } from 'react-native-svg';
 
 interface Point {
@@ -67,6 +67,7 @@ export function SpineCropper({
   onCropComplete,
   onCancel,
 }: SpineCropperProps) {
+  const { colors } = useTheme();
   const [isProcessing, setIsProcessing] = useState(false);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
@@ -273,11 +274,11 @@ export function SpineCropper({
   }, [activeCorner, corners, displaySize]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.primary }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Adjust Crop</Text>
-        <Text style={styles.subtitle}>Drag corners to select the spine area</Text>
+        <Text style={[styles.title, { color: colors.textInverse }]}>Adjust Crop</Text>
+        <Text style={[styles.subtitle, { color: colors.textInverse }]}>Drag corners to select the spine area</Text>
       </View>
 
       {/* Image container */}
@@ -285,7 +286,7 @@ export function SpineCropper({
         <View
           style={[
             styles.imageContainer,
-            { width: displaySize.width || IMAGE_CONTAINER_WIDTH, height: displaySize.height || IMAGE_CONTAINER_HEIGHT },
+            { width: displaySize.width || IMAGE_CONTAINER_WIDTH, height: displaySize.height || IMAGE_CONTAINER_HEIGHT, backgroundColor: colors.primaryDark },
           ]}
         >
           <Image
@@ -302,7 +303,7 @@ export function SpineCropper({
                 {/* Darkened overlay outside crop area */}
                 <Polygon
                   points={`0,0 ${displaySize.width},0 ${displaySize.width},${displaySize.height} 0,${displaySize.height}`}
-                  fill="rgba(0,0,0,0.5)"
+                  fill={colors.overlay}
                   clipRule="evenodd"
                   clipPath="url(#clip)"
                 />
@@ -310,8 +311,8 @@ export function SpineCropper({
                 {/* Crop region (semi-transparent) */}
                 <Polygon
                   points={polygonPoints}
-                  fill="rgba(255,255,255,0.1)"
-                  stroke={Colors.accent}
+                  fill={colors.overlayLight}
+                  stroke={colors.accent}
                   strokeWidth={2}
                 />
 
@@ -321,7 +322,7 @@ export function SpineCropper({
                   y1={(corners[0].y + corners[1].y) / 2}
                   x2={(corners[3].x + corners[2].x) / 2}
                   y2={(corners[3].y + corners[2].y) / 2}
-                  stroke="rgba(255,255,255,0.3)"
+                  stroke={colors.textOnDarkMuted}
                   strokeWidth={1}
                   strokeDasharray="5,5"
                 />
@@ -330,7 +331,7 @@ export function SpineCropper({
                   y1={(corners[0].y + corners[3].y) / 2}
                   x2={(corners[1].x + corners[2].x) / 2}
                   y2={(corners[1].y + corners[2].y) / 2}
-                  stroke="rgba(255,255,255,0.3)"
+                  stroke={colors.textOnDarkMuted}
                   strokeWidth={1}
                   strokeDasharray="5,5"
                 />
@@ -342,8 +343,8 @@ export function SpineCropper({
                     cx={corner.x}
                     cy={corner.y}
                     r={HANDLE_SIZE / 2}
-                    fill={activeCorner === index ? Colors.accent : Colors.textInverse}
-                    stroke={Colors.accent}
+                    fill={activeCorner === index ? colors.accent : colors.textInverse}
+                    stroke={colors.accent}
                     strokeWidth={3}
                   />
                 ))}
@@ -376,6 +377,8 @@ export function SpineCropper({
                       top: zoomBubbleData.bubbleY,
                       width: ZOOM_BUBBLE_SIZE,
                       height: ZOOM_BUBBLE_SIZE,
+                      borderColor: colors.accent,
+                      backgroundColor: colors.primaryDark,
                     },
                   ]}
                   pointerEvents="none"
@@ -393,10 +396,10 @@ export function SpineCropper({
                       contentFit="contain"
                     />
                     {/* Crosshair to show exact corner position */}
-                    <View style={styles.crosshairHorizontal} />
-                    <View style={styles.crosshairVertical} />
+                    <View style={[styles.crosshairHorizontal, { backgroundColor: colors.textOnDarkMuted }]} />
+                    <View style={[styles.crosshairVertical, { backgroundColor: colors.textOnDarkMuted }]} />
                     {/* Corner indicator dot */}
-                    <View style={styles.zoomCornerDot} />
+                    <View style={[styles.zoomCornerDot, { backgroundColor: colors.accent, borderColor: colors.textInverse }]} />
                   </View>
                 </View>
               )}
@@ -408,25 +411,25 @@ export function SpineCropper({
       {/* Controls */}
       <View style={styles.controls}>
         <Pressable
-          style={[styles.button, styles.cancelButton]}
+          style={[styles.button, styles.cancelButton, { backgroundColor: colors.textInverse }]}
           onPress={onCancel}
           disabled={isProcessing}
         >
-          <Ionicons name="close" size={24} color={Colors.text} />
-          <Text style={styles.buttonText}>Cancel</Text>
+          <Ionicons name="close" size={24} color={colors.text} />
+          <Text style={[styles.buttonText, { color: colors.text }]}>Cancel</Text>
         </Pressable>
 
         <Pressable
-          style={[styles.button, styles.confirmButton]}
+          style={[styles.button, styles.confirmButton, { backgroundColor: colors.success }]}
           onPress={handleCrop}
           disabled={isProcessing || !isInitialized}
         >
           {isProcessing ? (
-            <ActivityIndicator size="small" color={Colors.textInverse} />
+            <ActivityIndicator size="small" color={colors.textInverse} />
           ) : (
-            <Ionicons name="checkmark" size={24} color={Colors.textInverse} />
+            <Ionicons name="checkmark" size={24} color={colors.textInverse} />
           )}
-          <Text style={[styles.buttonText, styles.confirmText]}>
+          <Text style={[styles.buttonText, { color: colors.textInverse }]}>
             {isProcessing ? 'Processing...' : 'Crop'}
           </Text>
         </Pressable>
@@ -438,7 +441,6 @@ export function SpineCropper({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.primary,
   },
   header: {
     paddingTop: Spacing.lg,
@@ -448,11 +450,9 @@ const styles = StyleSheet.create({
   title: {
     fontSize: Typography.sizes.xl,
     fontWeight: Typography.weights.bold,
-    color: Colors.textInverse,
   },
   subtitle: {
     fontSize: Typography.sizes.sm,
-    color: Colors.textInverse,
     opacity: 0.8,
     marginTop: Spacing.xs,
   },
@@ -464,7 +464,6 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     position: 'relative',
-    backgroundColor: Colors.primaryDark,
     borderRadius: BorderRadius.md,
     overflow: 'hidden',
   },
@@ -493,27 +492,18 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     minWidth: 120,
   },
-  cancelButton: {
-    backgroundColor: Colors.textInverse,
-  },
-  confirmButton: {
-    backgroundColor: Colors.success,
-  },
+  cancelButton: {},
+  confirmButton: {},
   buttonText: {
     fontSize: Typography.sizes.lg,
     fontWeight: Typography.weights.semibold,
-    color: Colors.text,
   },
-  confirmText: {
-    color: Colors.textInverse,
-  },
+  confirmText: {},
   // Zoom bubble styles
   zoomBubble: {
     position: 'absolute',
     borderRadius: ZOOM_BUBBLE_SIZE / 2,
     borderWidth: 3,
-    borderColor: Colors.accent,
-    backgroundColor: Colors.primaryDark,
     overflow: 'hidden',
     zIndex: 100,
     // Add shadow for depth
@@ -535,7 +525,6 @@ const styles = StyleSheet.create({
     right: 0,
     top: '50%',
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
     marginTop: -0.5,
   },
   crosshairVertical: {
@@ -544,7 +533,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: '50%',
     width: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
     marginLeft: -0.5,
   },
   zoomCornerDot: {
@@ -554,11 +542,9 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.accent,
     marginLeft: -4,
     marginTop: -4,
     borderWidth: 1,
-    borderColor: Colors.textInverse,
   },
 });
 

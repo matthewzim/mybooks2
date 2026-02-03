@@ -28,11 +28,11 @@ import { DraggableBookSpine } from './DraggableBookSpine';
 import { BookSpine } from './BookSpine';
 import { VerticalBookStack } from './VerticalBookStack';
 import {
-  Colors,
   Spacing,
   BookSpine as BookSpineConstants,
   BookshelfDimensions,
 } from '@/constants/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 import { getSpineImageUrl } from '@/services/storage';
 import type { Book } from '@/types';
 
@@ -77,6 +77,7 @@ export function EditableBookshelfGrid({
   onStackBooks,
   onUnstackBook,
 }: EditableBookshelfGridProps) {
+  const { colors } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [localBooks, setLocalBooks] = useState<Book[]>(books);
@@ -291,8 +292,8 @@ export function EditableBookshelfGrid({
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Loading books...</Text>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading books...</Text>
       </View>
     );
   }
@@ -302,7 +303,7 @@ export function EditableBookshelfGrid({
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
       scrollEnabled={!isEditing || draggingIndex === null}
@@ -424,6 +425,7 @@ interface StackedBookSpineProps {
 }
 
 function StackedBookSpine({ book, onPress, width, height }: StackedBookSpineProps) {
+  const { colors } = useTheme();
   const spineImageUrl = getSpineImageUrl(book.image_url);
   const hasValidUrl = Boolean(spineImageUrl);
   const backgroundColor = getBookColor(book.title);
@@ -451,13 +453,13 @@ function StackedBookSpine({ book, onPress, width, height }: StackedBookSpineProp
         </View>
       ) : (
         <View style={[styles.stackedPlaceholder, { backgroundColor }]}>
-          <Text style={styles.stackedTitle} numberOfLines={1}>
+          <Text style={[styles.stackedTitle, { color: colors.textOnDark }]} numberOfLines={1}>
             {book.title}
           </Text>
         </View>
       )}
       {/* Top edge effect */}
-      <View style={styles.stackedTopEdge} />
+      <View style={[styles.stackedTopEdge, { backgroundColor: colors.overlayLight }]} />
     </Pressable>
   );
 }
@@ -484,19 +486,20 @@ interface AddBookButtonProps {
 }
 
 function AddBookButton({ width, height, onPress }: AddBookButtonProps) {
+  const { colors } = useTheme();
   return (
     <Pressable
       style={({ pressed }) => [
         styles.addButton,
-        { width, height },
-        pressed && styles.addButtonPressed,
+        { width, height, backgroundColor: colors.backgroundDark, borderColor: colors.border },
+        pressed && { backgroundColor: colors.border, opacity: 0.8 },
       ]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel="Add a new book"
     >
-      <Ionicons name="add" size={32} color={Colors.primary} />
-      <Text style={styles.addButtonText}>Add Book</Text>
+      <Ionicons name="add" size={32} color={colors.primary} />
+      <Text style={[styles.addButtonText, { color: colors.primary }]}>Add Book</Text>
     </Pressable>
   );
 }
@@ -504,7 +507,6 @@ function AddBookButton({ width, height, onPress }: AddBookButtonProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   contentContainer: {
     paddingTop: Spacing.md,
@@ -517,7 +519,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: Spacing.md,
-    color: Colors.textSecondary,
     fontSize: 14,
   },
   shelfContainer: {
@@ -589,7 +590,6 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   stackedTitle: {
-    color: Colors.textInverse,
     fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',
@@ -600,24 +600,16 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     height: 3,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   // Add button styles
   addButton: {
-    backgroundColor: Colors.backgroundDark,
     borderRadius: 4,
     borderWidth: 2,
-    borderColor: Colors.border,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  addButtonPressed: {
-    backgroundColor: Colors.border,
-    opacity: 0.8,
-  },
   addButtonText: {
-    color: Colors.primary,
     fontSize: 10,
     fontWeight: '500',
     marginTop: Spacing.xs,

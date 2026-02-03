@@ -20,7 +20,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { Colors, BookSpine as BookSpineConstants, Shadows } from '@/constants/theme';
+import { BookSpine as BookSpineConstants, Shadows } from '@/constants/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 import { getSpineImageUrl } from '@/services/storage';
 import type { Book } from '@/types';
 
@@ -50,6 +51,7 @@ export function BookSpine({
   width = BookSpineConstants.width,
   height = BookSpineConstants.height,
 }: BookSpineProps) {
+  const { colors } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
 
@@ -87,8 +89,8 @@ export function BookSpine({
             }}
           />
           {isLoading && (
-            <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="small" color={Colors.textInverse} />
+            <View style={[styles.loadingOverlay, { backgroundColor: colors.overlay }]}>
+              <ActivityIndicator size="small" color={colors.textOnDark} />
             </View>
           )}
         </View>
@@ -96,14 +98,14 @@ export function BookSpine({
         // Placeholder with book title
         <View style={[styles.placeholder, { backgroundColor }]}>
           <Text
-            style={styles.placeholderTitle}
+            style={[styles.placeholderTitle, { color: colors.textOnDark }]}
             numberOfLines={3}
             ellipsizeMode="tail"
           >
             {book.title}
           </Text>
           <Text
-            style={styles.placeholderAuthor}
+            style={[styles.placeholderAuthor, { color: colors.textOnDarkMuted }]}
             numberOfLines={2}
             ellipsizeMode="tail"
           >
@@ -113,7 +115,7 @@ export function BookSpine({
       )}
 
       {/* Book spine edge effect */}
-      <View style={styles.spineEdge} />
+      <View style={[styles.spineEdge, { backgroundColor: colors.overlayLight }]} />
     </Pressable>
   );
 }
@@ -139,7 +141,6 @@ const styles = StyleSheet.create({
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -150,7 +151,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   placeholderTitle: {
-    color: Colors.textInverse,
     fontSize: 8,
     fontWeight: '600',
     textAlign: 'center',
@@ -161,7 +161,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
   placeholderAuthor: {
-    color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 6,
     textAlign: 'center',
     position: 'absolute',
@@ -173,7 +172,6 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 3,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
 });
 

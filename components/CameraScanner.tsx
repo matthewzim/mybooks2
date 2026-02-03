@@ -26,11 +26,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  Colors,
   Spacing,
   BorderRadius,
   Typography,
 } from '@/constants/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 import { SpineCropper } from './SpineCropper';
 
 interface CameraScannerProps {
@@ -44,6 +44,7 @@ export function CameraScanner({
   onCancel,
   isUploading = false,
 }: CameraScannerProps) {
+  const { colors } = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
   const [rawCapturedImage, setRawCapturedImage] = useState<string | null>(null);
@@ -147,8 +148,8 @@ export function CameraScanner({
   // Permission not yet determined
   if (!permission) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+      <View style={[styles.container, { backgroundColor: colors.primary }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -156,20 +157,20 @@ export function CameraScanner({
   // Permission denied
   if (!permission.granted) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.primary }]}>
         <View style={styles.permissionContainer}>
-          <Ionicons name="camera-outline" size={64} color={Colors.textSecondary} />
-          <Text style={styles.permissionTitle}>Camera Access Required</Text>
-          <Text style={styles.permissionText}>
+          <Ionicons name="camera-outline" size={64} color={colors.textInverse} />
+          <Text style={[styles.permissionTitle, { color: colors.textInverse }]}>Camera Access Required</Text>
+          <Text style={[styles.permissionText, { color: colors.textInverse }]}>
             We need camera access to scan book spines. Please grant permission
             in your device settings.
           </Text>
-          <Pressable style={styles.permissionButton} onPress={requestPermission}>
-            <Text style={styles.permissionButtonText}>Grant Permission</Text>
+          <Pressable style={[styles.permissionButton, { backgroundColor: colors.accent }]} onPress={requestPermission}>
+            <Text style={[styles.permissionButtonText, { color: colors.textInverse }]}>Grant Permission</Text>
           </Pressable>
           <Pressable style={styles.galleryButton} onPress={pickFromGallery}>
-            <Ionicons name="images-outline" size={20} color={Colors.primary} />
-            <Text style={styles.galleryButtonText}>Choose from Gallery</Text>
+            <Ionicons name="images-outline" size={20} color={colors.textInverse} />
+            <Text style={[styles.galleryButtonText, { color: colors.textInverse }]}>Choose from Gallery</Text>
           </Pressable>
         </View>
       </View>
@@ -190,7 +191,7 @@ export function CameraScanner({
   // Image preview mode - show cropped image for confirmation
   if (croppedImage) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.primary }]}>
         <View style={styles.previewContainer}>
           <Image
             source={{ uri: croppedImage }}
@@ -199,26 +200,26 @@ export function CameraScanner({
           />
 
           {isUploading ? (
-            <View style={styles.uploadingOverlay}>
-              <ActivityIndicator size="large" color={Colors.textInverse} />
-              <Text style={styles.uploadingText}>Uploading...</Text>
+            <View style={[styles.uploadingOverlay, { backgroundColor: colors.overlay }]}>
+              <ActivityIndicator size="large" color={colors.textInverse} />
+              <Text style={[styles.uploadingText, { color: colors.textInverse }]}>Uploading...</Text>
             </View>
           ) : (
             <View style={styles.previewControls}>
               <Pressable
-                style={[styles.previewButton, styles.retakeButton]}
+                style={[styles.previewButton, { backgroundColor: colors.textInverse }]}
                 onPress={retake}
               >
-                <Ionicons name="crop" size={24} color={Colors.text} />
-                <Text style={styles.previewButtonText}>Adjust Crop</Text>
+                <Ionicons name="crop" size={24} color={colors.text} />
+                <Text style={[styles.previewButtonText, { color: colors.text }]}>Adjust Crop</Text>
               </Pressable>
 
               <Pressable
-                style={[styles.previewButton, styles.confirmButton]}
+                style={[styles.previewButton, { backgroundColor: colors.success }]}
                 onPress={confirmCapture}
               >
-                <Ionicons name="checkmark" size={24} color={Colors.textInverse} />
-                <Text style={[styles.previewButtonText, styles.confirmText]}>
+                <Ionicons name="checkmark" size={24} color={colors.textInverse} />
+                <Text style={[styles.previewButtonText, { color: colors.textInverse }]}>
                   Use Photo
                 </Text>
               </Pressable>
@@ -228,7 +229,7 @@ export function CameraScanner({
 
         {/* Start over button */}
         <Pressable style={styles.cancelButton} onPress={startOver}>
-          <Text style={styles.cancelButtonText}>Start Over</Text>
+          <Text style={[styles.cancelButtonText, { color: colors.textInverse }]}>Start Over</Text>
         </Pressable>
       </View>
     );
@@ -236,7 +237,7 @@ export function CameraScanner({
 
   // Camera mode
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.primary }]}>
       <CameraView
         ref={cameraRef}
         style={styles.camera}
@@ -244,8 +245,8 @@ export function CameraScanner({
       >
         {/* Guide overlay */}
         <View style={styles.guideOverlay}>
-          <View style={styles.guideBox}>
-            <Text style={styles.guideText}>
+          <View style={[styles.guideBox, { borderColor: colors.textInverse }]}>
+            <Text style={[styles.guideText, { color: colors.textInverse }]}>
               Position the book spine within the frame
             </Text>
           </View>
@@ -255,24 +256,24 @@ export function CameraScanner({
         <View style={styles.cameraControls}>
           {/* Gallery button */}
           <Pressable style={styles.controlButton} onPress={pickFromGallery}>
-            <Ionicons name="images" size={28} color={Colors.textInverse} />
+            <Ionicons name="images" size={28} color={colors.textInverse} />
           </Pressable>
 
           {/* Capture button */}
-          <Pressable style={styles.captureButton} onPress={takePicture}>
-            <View style={styles.captureButtonInner} />
+          <Pressable style={[styles.captureButton, { backgroundColor: colors.overlayWhite }]} onPress={takePicture}>
+            <View style={[styles.captureButtonInner, { backgroundColor: colors.textInverse }]} />
           </Pressable>
 
           {/* Flip camera button */}
           <Pressable style={styles.controlButton} onPress={toggleCameraFacing}>
-            <Ionicons name="camera-reverse" size={28} color={Colors.textInverse} />
+            <Ionicons name="camera-reverse" size={28} color={colors.textInverse} />
           </Pressable>
         </View>
       </CameraView>
 
       {/* Cancel button */}
       <Pressable style={styles.cancelButton} onPress={onCancel}>
-        <Text style={styles.cancelButtonText}>Cancel</Text>
+        <Text style={[styles.cancelButtonText, { color: colors.textInverse }]}>Cancel</Text>
       </Pressable>
     </View>
   );
@@ -281,7 +282,6 @@ export function CameraScanner({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.primary,
   },
   camera: {
     flex: 1,
@@ -295,26 +295,22 @@ const styles = StyleSheet.create({
   permissionTitle: {
     fontSize: Typography.sizes.xl,
     fontWeight: Typography.weights.bold,
-    color: Colors.textInverse,
     marginTop: Spacing.lg,
     marginBottom: Spacing.md,
   },
   permissionText: {
     fontSize: Typography.sizes.md,
-    color: Colors.textInverse,
     textAlign: 'center',
     opacity: 0.8,
     marginBottom: Spacing.lg,
   },
   permissionButton: {
-    backgroundColor: Colors.accent,
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.xl,
     borderRadius: BorderRadius.md,
     marginBottom: Spacing.md,
   },
   permissionButtonText: {
-    color: Colors.textInverse,
     fontSize: Typography.sizes.lg,
     fontWeight: Typography.weights.semibold,
   },
@@ -325,7 +321,6 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
   },
   galleryButtonText: {
-    color: Colors.textInverse,
     fontSize: Typography.sizes.md,
   },
   guideOverlay: {
@@ -337,13 +332,11 @@ const styles = StyleSheet.create({
     width: 100,
     height: 300,
     borderWidth: 2,
-    borderColor: Colors.textInverse,
     borderRadius: BorderRadius.sm,
     justifyContent: 'flex-end',
     padding: Spacing.sm,
   },
   guideText: {
-    color: Colors.textInverse,
     fontSize: Typography.sizes.xs,
     textAlign: 'center',
   },
@@ -367,7 +360,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -375,7 +367,6 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: Colors.textInverse,
   },
   previewContainer: {
     flex: 1,
@@ -389,12 +380,10 @@ const styles = StyleSheet.create({
   },
   uploadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },
   uploadingText: {
-    color: Colors.textInverse,
     fontSize: Typography.sizes.lg,
     marginTop: Spacing.md,
   },
@@ -411,26 +400,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     borderRadius: BorderRadius.md,
   },
-  retakeButton: {
-    backgroundColor: Colors.textInverse,
-  },
-  confirmButton: {
-    backgroundColor: Colors.success,
-  },
   previewButtonText: {
     fontSize: Typography.sizes.lg,
     fontWeight: Typography.weights.semibold,
-    color: Colors.text,
-  },
-  confirmText: {
-    color: Colors.textInverse,
   },
   cancelButton: {
     paddingVertical: Spacing.lg,
     alignItems: 'center',
   },
   cancelButtonText: {
-    color: Colors.textInverse,
     fontSize: Typography.sizes.md,
   },
 });

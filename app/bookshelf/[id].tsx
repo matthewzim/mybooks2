@@ -28,10 +28,12 @@ import { EditableBookshelfGrid } from '@/components/EditableBookshelfGrid';
 import { BookDetailModal } from '@/components/BookDetailModal';
 import { BookshelfEditModal } from '@/components/BookshelfEditModal';
 import { LoadingView, EmptyState } from '@/components/ui';
-import { Colors, Spacing, Typography, BorderRadius } from '@/constants/theme';
+import { Spacing, Typography, BorderRadius } from '@/constants/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 import type { Book, Bookshelf, UpdateBookshelfInput } from '@/types';
 
 export default function BookshelfDetailScreen() {
+  const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getBookshelf, updateBookshelf } = useBookshelves();
   const { books, isLoading: booksLoading, fetchBooks, deleteBook, reorderBooks, updateBook, stackBookOnTop, unstackBook } = useBooks(id || '');
@@ -204,7 +206,7 @@ export default function BookshelfDetailScreen() {
   // Error state
   if (!bookshelf) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <EmptyState
           icon="alert-circle-outline"
           title="Bookshelf Not Found"
@@ -226,13 +228,13 @@ export default function BookshelfDetailScreen() {
             <View style={styles.headerButtons}>
               <Pressable
                 onPress={toggleEditMode}
-                style={[styles.headerButton, isEditMode && styles.headerButtonActive]}
+                style={[styles.headerButton, isEditMode && { backgroundColor: colors.overlayWhiteLight, borderRadius: 4 }]}
                 hitSlop={8}
               >
                 <Ionicons
                   name={isEditMode ? 'checkmark' : 'swap-horizontal'}
                   size={20}
-                  color={Colors.textInverse}
+                  color={colors.textInverse}
                 />
               </Pressable>
               <Pressable
@@ -240,48 +242,49 @@ export default function BookshelfDetailScreen() {
                 style={styles.headerButton}
                 hitSlop={8}
               >
-                <Ionicons name="pencil" size={20} color={Colors.textInverse} />
+                <Ionicons name="pencil" size={20} color={colors.textInverse} />
               </Pressable>
             </View>
           ),
         }}
       />
 
-      <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right', 'bottom']}>
         {/* Bookshelf Stats */}
-        <View style={styles.statsContainer}>
+        <View style={[styles.statsContainer, { borderBottomColor: colors.border }]}>
           <View style={styles.stat}>
-            <Text style={styles.statValue}>{books.length}</Text>
-            <Text style={styles.statLabel}>
+            <Text style={[styles.statValue, { color: colors.primary }]}>{books.length}</Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
               {books.length === 1 ? 'Book' : 'Books'}
             </Text>
           </View>
           {isEditMode ? (
-            <View style={styles.editModeIndicator}>
-              <Ionicons name="information-circle" size={16} color={Colors.primary} />
-              <Text style={styles.editModeText}>
+            <View style={[styles.editModeIndicator, { backgroundColor: colors.backgroundDark }]}>
+              <Ionicons name="information-circle" size={16} color={colors.primary} />
+              <Text style={[styles.editModeText, { color: colors.primary }]}>
                 Drag to reorder. Long-press to stack flat. Drop stacked books on each other to pile.
               </Text>
             </View>
           ) : (
             <>
-              <View style={styles.privacyBadge}>
+              <View style={[styles.privacyBadge, { backgroundColor: colors.backgroundDark }]}>
                 <Ionicons
                   name={bookshelf.is_public ? 'globe-outline' : 'lock-closed-outline'}
                   size={14}
-                  color={bookshelf.is_public ? Colors.success : Colors.textSecondary}
+                  color={bookshelf.is_public ? colors.success : colors.textSecondary}
                 />
                 <Text
                   style={[
                     styles.privacyBadgeText,
-                    bookshelf.is_public && styles.privacyBadgeTextPublic,
+                    { color: colors.textSecondary },
+                    bookshelf.is_public && { color: colors.success },
                   ]}
                 >
                   {bookshelf.is_public ? 'Public' : 'Private'}
                 </Text>
               </View>
               {bookshelf.description && (
-                <Text style={styles.description} numberOfLines={2}>
+                <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
                   {bookshelf.description}
                 </Text>
               )}
@@ -326,7 +329,6 @@ export default function BookshelfDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   headerButtons: {
     flexDirection: 'row',
@@ -336,17 +338,12 @@ const styles = StyleSheet.create({
   headerButton: {
     padding: Spacing.xs,
   },
-  headerButtonActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 4,
-  },
   statsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   stat: {
     alignItems: 'center',
@@ -355,22 +352,18 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: Typography.sizes.xxl,
     fontWeight: Typography.weights.bold,
-    color: Colors.primary,
   },
   statLabel: {
     fontSize: Typography.sizes.sm,
-    color: Colors.textSecondary,
   },
   description: {
     flex: 1,
     fontSize: Typography.sizes.md,
-    color: Colors.textSecondary,
     fontStyle: 'italic',
   },
   privacyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundDark,
     paddingHorizontal: Spacing.sm,
     paddingVertical: Spacing.xs,
     borderRadius: BorderRadius.sm,
@@ -378,17 +371,12 @@ const styles = StyleSheet.create({
   },
   privacyBadgeText: {
     fontSize: Typography.sizes.sm,
-    color: Colors.textSecondary,
     marginLeft: 4,
-  },
-  privacyBadgeTextPublic: {
-    color: Colors.success,
   },
   editModeIndicator: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundDark,
     paddingHorizontal: Spacing.sm,
     paddingVertical: Spacing.xs,
     borderRadius: 4,
@@ -396,7 +384,6 @@ const styles = StyleSheet.create({
   editModeText: {
     flex: 1,
     fontSize: Typography.sizes.sm,
-    color: Colors.primary,
     marginLeft: Spacing.xs,
   },
 });
