@@ -24,7 +24,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { Colors, BookSpine as BookSpineConstants, Shadows } from '@/constants/theme';
+import { BookSpine as BookSpineConstants, Shadows } from '@/constants/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 import { getSpineImageUrl } from '@/services/storage';
 import type { Book } from '@/types';
 
@@ -73,6 +74,7 @@ export function DraggableBookSpine({
   booksPerRow,
   stackableBooks = [],
 }: DraggableBookSpineProps) {
+  const { colors } = useTheme();
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -163,7 +165,7 @@ export function DraggableBookSpine({
     if (book.is_stacked) {
       // Stacked (horizontal) view - book laying flat
       return (
-        <View style={[styles.stackedContainer, { width: stackedWidth, height: stackedHeight }]}>
+        <View style={[styles.stackedContainer, { width: stackedWidth, height: stackedHeight, backgroundColor: colors.backgroundDark }]}>
           {hasValidUrl ? (
             <Image
               source={{ uri: spineImageUrl! }}
@@ -173,13 +175,13 @@ export function DraggableBookSpine({
             />
           ) : (
             <View style={[styles.stackedPlaceholder, { backgroundColor }]}>
-              <Text style={styles.stackedTitle} numberOfLines={1}>
+              <Text style={[styles.stackedTitle, { color: colors.textOnDark }]} numberOfLines={1}>
                 {book.title}
               </Text>
             </View>
           )}
           {/* Top edge effect for stacked book */}
-          <View style={styles.stackedEdge} />
+          <View style={[styles.stackedEdge, { backgroundColor: colors.overlayLight }]} />
         </View>
       );
     }
@@ -196,16 +198,16 @@ export function DraggableBookSpine({
           />
         ) : (
           <View style={[styles.placeholder, { backgroundColor }]}>
-            <Text style={styles.placeholderTitle} numberOfLines={3}>
+            <Text style={[styles.placeholderTitle, { color: colors.textOnDark }]} numberOfLines={3}>
               {book.title}
             </Text>
-            <Text style={styles.placeholderAuthor} numberOfLines={2}>
+            <Text style={[styles.placeholderAuthor, { color: colors.textOnDarkMuted }]} numberOfLines={2}>
               {book.author}
             </Text>
           </View>
         )}
         {/* Book spine edge effect */}
-        <View style={styles.spineEdge} />
+        <View style={[styles.spineEdge, { backgroundColor: colors.overlayLight }]} />
       </View>
     );
   };
@@ -225,19 +227,19 @@ export function DraggableBookSpine({
 
         {/* Edit mode indicator */}
         {isEditing && (
-          <View style={styles.editOverlay}>
-            <View style={styles.dragHandle}>
-              <Ionicons name="move" size={16} color={Colors.textInverse} />
+          <View style={[styles.editOverlay, { backgroundColor: colors.overlay }]}>
+            <View style={[styles.dragHandle, { backgroundColor: colors.overlayDark }]}>
+              <Ionicons name="move" size={16} color={colors.textOnDark} />
             </View>
             <Pressable
-              style={styles.rotateButton}
+              style={[styles.rotateButton, { backgroundColor: colors.primary }]}
               onPress={() => onToggleStack(book)}
               hitSlop={8}
             >
               <Ionicons
                 name={book.is_stacked ? 'arrow-up' : 'arrow-forward'}
                 size={14}
-                color={Colors.textInverse}
+                color={colors.textInverse}
               />
             </Pressable>
           </View>
@@ -268,7 +270,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   placeholderTitle: {
-    color: Colors.textInverse,
     fontSize: 8,
     fontWeight: '600',
     textAlign: 'center',
@@ -278,7 +279,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
   placeholderAuthor: {
-    color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 6,
     textAlign: 'center',
     position: 'absolute',
@@ -290,13 +290,11 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 3,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   // Stacked (horizontal) book styles
   stackedContainer: {
     borderRadius: 2,
     overflow: 'hidden',
-    backgroundColor: Colors.backgroundDark,
   },
   stackedImage: {
     width: '100%',
@@ -309,7 +307,6 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   stackedTitle: {
-    color: Colors.textInverse,
     fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',
@@ -320,24 +317,20 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     height: 3,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   // Edit mode overlay
   editOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     borderRadius: 2,
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 4,
   },
   dragHandle: {
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderRadius: 4,
     padding: 4,
   },
   rotateButton: {
-    backgroundColor: Colors.primary,
     borderRadius: 12,
     width: 24,
     height: 24,

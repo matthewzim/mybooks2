@@ -33,13 +33,13 @@ import { Image } from 'expo-image';
 import { booksService } from '@/services/books';
 import { Button, Rating, LoadingView } from '@/components/ui';
 import {
-  Colors,
   Spacing,
   BorderRadius,
   Typography,
   Shadows,
   BookSpine as BookSpineConstants,
 } from '@/constants/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 import type { Book } from '@/types';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -73,6 +73,7 @@ export function BookDetailModal({
   onBookUpdated,
   onBookDeleted,
 }: BookDetailModalProps) {
+  const { colors } = useTheme();
   const [isSaving, setIsSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -273,7 +274,7 @@ export function BookDetailModal({
       animationType="none"
       onRequestClose={handleClose}
     >
-      <Animated.View style={[styles.overlay, { opacity: fadeAnimation }]}>
+      <Animated.View style={[styles.overlay, { opacity: fadeAnimation, backgroundColor: colors.overlay }]}>
         <Pressable style={styles.backdropPress} onPress={handleClose} />
 
         <KeyboardAvoidingView
@@ -282,16 +283,16 @@ export function BookDetailModal({
         >
           <View style={styles.bookContainer}>
             {/* Book Base (back cover and pages) */}
-            <View style={[styles.bookBase, { backgroundColor: '#f5f0e6' }]}>
+            <View style={[styles.bookBase, { backgroundColor: colors.bookBase }]}>
               {/* Page texture lines */}
               <View style={styles.pageLines}>
                 {[...Array(20)].map((_, i) => (
-                  <View key={i} style={styles.pageLine} />
+                  <View key={i} style={[styles.pageLine, { backgroundColor: colors.bookPageLines }]} />
                 ))}
               </View>
 
               {/* Right page content */}
-              <Animated.View style={[styles.pageContent, { opacity: contentOpacity }]}>
+              <Animated.View style={[styles.pageContent, { opacity: contentOpacity, backgroundColor: colors.bookPageContent }]}>
                 <ScrollView
                   style={styles.scrollView}
                   contentContainerStyle={styles.scrollContent}
@@ -299,8 +300,8 @@ export function BookDetailModal({
                   showsVerticalScrollIndicator={false}
                 >
                   {/* Close button */}
-                  <View style={styles.headerRow}>
-                    <Text style={styles.pageTitle}>
+                  <View style={[styles.headerRow, { borderBottomColor: colors.inputBorder }]}>
+                    <Text style={[styles.pageTitle, { color: colors.text }]}>
                       {isEditing ? 'Edit Book' : 'Book Details'}
                     </Text>
                     <View style={styles.headerButtons}>
@@ -310,7 +311,7 @@ export function BookDetailModal({
                           style={styles.iconButton}
                           hitSlop={8}
                         >
-                          <Ionicons name="trash-outline" size={20} color={Colors.error} />
+                          <Ionicons name="trash-outline" size={20} color={colors.error} />
                         </Pressable>
                       )}
                       <Pressable
@@ -318,7 +319,7 @@ export function BookDetailModal({
                         style={styles.iconButton}
                         hitSlop={8}
                       >
-                        <Ionicons name="close" size={24} color={Colors.text} />
+                        <Ionicons name="close" size={24} color={colors.text} />
                       </Pressable>
                     </View>
                   </View>
@@ -327,40 +328,40 @@ export function BookDetailModal({
                     // Edit mode
                     <>
                       <View style={styles.field}>
-                        <Text style={styles.fieldLabel}>Title</Text>
+                        <Text style={[styles.fieldLabel, { color: colors.text }]}>Title</Text>
                         <TextInput
-                          style={styles.input}
+                          style={[styles.input, { backgroundColor: colors.inputBackground, borderColor: colors.inputBorder, color: colors.text }]}
                           value={title}
                           onChangeText={setTitle}
                           placeholder="Book title"
-                          placeholderTextColor={Colors.textLight}
+                          placeholderTextColor={colors.textLight}
                         />
                       </View>
 
                       <View style={styles.field}>
-                        <Text style={styles.fieldLabel}>Author</Text>
+                        <Text style={[styles.fieldLabel, { color: colors.text }]}>Author</Text>
                         <TextInput
-                          style={styles.input}
+                          style={[styles.input, { backgroundColor: colors.inputBackground, borderColor: colors.inputBorder, color: colors.text }]}
                           value={author}
                           onChangeText={setAuthor}
                           placeholder="Author name"
-                          placeholderTextColor={Colors.textLight}
+                          placeholderTextColor={colors.textLight}
                         />
                       </View>
 
                       <View style={styles.field}>
-                        <Text style={styles.fieldLabel}>Your Rating</Text>
+                        <Text style={[styles.fieldLabel, { color: colors.text }]}>Your Rating</Text>
                         <Rating value={rating} onChange={setRating} size={28} />
                       </View>
 
                       <View style={styles.field}>
-                        <Text style={styles.fieldLabel}>Your Review</Text>
+                        <Text style={[styles.fieldLabel, { color: colors.text }]}>Your Review</Text>
                         <TextInput
-                          style={[styles.input, styles.textArea]}
+                          style={[styles.input, styles.textArea, { backgroundColor: colors.inputBackground, borderColor: colors.inputBorder, color: colors.text }]}
                           value={review}
                           onChangeText={setReview}
                           placeholder="Write your thoughts..."
-                          placeholderTextColor={Colors.textLight}
+                          placeholderTextColor={colors.textLight}
                           multiline
                           numberOfLines={4}
                           textAlignVertical="top"
@@ -395,46 +396,46 @@ export function BookDetailModal({
                           />
                         ) : (
                           <View style={[styles.thumbnail, styles.thumbnailPlaceholder, { backgroundColor: bookColor }]}>
-                            <Ionicons name="book" size={32} color={Colors.textInverse} />
+                            <Ionicons name="book" size={32} color={colors.textInverse} />
                           </View>
                         )}
                       </View>
 
-                      <Text style={styles.bookTitle}>{book.title}</Text>
-                      <Text style={styles.bookAuthor}>by {book.author}</Text>
+                      <Text style={[styles.bookTitle, { color: colors.text }]}>{book.title}</Text>
+                      <Text style={[styles.bookAuthor, { color: colors.textSecondary }]}>by {book.author}</Text>
 
                       {/* Rating */}
-                      <View style={styles.ratingContainer}>
+                      <View style={[styles.ratingContainer, { backgroundColor: colors.cardDark }]}>
                         <Rating value={book.rating || 0} readonly size={22} />
                         {book.rating ? (
-                          <Text style={styles.ratingText}>Your rating</Text>
+                          <Text style={[styles.ratingText, { color: colors.textSecondary }]}>Your rating</Text>
                         ) : (
-                          <Text style={styles.ratingText}>Not rated</Text>
+                          <Text style={[styles.ratingText, { color: colors.textSecondary }]}>Not rated</Text>
                         )}
                       </View>
 
                       {/* Review */}
                       {book.review ? (
-                        <View style={styles.reviewContainer}>
-                          <Text style={styles.reviewLabel}>Your Review</Text>
-                          <Text style={styles.reviewText}>{book.review}</Text>
+                        <View style={[styles.reviewContainer, { backgroundColor: colors.bookBase, borderLeftColor: colors.primary }]}>
+                          <Text style={[styles.reviewLabel, { color: colors.textSecondary }]}>Your Review</Text>
+                          <Text style={[styles.reviewText, { color: colors.text }]}>{book.review}</Text>
                         </View>
                       ) : (
                         <Pressable
-                          style={styles.addReviewButton}
+                          style={[styles.addReviewButton, { backgroundColor: colors.bookBase, borderColor: colors.inputBorder }]}
                           onPress={() => setIsEditing(true)}
                         >
-                          <Ionicons name="create-outline" size={18} color={Colors.primary} />
-                          <Text style={styles.addReviewText}>Add a review</Text>
+                          <Ionicons name="create-outline" size={18} color={colors.primary} />
+                          <Text style={[styles.addReviewText, { color: colors.primary }]}>Add a review</Text>
                         </Pressable>
                       )}
 
                       {/* Metadata */}
-                      <View style={styles.metadata}>
+                      <View style={[styles.metadata, { borderTopColor: colors.inputBorder }]}>
                         {book.isbn && (
-                          <Text style={styles.metadataText}>ISBN: {book.isbn}</Text>
+                          <Text style={[styles.metadataText, { color: colors.textSecondary }]}>ISBN: {book.isbn}</Text>
                         )}
-                        <Text style={styles.metadataText}>
+                        <Text style={[styles.metadataText, { color: colors.textSecondary }]}>
                           Added: {new Date(book.created_at).toLocaleDateString()}
                         </Text>
                       </View>
@@ -452,7 +453,7 @@ export function BookDetailModal({
               </Animated.View>
 
               {/* Book spine (center binding) */}
-              <View style={styles.bookSpine} />
+              <View style={[styles.bookSpine, { backgroundColor: colors.bookshelfWood }]} />
             </View>
 
             {/* Book Cover (animated) */}
@@ -480,25 +481,25 @@ export function BookDetailModal({
                 ) : (
                   <>
                     <View style={styles.coverDecoration}>
-                      <View style={styles.coverLine} />
-                      <View style={[styles.coverLine, styles.coverLineShort]} />
+                      <View style={[styles.coverLine, { backgroundColor: colors.textOnDarkMuted }]} />
+                      <View style={[styles.coverLine, styles.coverLineShort, { backgroundColor: colors.textOnDarkMuted }]} />
                     </View>
-                    <Text style={styles.coverTitle} numberOfLines={4}>
+                    <Text style={[styles.coverTitle, { color: colors.textOnDark }]} numberOfLines={4}>
                       {book.title}
                     </Text>
-                    <Text style={styles.coverAuthor} numberOfLines={2}>
+                    <Text style={[styles.coverAuthor, { color: colors.textOnDarkMuted }]} numberOfLines={2}>
                       {book.author}
                     </Text>
                     <View style={styles.coverDecoration}>
-                      <View style={[styles.coverLine, styles.coverLineShort]} />
-                      <View style={styles.coverLine} />
+                      <View style={[styles.coverLine, styles.coverLineShort, { backgroundColor: colors.textOnDarkMuted }]} />
+                      <View style={[styles.coverLine, { backgroundColor: colors.textOnDarkMuted }]} />
                     </View>
                   </>
                 )}
               </View>
 
               {/* Cover spine edge */}
-              <View style={styles.coverSpineEdge} />
+              <View style={[styles.coverSpineEdge, { backgroundColor: colors.bookCoverEdge }]} />
             </Animated.View>
           </View>
         </KeyboardAvoidingView>
@@ -510,7 +511,6 @@ export function BookDetailModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -546,13 +546,11 @@ const styles = StyleSheet.create({
   },
   pageLine: {
     height: 1,
-    backgroundColor: '#d4cfc4',
     marginLeft: 2,
   },
   pageContent: {
     flex: 1,
     marginLeft: 15,
-    backgroundColor: '#fdfbf7',
     borderTopRightRadius: BorderRadius.sm,
     borderBottomRightRadius: BorderRadius.sm,
   },
@@ -569,7 +567,6 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 4,
-    backgroundColor: '#8B4513',
     ...Shadows.sm,
   },
   // Book cover (animated)
@@ -600,7 +597,6 @@ const styles = StyleSheet.create({
   coverLine: {
     width: 80,
     height: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
     marginVertical: 4,
   },
   coverLineShort: {
@@ -609,7 +605,6 @@ const styles = StyleSheet.create({
   coverTitle: {
     fontSize: Typography.sizes.xl,
     fontWeight: Typography.weights.bold,
-    color: Colors.textInverse,
     textAlign: 'center',
     marginVertical: Spacing.md,
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
@@ -618,7 +613,6 @@ const styles = StyleSheet.create({
   },
   coverAuthor: {
     fontSize: Typography.sizes.md,
-    color: 'rgba(255, 255, 255, 0.85)',
     textAlign: 'center',
     fontStyle: 'italic',
   },
@@ -628,7 +622,6 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     borderTopLeftRadius: BorderRadius.sm,
     borderBottomLeftRadius: BorderRadius.sm,
   },
@@ -639,13 +632,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#e8e4dc',
     paddingBottom: Spacing.sm,
   },
   pageTitle: {
     fontSize: Typography.sizes.lg,
     fontWeight: Typography.weights.semibold,
-    color: Colors.text,
   },
   headerButtons: {
     flexDirection: 'row',
@@ -674,13 +665,11 @@ const styles = StyleSheet.create({
   bookTitle: {
     fontSize: Typography.sizes.xl,
     fontWeight: Typography.weights.bold,
-    color: Colors.text,
     textAlign: 'center',
     marginBottom: Spacing.xs,
   },
   bookAuthor: {
     fontSize: Typography.sizes.md,
-    color: Colors.textSecondary,
     textAlign: 'center',
     marginBottom: Spacing.md,
   },
@@ -692,33 +681,27 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     marginBottom: Spacing.md,
     paddingVertical: Spacing.sm,
-    backgroundColor: 'rgba(0, 0, 0, 0.03)',
     borderRadius: BorderRadius.md,
   },
   ratingText: {
     fontSize: Typography.sizes.sm,
-    color: Colors.textSecondary,
   },
   // Review
   reviewContainer: {
-    backgroundColor: '#f5f2eb',
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     marginBottom: Spacing.md,
     borderLeftWidth: 3,
-    borderLeftColor: Colors.primary,
   },
   reviewLabel: {
     fontSize: Typography.sizes.xs,
     fontWeight: Typography.weights.semibold,
-    color: Colors.textSecondary,
     marginBottom: Spacing.xs,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   reviewText: {
     fontSize: Typography.sizes.md,
-    color: Colors.text,
     lineHeight: 20,
     fontStyle: 'italic',
   },
@@ -728,27 +711,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.xs,
     padding: Spacing.md,
-    backgroundColor: '#f5f2eb',
     borderRadius: BorderRadius.md,
     marginBottom: Spacing.md,
     borderWidth: 1,
-    borderColor: '#e8e4dc',
     borderStyle: 'dashed',
   },
   addReviewText: {
     fontSize: Typography.sizes.sm,
-    color: Colors.primary,
   },
   // Metadata
   metadata: {
     borderTopWidth: 1,
-    borderTopColor: '#e8e4dc',
     paddingTop: Spacing.md,
     marginBottom: Spacing.md,
   },
   metadataText: {
     fontSize: Typography.sizes.xs,
-    color: Colors.textSecondary,
     marginBottom: Spacing.xs,
   },
   // Edit mode
@@ -758,17 +736,13 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: Typography.sizes.sm,
     fontWeight: Typography.weights.semibold,
-    color: Colors.text,
     marginBottom: Spacing.xs,
   },
   input: {
-    backgroundColor: '#ffffff',
     borderRadius: BorderRadius.sm,
     padding: Spacing.sm,
     fontSize: Typography.sizes.md,
-    color: Colors.text,
     borderWidth: 1,
-    borderColor: '#e8e4dc',
   },
   textArea: {
     minHeight: 80,

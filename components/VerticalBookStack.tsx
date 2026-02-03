@@ -15,7 +15,8 @@ import React from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { Colors, BookSpine as BookSpineConstants, Shadows } from '@/constants/theme';
+import { BookSpine as BookSpineConstants, Shadows } from '@/constants/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 import { getSpineImageUrl } from '@/services/storage';
 import type { Book } from '@/types';
 
@@ -51,6 +52,8 @@ export function VerticalBookStack({
   isEditing = false,
   onUnstackBook,
 }: VerticalBookStackProps) {
+  const { colors } = useTheme();
+
   // Sort books by stack_position (0 = bottom, higher = on top)
   const sortedBooks = [...books].sort(
     (a, b) => (a.stack_position || 0) - (b.stack_position || 0)
@@ -98,36 +101,36 @@ export function VerticalBookStack({
               </View>
             ) : (
               <View style={[styles.stackedPlaceholder, { backgroundColor }]}>
-                <Text style={styles.stackedTitle} numberOfLines={1}>
+                <Text style={[styles.stackedTitle, { color: colors.textOnDark }]} numberOfLines={1}>
                   {book.title}
                 </Text>
               </View>
             )}
             {/* Top edge effect */}
-            <View style={styles.stackedTopEdge} />
+            <View style={[styles.stackedTopEdge, { backgroundColor: colors.overlayLight }]} />
 
             {/* Edit mode overlay - show unstack button on top book */}
             {isEditing && isTopBook && onUnstackBook && (
-              <View style={styles.editOverlay}>
-                <View style={styles.stackBadge}>
-                  <Ionicons name="layers" size={12} color={Colors.textInverse} />
-                  <Text style={styles.stackBadgeText}>{sortedBooks.length}</Text>
+              <View style={[styles.editOverlay, { backgroundColor: colors.overlay }]}>
+                <View style={[styles.stackBadge, { backgroundColor: colors.overlayDark }]}>
+                  <Ionicons name="layers" size={12} color={colors.textOnDark} />
+                  <Text style={[styles.stackBadgeText, { color: colors.textOnDark }]}>{sortedBooks.length}</Text>
                 </View>
                 <Pressable
-                  style={styles.unstackButton}
+                  style={[styles.unstackButton, { backgroundColor: colors.primary }]}
                   onPress={() => onUnstackBook(book)}
                   hitSlop={8}
                 >
-                  <Ionicons name="arrow-up-outline" size={14} color={Colors.textInverse} />
+                  <Ionicons name="arrow-up-outline" size={14} color={colors.textInverse} />
                 </Pressable>
               </View>
             )}
 
             {/* Stack count badge (view mode) */}
             {!isEditing && isTopBook && sortedBooks.length > 1 && (
-              <View style={styles.stackCountBadge}>
-                <Ionicons name="layers" size={10} color={Colors.textInverse} />
-                <Text style={styles.stackCountText}>{sortedBooks.length}</Text>
+              <View style={[styles.stackCountBadge, { backgroundColor: colors.overlayDark }]}>
+                <Ionicons name="layers" size={10} color={colors.textOnDark} />
+                <Text style={[styles.stackCountText, { color: colors.textOnDark }]}>{sortedBooks.length}</Text>
               </View>
             )}
           </Pressable>
@@ -167,7 +170,6 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   stackedTitle: {
-    color: Colors.textInverse,
     fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',
@@ -178,12 +180,10 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     height: 3,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   // Edit mode overlay
   editOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     borderRadius: 2,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -193,19 +193,16 @@ const styles = StyleSheet.create({
   stackBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
   stackBadgeText: {
-    color: Colors.textInverse,
     fontSize: 10,
     fontWeight: '600',
     marginLeft: 4,
   },
   unstackButton: {
-    backgroundColor: Colors.primary,
     borderRadius: 12,
     width: 24,
     height: 24,
@@ -219,13 +216,11 @@ const styles = StyleSheet.create({
     right: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     borderRadius: 8,
     paddingHorizontal: 4,
     paddingVertical: 2,
   },
   stackCountText: {
-    color: Colors.textInverse,
     fontSize: 9,
     fontWeight: '600',
     marginLeft: 2,

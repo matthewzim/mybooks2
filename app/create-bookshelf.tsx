@@ -28,13 +28,14 @@ import { useBookshelves } from '@/hooks/useBookshelves';
 import { Button, Input } from '@/components/ui';
 import { BOOKSHELF_COLORS } from '@/types';
 import {
-  Colors,
   Spacing,
   BorderRadius,
   Typography,
 } from '@/constants/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 
 export default function CreateBookshelfScreen() {
+  const { colors } = useTheme();
   const { createBookshelf } = useBookshelves();
 
   const [name, setName] = useState('');
@@ -98,13 +99,13 @@ export default function CreateBookshelfScreen() {
         options={{
           headerLeft: () => (
             <Pressable onPress={() => router.back()} style={styles.headerButton}>
-              <Text style={styles.headerButtonText}>Cancel</Text>
+              <Text style={[styles.headerButtonText, { color: colors.textInverse }]}>Cancel</Text>
             </Pressable>
           ),
         }}
       />
 
-      <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right', 'bottom']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardView}
@@ -115,15 +116,15 @@ export default function CreateBookshelfScreen() {
             keyboardShouldPersistTaps="handled"
           >
             {/* Preview */}
-            <View style={styles.previewSection}>
+            <View style={[styles.previewSection, { backgroundColor: colors.backgroundDark }]}>
               <View
                 style={[styles.shelfPreview, { backgroundColor: selectedColor }]}
               >
-                <Text style={styles.previewName} numberOfLines={1}>
+                <Text style={[styles.previewName, { color: colors.textOnDark }]} numberOfLines={1}>
                   {name || 'New Bookshelf'}
                 </Text>
                 <View style={styles.previewShelf}>
-                  <View style={styles.previewShelfSurface} />
+                  <View style={[styles.previewShelfSurface, { backgroundColor: colors.overlay }]} />
                 </View>
               </View>
             </View>
@@ -155,7 +156,7 @@ export default function CreateBookshelfScreen() {
 
               {/* Color Picker */}
               <View style={styles.colorSection}>
-                <Text style={styles.colorLabel}>Shelf Color</Text>
+                <Text style={[styles.colorLabel, { color: colors.text }]}>Shelf Color</Text>
                 <View style={styles.colorGrid}>
                   {BOOKSHELF_COLORS.map((color) => (
                     <Pressable
@@ -163,7 +164,7 @@ export default function CreateBookshelfScreen() {
                       style={[
                         styles.colorOption,
                         { backgroundColor: color },
-                        selectedColor === color && styles.colorSelected,
+                        selectedColor === color && { borderColor: colors.text },
                       ]}
                       onPress={() => setSelectedColor(color)}
                     >
@@ -171,7 +172,7 @@ export default function CreateBookshelfScreen() {
                         <Ionicons
                           name="checkmark"
                           size={20}
-                          color={Colors.textInverse}
+                          color={colors.textOnDark}
                         />
                       )}
                     </Pressable>
@@ -180,20 +181,20 @@ export default function CreateBookshelfScreen() {
               </View>
 
               {/* Privacy Toggle */}
-              <View style={styles.privacySection}>
+              <View style={[styles.privacySection, { backgroundColor: colors.backgroundDark }]}>
                 <View style={styles.privacyHeader}>
                   <Ionicons
                     name={isPublic ? 'globe-outline' : 'lock-closed-outline'}
                     size={20}
-                    color={Colors.text}
+                    color={colors.text}
                   />
-                  <Text style={styles.privacyLabel}>
+                  <Text style={[styles.privacyLabel, { color: colors.text }]}>
                     {isPublic ? 'Public Shelf' : 'Private Shelf'}
                   </Text>
                 </View>
                 <View style={styles.privacyRow}>
                   <View style={styles.privacyInfo}>
-                    <Text style={styles.privacyDescription}>
+                    <Text style={[styles.privacyDescription, { color: colors.textSecondary }]}>
                       {isPublic
                         ? 'Anyone can view this bookshelf'
                         : 'Only you can view this bookshelf'}
@@ -202,8 +203,8 @@ export default function CreateBookshelfScreen() {
                   <Switch
                     value={isPublic}
                     onValueChange={setIsPublic}
-                    trackColor={{ false: Colors.border, true: Colors.success }}
-                    thumbColor={Colors.background}
+                    trackColor={{ false: colors.border, true: colors.success }}
+                    thumbColor={colors.background}
                   />
                 </View>
               </View>
@@ -229,7 +230,6 @@ export default function CreateBookshelfScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   keyboardView: {
     flex: 1,
@@ -244,12 +244,10 @@ const styles = StyleSheet.create({
     padding: Spacing.xs,
   },
   headerButtonText: {
-    color: Colors.textInverse,
     fontSize: Typography.sizes.md,
   },
   previewSection: {
     padding: Spacing.lg,
-    backgroundColor: Colors.backgroundDark,
   },
   shelfPreview: {
     borderRadius: BorderRadius.lg,
@@ -258,7 +256,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   previewName: {
-    color: Colors.textInverse,
     fontSize: Typography.sizes.lg,
     fontWeight: Typography.weights.bold,
   },
@@ -271,7 +268,6 @@ const styles = StyleSheet.create({
     left: -Spacing.md,
     right: -Spacing.md,
     height: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     borderRadius: 2,
   },
   form: {
@@ -283,7 +279,6 @@ const styles = StyleSheet.create({
   colorLabel: {
     fontSize: Typography.sizes.sm,
     fontWeight: Typography.weights.medium,
-    color: Colors.text,
     marginBottom: Spacing.md,
   },
   colorGrid: {
@@ -300,12 +295,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  colorSelected: {
-    borderColor: Colors.text,
-  },
   privacySection: {
     marginBottom: Spacing.lg,
-    backgroundColor: Colors.backgroundDark,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
   },
@@ -317,7 +308,6 @@ const styles = StyleSheet.create({
   privacyLabel: {
     fontSize: Typography.sizes.md,
     fontWeight: Typography.weights.medium,
-    color: Colors.text,
     marginLeft: Spacing.sm,
   },
   privacyRow: {
@@ -331,7 +321,6 @@ const styles = StyleSheet.create({
   },
   privacyDescription: {
     fontSize: Typography.sizes.sm,
-    color: Colors.textSecondary,
   },
   buttonContainer: {
     marginTop: Spacing.lg,

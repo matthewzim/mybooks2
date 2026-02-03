@@ -41,6 +41,16 @@ export interface ThemeColors {
   bookshelfDark: string;
   bookshelfLight: string;
 
+  // Book appearance colors
+  bookBase: string;
+  bookPageLines: string;
+  bookPageContent: string;
+  bookCoverEdge: string;
+
+  // Input colors
+  inputBackground: string;
+  inputBorder: string;
+
   // Status colors
   success: string;
   warning: string;
@@ -55,8 +65,16 @@ export interface ThemeColors {
   starFilled: string;
   starEmpty: string;
 
-  // Overlay
+  // Overlay colors
   overlay: string;
+  overlayLight: string;
+  overlayDark: string;
+  overlayWhite: string;
+  overlayWhiteLight: string;
+
+  // Text on contrasting backgrounds
+  textOnDark: string;
+  textOnDarkMuted: string;
 }
 
 /**
@@ -93,6 +111,16 @@ export const LightTheme: ThemeColors = {
   bookshelfDark: '#654321',
   bookshelfLight: '#DEB887',
 
+  // Book appearance colors
+  bookBase: '#f1f5f9',
+  bookPageLines: '#cbd5e1',
+  bookPageContent: '#f8fafc',
+  bookCoverEdge: 'rgba(0, 0, 0, 0.3)',
+
+  // Input colors
+  inputBackground: '#ffffff',
+  inputBorder: '#e2e8f0',
+
   // Status colors
   success: '#22c55e',
   warning: '#f59e0b',
@@ -107,8 +135,16 @@ export const LightTheme: ThemeColors = {
   starFilled: '#f59e0b',
   starEmpty: '#e2e8f0',
 
-  // Overlay
+  // Overlay colors
   overlay: 'rgba(0, 0, 0, 0.5)',
+  overlayLight: 'rgba(0, 0, 0, 0.2)',
+  overlayDark: 'rgba(0, 0, 0, 0.6)',
+  overlayWhite: 'rgba(255, 255, 255, 0.3)',
+  overlayWhiteLight: 'rgba(255, 255, 255, 0.2)',
+
+  // Text on contrasting backgrounds
+  textOnDark: 'rgba(255, 255, 255, 0.9)',
+  textOnDarkMuted: 'rgba(255, 255, 255, 0.7)',
 };
 
 /**
@@ -145,6 +181,16 @@ export const DarkTheme: ThemeColors = {
   bookshelfDark: '#451a03',
   bookshelfLight: '#a16207',
 
+  // Book appearance colors
+  bookBase: '#1e293b',
+  bookPageLines: '#334155',
+  bookPageContent: '#0f172a',
+  bookCoverEdge: 'rgba(0, 0, 0, 0.5)',
+
+  // Input colors
+  inputBackground: '#1e293b',
+  inputBorder: '#334155',
+
   // Status colors
   success: '#22c55e',
   warning: '#f59e0b',
@@ -159,8 +205,16 @@ export const DarkTheme: ThemeColors = {
   starFilled: '#f59e0b',
   starEmpty: '#334155',
 
-  // Overlay
+  // Overlay colors
   overlay: 'rgba(0, 0, 0, 0.7)',
+  overlayLight: 'rgba(0, 0, 0, 0.4)',
+  overlayDark: 'rgba(0, 0, 0, 0.8)',
+  overlayWhite: 'rgba(255, 255, 255, 0.3)',
+  overlayWhiteLight: 'rgba(255, 255, 255, 0.2)',
+
+  // Text on contrasting backgrounds
+  textOnDark: 'rgba(255, 255, 255, 0.9)',
+  textOnDarkMuted: 'rgba(255, 255, 255, 0.7)',
 };
 
 /**
@@ -197,6 +251,16 @@ export const StandardTheme: ThemeColors = {
   bookshelfDark: '#654321',
   bookshelfLight: '#DEB887',
 
+  // Book appearance colors
+  bookBase: '#f5f0e6',
+  bookPageLines: '#d4cfc4',
+  bookPageContent: '#fdfbf7',
+  bookCoverEdge: 'rgba(0, 0, 0, 0.3)',
+
+  // Input colors
+  inputBackground: '#fffbeb',
+  inputBorder: '#d97706',
+
   // Status colors
   success: '#15803d',
   warning: '#ca8a04',
@@ -211,8 +275,16 @@ export const StandardTheme: ThemeColors = {
   starFilled: '#f59e0b',
   starEmpty: '#fde68a',
 
-  // Overlay
+  // Overlay colors
   overlay: 'rgba(69, 26, 3, 0.5)',
+  overlayLight: 'rgba(69, 26, 3, 0.2)',
+  overlayDark: 'rgba(69, 26, 3, 0.7)',
+  overlayWhite: 'rgba(255, 255, 255, 0.3)',
+  overlayWhiteLight: 'rgba(255, 255, 255, 0.2)',
+
+  // Text on contrasting backgrounds
+  textOnDark: 'rgba(255, 255, 255, 0.9)',
+  textOnDarkMuted: 'rgba(255, 255, 255, 0.7)',
 };
 
 /**

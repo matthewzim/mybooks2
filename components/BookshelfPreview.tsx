@@ -22,12 +22,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import {
-  Colors,
   Spacing,
   BorderRadius,
   Shadows,
   Typography,
 } from '@/constants/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 import { getSpineImageUrl } from '@/services/storage';
 import type { Bookshelf, Book } from '@/types';
 
@@ -44,6 +44,8 @@ export function BookshelfPreview({
   onPress,
   onDelete,
 }: BookshelfPreviewProps) {
+  const { colors } = useTheme();
+
   const handleDelete = () => {
     Alert.alert(
       'Delete Bookshelf',
@@ -66,7 +68,7 @@ export function BookshelfPreview({
     <Pressable
       style={({ pressed }) => [
         styles.container,
-        { backgroundColor: bookshelf.cover_color || Colors.bookshelfWood },
+        { backgroundColor: bookshelf.cover_color || colors.bookshelfWood },
         pressed && styles.pressed,
       ]}
       onPress={() => onPress(bookshelf)}
@@ -77,10 +79,10 @@ export function BookshelfPreview({
       {/* Shelf Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.shelfName} numberOfLines={1}>
+          <Text style={[styles.shelfName, { color: colors.textOnDark }]} numberOfLines={1}>
             {bookshelf.name}
           </Text>
-          <Text style={styles.bookCount}>
+          <Text style={[styles.bookCount, { color: colors.textOnDarkMuted }]}>
             {totalBooks} {totalBooks === 1 ? 'book' : 'books'}
           </Text>
         </View>
@@ -92,7 +94,7 @@ export function BookshelfPreview({
             hitSlop={8}
             accessibilityLabel="Delete bookshelf"
           >
-            <Ionicons name="trash-outline" size={18} color={Colors.textInverse} />
+            <Ionicons name="trash-outline" size={18} color={colors.textOnDark} />
           </Pressable>
         )}
       </View>
@@ -100,7 +102,7 @@ export function BookshelfPreview({
       {/* Book Previews */}
       <View style={styles.booksContainer}>
         {/* Shelf back */}
-        <View style={styles.shelfBack} />
+        <View style={[styles.shelfBack, { backgroundColor: colors.overlayLight }]} />
 
         {/* Books */}
         <View style={styles.booksRow}>
@@ -113,27 +115,27 @@ export function BookshelfPreview({
               <Ionicons
                 name="book-outline"
                 size={24}
-                color="rgba(255, 255, 255, 0.5)"
+                color={colors.textOnDarkMuted}
               />
-              <Text style={styles.emptyText}>No books yet</Text>
+              <Text style={[styles.emptyText, { color: colors.textOnDarkMuted }]}>No books yet</Text>
             </View>
           )}
 
           {/* More books indicator */}
           {totalBooks > 3 && (
-            <View style={styles.moreIndicator}>
-              <Text style={styles.moreText}>+{totalBooks - 3}</Text>
+            <View style={[styles.moreIndicator, { backgroundColor: colors.overlayLight }]}>
+              <Text style={[styles.moreText, { color: colors.textOnDark }]}>+{totalBooks - 3}</Text>
             </View>
           )}
         </View>
 
         {/* Shelf surface */}
-        <View style={styles.shelfSurface} />
+        <View style={[styles.shelfSurface, { backgroundColor: colors.overlay }]} />
       </View>
 
       {/* Arrow indicator */}
       <View style={styles.arrowContainer}>
-        <Ionicons name="chevron-forward" size={20} color={Colors.textInverse} />
+        <Ionicons name="chevron-forward" size={20} color={colors.textOnDark} />
       </View>
     </Pressable>
   );
@@ -207,12 +209,10 @@ const styles = StyleSheet.create({
     marginRight: Spacing.md,
   },
   shelfName: {
-    color: Colors.textInverse,
     fontSize: Typography.sizes.lg,
     fontWeight: Typography.weights.bold,
   },
   bookCount: {
-    color: 'rgba(255, 255, 255, 0.7)',
     fontSize: Typography.sizes.sm,
     marginTop: 2,
   },
@@ -229,7 +229,6 @@ const styles = StyleSheet.create({
     right: -4,
     bottom: 8,
     height: 60,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
     borderTopLeftRadius: 4,
     borderTopRightRadius: 4,
   },
@@ -241,7 +240,6 @@ const styles = StyleSheet.create({
   },
   shelfSurface: {
     height: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     borderRadius: 2,
     marginTop: 2,
   },
@@ -266,19 +264,16 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   emptyText: {
-    color: 'rgba(255, 255, 255, 0.5)',
     fontSize: Typography.sizes.sm,
   },
   moreIndicator: {
     width: 30,
     height: 55,
     borderRadius: 2,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   moreText: {
-    color: Colors.textInverse,
     fontSize: Typography.sizes.xs,
     fontWeight: Typography.weights.bold,
   },
