@@ -28,7 +28,23 @@ SELECT id, shelf_id, position, review, rating, is_stacked, stack_id, stack_posit
 FROM books
 WHERE shelf_id IS NOT NULL;
 
--- Step 3: Remove per-user columns from books table
+-- Step 3: Drop existing RLS policies on books that reference columns being removed
+-- (Supabase projects typically have auto-generated or manually created policies)
+DO $$
+DECLARE
+  pol RECORD;
+BEGIN
+  FOR pol IN
+    SELECT policyname
+    FROM pg_policies
+    WHERE tablename = 'books' AND schemaname = 'public'
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON books', pol.policyname);
+  END LOOP;
+END;
+$$;
+
+-- Step 4: Remove per-user columns from books table
 ALTER TABLE books
   DROP COLUMN IF EXISTS shelf_id,
   DROP COLUMN IF EXISTS position,
@@ -38,17 +54,17 @@ ALTER TABLE books
   DROP COLUMN IF EXISTS stack_id,
   DROP COLUMN IF EXISTS stack_position;
 
--- Step 4: Add indexes for common query patterns
+-- Step 5: Add indexes for common query patterns
 CREATE INDEX IF NOT EXISTS idx_bookshelf_items_shelf_id ON bookshelf_items(shelf_id);
 CREATE INDEX IF NOT EXISTS idx_bookshelf_items_book_id ON bookshelf_items(book_id);
 CREATE INDEX IF NOT EXISTS idx_bookshelf_items_shelf_position ON bookshelf_items(shelf_id, position);
 CREATE INDEX IF NOT EXISTS idx_bookshelf_items_stack_id ON bookshelf_items(stack_id);
 CREATE INDEX IF NOT EXISTS idx_books_is_community ON books(is_community) WHERE is_community = true;
 
--- Step 5: Add unique constraint to prevent duplicate book on same shelf
+-- Step 6: Add unique constraint to prevent duplicate book on same shelf
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bookshelf_items_book_shelf ON bookshelf_items(book_id, shelf_id);
 
--- Step 6: Update the community_book_spines view
+-- Step 7: Update the community_book_spines view
 -- (Books table no longer has shelf_id; community books are those with is_community = true)
 DROP VIEW IF EXISTS community_book_spines;
 
@@ -72,7 +88,7 @@ LEFT JOIN (
 WHERE b.is_community = true
   AND b.image_url IS NOT NULL;
 
--- Step 7: Update or replace the get_community_books function
+-- Step 8: Update or replace the get_community_books function
 CREATE OR REPLACE FUNCTION get_community_books(
   page_num INTEGER DEFAULT 0,
   page_size INTEGER DEFAULT 20,
@@ -121,7 +137,7 @@ BEGIN
 END;
 $$;
 
--- Step 8: Enable Row Level Security on bookshelf_items
+-- Step 9: Enable Row Level Security on bookshelf_items
 ALTER TABLE bookshelf_items ENABLE ROW LEVEL SECURITY;
 
 -- Users can read their own bookshelf items (via shelf ownership)
