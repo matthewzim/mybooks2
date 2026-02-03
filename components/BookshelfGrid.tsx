@@ -30,13 +30,14 @@ import {
   BookSpine as BookSpineConstants,
   BookshelfDimensions,
 } from '@/constants/theme';
-import type { Book } from '@/types';
+import type { Book, ShelfStyle } from '@/types';
 
 interface BookshelfGridProps {
   books: Book[];
   onBookPress: (book: Book) => void;
   onAddBook: () => void;
   isLoading?: boolean;
+  shelfStyle?: ShelfStyle;
 }
 
 // Number of books per row
@@ -47,6 +48,7 @@ export function BookshelfGrid({
   onBookPress,
   onAddBook,
   isLoading = false,
+  shelfStyle = 'full',
 }: BookshelfGridProps) {
   const { width: screenWidth } = useWindowDimensions();
 
@@ -87,9 +89,19 @@ export function BookshelfGrid({
       showsVerticalScrollIndicator={false}
     >
       {rows.map((row, rowIndex) => (
-        <View key={rowIndex} style={styles.shelfContainer}>
-          {/* Shelf back */}
-          <View style={styles.shelfBack} />
+        <View
+          key={rowIndex}
+          style={[
+            styles.shelfContainer,
+            shelfStyle === 'full' && {
+              borderWidth: BookshelfDimensions.shelfThickness / 2,
+              borderColor: BookshelfDimensions.shelfColor,
+              borderRadius: 4,
+            },
+          ]}
+        >
+          {/* Shelf back - only shown in 'full' style */}
+          {shelfStyle === 'full' && <View style={styles.shelfBack} />}
 
           {/* Books row */}
           <View style={[styles.booksRow, { height: bookHeight }]}>
@@ -129,8 +141,8 @@ export function BookshelfGrid({
               )}
           </View>
 
-          {/* Shelf surface */}
-          <View style={styles.shelfSurface} />
+          {/* Shelf surface - only shown in 'bottom' style */}
+          {shelfStyle === 'bottom' && <View style={styles.shelfSurface} />}
         </View>
       ))}
 

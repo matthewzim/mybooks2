@@ -34,7 +34,7 @@ import {
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getSpineImageUrl } from '@/services/storage';
-import type { Book } from '@/types';
+import type { Book, ShelfStyle } from '@/types';
 
 interface EditableBookshelfGridProps {
   books: Book[];
@@ -42,6 +42,7 @@ interface EditableBookshelfGridProps {
   onAddBook: () => void;
   isLoading?: boolean;
   isEditing: boolean;
+  shelfStyle?: ShelfStyle;
   onReorderBooks: (orderedIds: string[]) => Promise<boolean>;
   onToggleBookStack: (book: Book) => Promise<void>;
   onStackBooks?: (bookId: string, targetBookId: string) => Promise<boolean>;
@@ -72,6 +73,7 @@ export function EditableBookshelfGrid({
   onAddBook,
   isLoading = false,
   isEditing,
+  shelfStyle = 'full',
   onReorderBooks,
   onToggleBookStack,
   onStackBooks,
@@ -312,9 +314,21 @@ export function EditableBookshelfGrid({
         const rowHeight = getRowHeight(row);
 
         return (
-          <View key={rowIndex} style={styles.shelfContainer}>
-            {/* Shelf back */}
-            <View style={[styles.shelfBack, { height: rowHeight + 20 }]} />
+          <View
+            key={rowIndex}
+            style={[
+              styles.shelfContainer,
+              shelfStyle === 'full' && {
+                borderWidth: BookshelfDimensions.shelfThickness / 2,
+                borderColor: BookshelfDimensions.shelfColor,
+                borderRadius: 4,
+              },
+            ]}
+          >
+            {/* Shelf back - only shown in 'full' style */}
+            {shelfStyle === 'full' && (
+              <View style={[styles.shelfBack, { height: rowHeight + 20 }]} />
+            )}
 
             {/* Books row */}
             <View style={[styles.booksRow, { minHeight: rowHeight }]}>
@@ -401,8 +415,10 @@ export function EditableBookshelfGrid({
               )}
             </View>
 
-            {/* Shelf surface */}
-            <View style={styles.shelfSurface} />
+            {/* Shelf surface - only shown in 'bottom' style (full style uses border instead) */}
+            {shelfStyle === 'bottom' && (
+              <View style={styles.shelfSurface} />
+            )}
           </View>
         );
       })}

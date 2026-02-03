@@ -52,6 +52,7 @@ export interface Database {
           description: string | null;
           cover_color: string;
           is_public: boolean;
+          shelf_style: string;
           position: number;
           created_at: string;
           updated_at: string;
@@ -63,6 +64,7 @@ export interface Database {
           description?: string | null;
           cover_color?: string;
           is_public?: boolean;
+          shelf_style?: string;
           position?: number;
           created_at?: string;
           updated_at?: string;
@@ -74,6 +76,7 @@ export interface Database {
           description?: string | null;
           cover_color?: string;
           is_public?: boolean;
+          shelf_style?: string;
           position?: number;
           created_at?: string;
           updated_at?: string;

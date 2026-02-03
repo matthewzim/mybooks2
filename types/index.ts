@@ -22,6 +22,13 @@ export interface User {
 }
 
 /**
+ * Shelf display style
+ * - 'bottom': shelf line only along the bottom of each row (no background)
+ * - 'full': shelf line goes all the way around each row as a rectangle (with background)
+ */
+export type ShelfStyle = 'bottom' | 'full';
+
+/**
  * Bookshelf - a collection of books
  * Users can have multiple bookshelves
  */
@@ -32,6 +39,7 @@ export interface Bookshelf {
   description: string | null;
   cover_color: string;
   is_public: boolean;
+  shelf_style: ShelfStyle;
   position: number;
   created_at: string;
   updated_at: string;
@@ -140,6 +148,7 @@ export interface CreateBookshelfInput {
   description?: string;
   cover_color?: string;
   is_public?: boolean;
+  shelf_style?: ShelfStyle;
 }
 
 export interface UpdateBookshelfInput {
@@ -147,6 +156,7 @@ export interface UpdateBookshelfInput {
   description?: string;
   cover_color?: string;
   is_public?: boolean;
+  shelf_style?: ShelfStyle;
   position?: number;
 }
 
