@@ -1,11 +1,16 @@
 /**
  * Books Service
  *
- * Handles all CRUD operations for books:
- * - Create, read, update, delete books
- * - Manage book positions within shelves
- * - Move books between shelves
+ * Handles all CRUD operations for books and bookshelf items:
+ * - Global book records (shared across users)
+ * - Per-user bookshelf item placement (position, review, rating, stacking)
  * - Community book operations
+ *
+ * Schema:
+ *   books          – global data: title, author, image_url, isbn, is_community
+ *   bookshelf_items – per-user: book_id, shelf_id, position, review, rating, stack fields
+ *
+ * The service returns a combined `Book` type (join of both tables) for UI consumption.
  *
  * Usage:
  * import { booksService } from '@/services/books';
@@ -23,13 +28,39 @@ import type {
 } from '@/types';
 
 /**
+ * Transform a joined bookshelf_items + books row into the combined Book type.
+ */
+function toBook(row: any): Book {
+  const book = row.book || {};
+  return {
+    id: row.id,                                   // bookshelf_items.id
+    book_id: row.book_id || book.id,              // books.id
+    title: book.title ?? row.title,
+    author: book.author ?? row.author,
+    image_url: book.image_url ?? row.image_url ?? null,
+    isbn: book.isbn ?? row.isbn ?? null,
+    uploaded_by_user_id: book.uploaded_by_user_id ?? row.uploaded_by_user_id,
+    is_community: book.is_community ?? row.is_community ?? false,
+    shelf_id: row.shelf_id,
+    position: row.position,
+    review: row.review ?? null,
+    rating: row.rating ?? null,
+    is_stacked: row.is_stacked ?? false,
+    stack_id: row.stack_id ?? null,
+    stack_position: row.stack_position ?? 0,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+/**
  * Books Service Class
  * Provides methods for managing books on bookshelves
  */
 class BooksService {
   /**
    * Get all books on a specific shelf
-   * Ordered by position for correct display
+   * Joins bookshelf_items with books for complete data
    *
    * @param shelfId - Bookshelf ID
    * @returns Array of books on the shelf
@@ -37,14 +68,17 @@ class BooksService {
   async getBooksByShelf(shelfId: string): Promise<ApiResponse<Book[]>> {
     try {
       const { data, error } = await supabase
-        .from(TABLES.BOOKS)
-        .select('*')
+        .from(TABLES.BOOKSHELF_ITEMS)
+        .select(`
+          *,
+          book:books(*)
+        `)
         .eq('shelf_id', shelfId)
         .order('position', { ascending: true });
 
       if (error) throw error;
 
-      return { data: data as Book[], error: null };
+      return { data: (data || []).map(toBook), error: null };
     } catch (error) {
       return {
         data: null,
@@ -54,22 +88,25 @@ class BooksService {
   }
 
   /**
-   * Get a single book by ID
+   * Get a single book by its bookshelf_item ID
    *
-   * @param id - Book ID
-   * @returns Book details
+   * @param id - BookshelfItem ID
+   * @returns Book details (combined view)
    */
   async getBookById(id: string): Promise<ApiResponse<Book>> {
     try {
       const { data, error } = await supabase
-        .from(TABLES.BOOKS)
-        .select('*')
+        .from(TABLES.BOOKSHELF_ITEMS)
+        .select(`
+          *,
+          book:books(*)
+        `)
         .eq('id', id)
         .single();
 
       if (error) throw error;
 
-      return { data: data as Book, error: null };
+      return { data: toBook(data), error: null };
     } catch (error) {
       return {
         data: null,
@@ -79,10 +116,13 @@ class BooksService {
   }
 
   /**
-   * Create a new book on a shelf
+   * Create a new book on a shelf.
+   *
+   * If `input.book_id` is provided, references the existing global book.
+   * Otherwise, creates a new global book record first.
    *
    * @param input - Book details including title, author, shelf_id
-   * @returns Created book
+   * @returns Created book (combined view)
    */
   async createBook(input: CreateBookInput): Promise<ApiResponse<Book>> {
     try {
@@ -91,43 +131,62 @@ class BooksService {
         throw new Error('Not authenticated');
       }
 
+      let bookId = input.book_id;
+
+      // If no existing book_id, create a new global book record
+      if (!bookId) {
+        const { data: newBook, error: bookError } = await supabase
+          .from(TABLES.BOOKS)
+          .insert({
+            title: input.title,
+            author: input.author,
+            image_url: input.image_url || null,
+            isbn: input.isbn || null,
+            uploaded_by_user_id: session.session.user.id,
+            is_community: input.is_community ?? true,
+          })
+          .select()
+          .single();
+
+        if (bookError) throw bookError;
+        bookId = newBook.id;
+      }
+
       // Get the current max position on this shelf
-      const { data: existingBooks } = await supabase
-        .from(TABLES.BOOKS)
+      const { data: existingItems } = await supabase
+        .from(TABLES.BOOKSHELF_ITEMS)
         .select('position')
         .eq('shelf_id', input.shelf_id)
         .order('position', { ascending: false })
         .limit(1);
 
       const nextPosition =
-        existingBooks && existingBooks.length > 0
-          ? existingBooks[0].position + 1
+        existingItems && existingItems.length > 0
+          ? existingItems[0].position + 1
           : 0;
 
-      // Insert the new book
-      const { data, error } = await supabase
-        .from(TABLES.BOOKS)
+      // Create the bookshelf_item linking the book to the shelf
+      const { data: item, error: itemError } = await supabase
+        .from(TABLES.BOOKSHELF_ITEMS)
         .insert({
-          title: input.title,
-          author: input.author,
-          image_url: input.image_url || null,
+          book_id: bookId,
           shelf_id: input.shelf_id,
           position: input.position ?? nextPosition,
           review: input.review || null,
           rating: input.rating || null,
-          isbn: input.isbn || null,
-          uploaded_by_user_id: session.session.user.id,
-          is_community: input.is_community ?? true, // Default to sharing with community
-          is_stacked: input.is_stacked ?? false, // Default to upright position
-          stack_id: input.stack_id || null, // Stack group ID for vertical stacking
-          stack_position: input.stack_position ?? 0, // Position within stack (0 = bottom)
+          is_stacked: input.is_stacked ?? false,
+          stack_id: input.stack_id || null,
+          stack_position: input.stack_position ?? 0,
         })
-        .select()
+        .select(`
+          *,
+          book:books(*)
+        `)
         .single();
 
-      if (error) throw error;
+      if (itemError) throw itemError;
 
-      return { data: data as Book, error: null };
+      return { data: toBook(item), error: null };
     } catch (error) {
       return {
         data: null,
@@ -137,30 +196,72 @@ class BooksService {
   }
 
   /**
-   * Update an existing book
+   * Update an existing book.
+   * Routes fields to the correct table:
+   *   - title, author, image_url, isbn → books table (global)
+   *   - review, rating, position, shelf_id, stack fields → bookshelf_items table (per-user)
    *
-   * @param id - Book ID
+   * @param id - BookshelfItem ID
    * @param updates - Fields to update
-   * @returns Updated book
+   * @returns Updated book (combined view)
    */
   async updateBook(
     id: string,
     updates: UpdateBookInput
   ): Promise<ApiResponse<Book>> {
     try {
-      const { data, error } = await supabase
-        .from(TABLES.BOOKS)
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-        .select()
-        .single();
+      // Separate updates for each table
+      const bookUpdates: Record<string, any> = {};
+      const itemUpdates: Record<string, any> = {};
 
-      if (error) throw error;
+      // Global book fields
+      if (updates.title !== undefined) bookUpdates.title = updates.title;
+      if (updates.author !== undefined) bookUpdates.author = updates.author;
+      if (updates.image_url !== undefined) bookUpdates.image_url = updates.image_url;
+      if (updates.isbn !== undefined) bookUpdates.isbn = updates.isbn;
 
-      return { data: data as Book, error: null };
+      // Per-user bookshelf_item fields
+      if (updates.review !== undefined) itemUpdates.review = updates.review;
+      if (updates.rating !== undefined) itemUpdates.rating = updates.rating;
+      if (updates.position !== undefined) itemUpdates.position = updates.position;
+      if (updates.shelf_id !== undefined) itemUpdates.shelf_id = updates.shelf_id;
+      if (updates.is_stacked !== undefined) itemUpdates.is_stacked = updates.is_stacked;
+      if (updates.stack_id !== undefined) itemUpdates.stack_id = updates.stack_id;
+      if (updates.stack_position !== undefined) itemUpdates.stack_position = updates.stack_position;
+
+      // If we have global book updates, get the book_id and update the books table
+      if (Object.keys(bookUpdates).length > 0) {
+        // First get the book_id from the bookshelf_item
+        const { data: itemRow, error: fetchError } = await supabase
+          .from(TABLES.BOOKSHELF_ITEMS)
+          .select('book_id')
+          .eq('id', id)
+          .single();
+
+        if (fetchError) throw fetchError;
+
+        bookUpdates.updated_at = new Date().toISOString();
+        const { error: bookError } = await supabase
+          .from(TABLES.BOOKS)
+          .update(bookUpdates)
+          .eq('id', itemRow.book_id);
+
+        if (bookError) throw bookError;
+      }
+
+      // If we have per-user updates, update the bookshelf_items table
+      if (Object.keys(itemUpdates).length > 0) {
+        itemUpdates.updated_at = new Date().toISOString();
+        const { error: itemError } = await supabase
+          .from(TABLES.BOOKSHELF_ITEMS)
+          .update(itemUpdates)
+          .eq('id', id);
+
+        if (itemError) throw itemError;
+      }
+
+      // Re-fetch the combined record to return
+      return this.getBookById(id);
     } catch (error) {
       return {
         data: null,
@@ -170,14 +271,15 @@ class BooksService {
   }
 
   /**
-   * Delete a book
+   * Delete a book from a user's shelf (removes the bookshelf_item).
+   * The global book record is preserved so other users still have access.
    *
-   * @param id - Book ID to delete
+   * @param id - BookshelfItem ID to delete
    */
   async deleteBook(id: string): Promise<ApiResponse<null>> {
     try {
       const { error } = await supabase
-        .from(TABLES.BOOKS)
+        .from(TABLES.BOOKSHELF_ITEMS)
         .delete()
         .eq('id', id);
 
@@ -195,7 +297,7 @@ class BooksService {
   /**
    * Move a book to a different shelf
    *
-   * @param bookId - Book ID
+   * @param bookId - BookshelfItem ID
    * @param newShelfId - Target shelf ID
    * @param newPosition - Optional position on new shelf
    */
@@ -205,36 +307,38 @@ class BooksService {
     newPosition?: number
   ): Promise<ApiResponse<Book>> {
     try {
-      // Get the position if not provided
       let position = newPosition;
       if (position === undefined) {
-        const { data: existingBooks } = await supabase
-          .from(TABLES.BOOKS)
+        const { data: existingItems } = await supabase
+          .from(TABLES.BOOKSHELF_ITEMS)
           .select('position')
           .eq('shelf_id', newShelfId)
           .order('position', { ascending: false })
           .limit(1);
 
         position =
-          existingBooks && existingBooks.length > 0
-            ? existingBooks[0].position + 1
+          existingItems && existingItems.length > 0
+            ? existingItems[0].position + 1
             : 0;
       }
 
       const { data, error } = await supabase
-        .from(TABLES.BOOKS)
+        .from(TABLES.BOOKSHELF_ITEMS)
         .update({
           shelf_id: newShelfId,
           position: position,
           updated_at: new Date().toISOString(),
         })
         .eq('id', bookId)
-        .select()
+        .select(`
+          *,
+          book:books(*)
+        `)
         .single();
 
       if (error) throw error;
 
-      return { data: data as Book, error: null };
+      return { data: toBook(data), error: null };
     } catch (error) {
       return {
         data: null,
@@ -245,20 +349,18 @@ class BooksService {
 
   /**
    * Reorder books within a shelf
-   * Updates position values for all affected books
    *
    * @param shelfId - Shelf ID
-   * @param orderedIds - Array of book IDs in new order
+   * @param orderedIds - Array of bookshelf_item IDs in new order
    */
   async reorderBooks(
     shelfId: string,
     orderedIds: string[]
   ): Promise<ApiResponse<null>> {
     try {
-      // Update each book's position based on array index
       const updates = orderedIds.map((id, index) =>
         supabase
-          .from(TABLES.BOOKS)
+          .from(TABLES.BOOKSHELF_ITEMS)
           .update({ position: index })
           .eq('id', id)
           .eq('shelf_id', shelfId)
@@ -277,7 +379,7 @@ class BooksService {
 
   /**
    * Get community book spines (paginated)
-   * Shows all books marked as community from all users
+   * Queries the global books table for community-shared books.
    *
    * @param page - Page number (0-indexed)
    * @param pageSize - Number of items per page
@@ -290,7 +392,6 @@ class BooksService {
     searchQuery?: string
   ): Promise<ApiResponse<PaginatedResponse<CommunityBookSpine>>> {
     try {
-      // Build the query for community books
       let query = supabase
         .from(TABLES.BOOKS)
         .select(
@@ -308,14 +409,12 @@ class BooksService {
         .eq('is_community', true)
         .not('image_url', 'is', null);
 
-      // Add search filter if provided
       if (searchQuery) {
         query = query.or(
           `title.ilike.%${searchQuery}%,author.ilike.%${searchQuery}%`
         );
       }
 
-      // Add pagination
       const from = page * pageSize;
       const to = from + pageSize - 1;
       query = query.range(from, to).order('created_at', { ascending: false });
@@ -324,7 +423,6 @@ class BooksService {
 
       if (error) throw error;
 
-      // Transform the data to match CommunityBookSpine type
       const communityBooks: CommunityBookSpine[] = (data || []).map(
         (book: any) => ({
           id: book.id,
@@ -333,7 +431,7 @@ class BooksService {
           image_url: book.image_url,
           uploaded_by_user_id: book.uploaded_by_user_id,
           uploader_name: book.users?.name || null,
-          times_added: 0, // Would need a separate counter table for this
+          times_added: 0,
           created_at: book.created_at,
         })
       );
@@ -357,8 +455,8 @@ class BooksService {
   }
 
   /**
-   * Add a community book to user's shelf
-   * Creates a copy of the book on the user's shelf
+   * Add a community book to user's shelf.
+   * References the same global book record (no duplication of spine images).
    *
    * @param communityBook - Community book to add
    * @param shelfId - Target shelf ID
@@ -369,13 +467,14 @@ class BooksService {
     shelfId: string
   ): Promise<ApiResponse<Book>> {
     try {
-      // Create a copy of the book on the user's shelf
+      // Reference the existing global book by its id
       return this.createBook({
         title: communityBook.title,
         author: communityBook.author,
         image_url: communityBook.image_url,
         shelf_id: shelfId,
-        is_community: false, // User's copy is not automatically shared
+        is_community: false,
+        book_id: communityBook.id, // reuse the same global book record
       });
     } catch (error) {
       return {
@@ -386,9 +485,9 @@ class BooksService {
   }
 
   /**
-   * Update book review and rating
+   * Update book review and rating (per-user data on bookshelf_items)
    *
-   * @param id - Book ID
+   * @param id - BookshelfItem ID
    * @param review - User's review text
    * @param rating - User's rating (1-5)
    */
@@ -402,10 +501,9 @@ class BooksService {
 
   /**
    * Stack a book on top of another book
-   * Creates or joins a vertical stack of books
    *
-   * @param bookId - Book to stack
-   * @param targetBookId - Book to stack on top of
+   * @param bookId - BookshelfItem ID of the book to stack
+   * @param targetBookId - BookshelfItem ID of the target book
    * @returns Updated book
    */
   async stackBookOnTop(
@@ -413,35 +511,35 @@ class BooksService {
     targetBookId: string
   ): Promise<ApiResponse<Book>> {
     try {
-      // Get the target book to find its stack
-      const { data: targetBook, error: targetError } = await supabase
-        .from(TABLES.BOOKS)
+      // Get the target item to find its stack
+      const { data: targetItem, error: targetError } = await supabase
+        .from(TABLES.BOOKSHELF_ITEMS)
         .select('*')
         .eq('id', targetBookId)
         .single();
 
       if (targetError) throw targetError;
 
-      // Determine the stack_id - use existing or create new from target book id
-      const stackId = targetBook.stack_id || targetBookId;
+      // Determine the stack_id - use existing or create new from target item id
+      const stackId = targetItem.stack_id || targetBookId;
 
       // Get the current max stack_position in this stack
-      const { data: stackBooks } = await supabase
-        .from(TABLES.BOOKS)
+      const { data: stackItems } = await supabase
+        .from(TABLES.BOOKSHELF_ITEMS)
         .select('stack_position')
         .or(`id.eq.${targetBookId},stack_id.eq.${stackId}`)
         .order('stack_position', { ascending: false })
         .limit(1);
 
       const nextStackPosition =
-        stackBooks && stackBooks.length > 0
-          ? (stackBooks[0].stack_position || 0) + 1
+        stackItems && stackItems.length > 0
+          ? (stackItems[0].stack_position || 0) + 1
           : 1;
 
-      // If target book doesn't have a stack_id, update it first
-      if (!targetBook.stack_id) {
+      // If target item doesn't have a stack_id, update it first
+      if (!targetItem.stack_id) {
         await supabase
-          .from(TABLES.BOOKS)
+          .from(TABLES.BOOKSHELF_ITEMS)
           .update({
             stack_id: stackId,
             stack_position: 0,
@@ -450,23 +548,26 @@ class BooksService {
           .eq('id', targetBookId);
       }
 
-      // Update the book being stacked
+      // Update the item being stacked
       const { data, error } = await supabase
-        .from(TABLES.BOOKS)
+        .from(TABLES.BOOKSHELF_ITEMS)
         .update({
           stack_id: stackId,
           stack_position: nextStackPosition,
           is_stacked: true,
-          position: targetBook.position, // Same position as the stack
+          position: targetItem.position,
           updated_at: new Date().toISOString(),
         })
         .eq('id', bookId)
-        .select()
+        .select(`
+          *,
+          book:books(*)
+        `)
         .single();
 
       if (error) throw error;
 
-      return { data: data as Book, error: null };
+      return { data: toBook(data), error: null };
     } catch (error) {
       return {
         data: null,
@@ -477,75 +578,78 @@ class BooksService {
 
   /**
    * Remove a book from its stack
-   * If it's the last book in the stack, clears the stack_id
    *
-   * @param bookId - Book to unstack
+   * @param bookId - BookshelfItem ID to unstack
    * @returns Updated book
    */
   async unstackBook(bookId: string): Promise<ApiResponse<Book>> {
     try {
-      // Get the book's current stack info
-      const { data: book, error: bookError } = await supabase
-        .from(TABLES.BOOKS)
-        .select('*')
+      // Get the item's current stack info
+      const { data: item, error: itemError } = await supabase
+        .from(TABLES.BOOKSHELF_ITEMS)
+        .select(`
+          *,
+          book:books(*)
+        `)
         .eq('id', bookId)
         .single();
 
-      if (bookError) throw bookError;
+      if (itemError) throw itemError;
 
-      if (!book.stack_id) {
-        // Book is not in a stack
-        return { data: book as Book, error: null };
+      if (!item.stack_id) {
+        return { data: toBook(item), error: null };
       }
 
-      // Check how many books are left in this stack
-      const { data: stackBooks, error: countError } = await supabase
-        .from(TABLES.BOOKS)
+      // Check how many items are left in this stack
+      const { data: stackItems, error: countError } = await supabase
+        .from(TABLES.BOOKSHELF_ITEMS)
         .select('id, stack_position')
-        .eq('stack_id', book.stack_id);
+        .eq('stack_id', item.stack_id);
 
       if (countError) throw countError;
 
-      // Remove this book from the stack
-      const { data: updatedBook, error: updateError } = await supabase
-        .from(TABLES.BOOKS)
+      // Remove this item from the stack
+      const { data: updatedItem, error: updateError } = await supabase
+        .from(TABLES.BOOKSHELF_ITEMS)
         .update({
           stack_id: null,
           stack_position: 0,
           updated_at: new Date().toISOString(),
         })
         .eq('id', bookId)
-        .select()
+        .select(`
+          *,
+          book:books(*)
+        `)
         .single();
 
       if (updateError) throw updateError;
 
-      // If only one book left in stack, clear its stack_id too
-      const remainingBooks = stackBooks.filter((b) => b.id !== bookId);
-      if (remainingBooks.length === 1) {
+      // If only one item left in stack, clear its stack_id too
+      const remainingItems = stackItems.filter((b) => b.id !== bookId);
+      if (remainingItems.length === 1) {
         await supabase
-          .from(TABLES.BOOKS)
+          .from(TABLES.BOOKSHELF_ITEMS)
           .update({
             stack_id: null,
             stack_position: 0,
           })
-          .eq('id', remainingBooks[0].id);
-      } else if (remainingBooks.length > 1) {
-        // Reorder stack positions for remaining books
-        const sortedRemaining = remainingBooks.sort(
+          .eq('id', remainingItems[0].id);
+      } else if (remainingItems.length > 1) {
+        const sortedRemaining = remainingItems.sort(
           (a, b) => (a.stack_position || 0) - (b.stack_position || 0)
         );
         await Promise.all(
           sortedRemaining.map((b, index) =>
             supabase
-              .from(TABLES.BOOKS)
+              .from(TABLES.BOOKSHELF_ITEMS)
               .update({ stack_position: index })
               .eq('id', b.id)
           )
         );
       }
 
-      return { data: updatedBook as Book, error: null };
+      return { data: toBook(updatedItem), error: null };
     } catch (error) {
       return {
         data: null,
