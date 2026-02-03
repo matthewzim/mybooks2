@@ -28,6 +28,22 @@ SELECT id, shelf_id, position, review, rating, is_stacked, stack_id, stack_posit
 FROM books
 WHERE shelf_id IS NOT NULL;
 
+-- Step 3: Drop existing RLS policies on books that reference columns being removed
+-- (Supabase projects typically have auto-generated or manually created policies)
+DO $$
+DECLARE
+  pol RECORD;
+BEGIN
+  FOR pol IN
+    SELECT policyname
+    FROM pg_policies
+    WHERE tablename = 'books' AND schemaname = 'public'
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON books', pol.policyname);
+  END LOOP;
+END;
+$$;
+
 -- Step 3: Remove per-user columns from books table
 ALTER TABLE books
   DROP COLUMN IF EXISTS shelf_id,
