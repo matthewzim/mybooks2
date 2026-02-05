@@ -68,6 +68,7 @@ function RootLayoutContent() {
         <Stack.Screen
           name="(tabs)"
           options={{
+            title: 'Shelves',
             headerShown: false,
           }}
         />
