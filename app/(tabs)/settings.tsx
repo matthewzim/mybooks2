@@ -19,10 +19,14 @@ import {
   Pressable,
   Alert,
   Switch,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Input, Button } from '@/components/ui';
@@ -35,6 +39,10 @@ import {
   ThemeColors,
 } from '@/constants/theme';
 import { FREE_TIER_LIMITS } from '@/services/stripe';
+import { bookshelvesService } from '@/services/bookshelves';
+import { booksService } from '@/services/books';
+import { supabase } from '@/services/supabase';
+import type { Bookshelf } from '@/types';
 
 /**
  * Theme option configuration
@@ -45,6 +53,76 @@ const THEME_OPTIONS: { value: ThemeType; label: string; icon: keyof typeof Ionic
   { value: 'standard', label: 'Standard', icon: 'leaf-outline', description: 'Warm brown tones' },
 ];
 
+interface GoodreadsCsvBook {
+  title: string;
+  author: string;
+}
+
+const GOODREADS_TITLE_COLUMN_INDEX = 1;
+const GOODREADS_AUTHOR_COLUMN_INDEX = 2;
+
+function parseCsvRows(csvText: string): string[][] {
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentCell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < csvText.length; i += 1) {
+    const char = csvText[i];
+    const nextChar = csvText[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentCell += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === ',' && !inQuotes) {
+      currentRow.push(currentCell);
+      currentCell = '';
+      continue;
+    }
+
+    if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && nextChar === '\n') {
+        i += 1;
+      }
+      currentRow.push(currentCell);
+      const hasAnyCell = currentRow.some((cell) => cell.trim().length > 0);
+      if (hasAnyCell) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+      currentCell = '';
+      continue;
+    }
+
+    currentCell += char;
+  }
+
+  currentRow.push(currentCell);
+  if (currentRow.some((cell) => cell.trim().length > 0)) {
+    rows.push(currentRow);
+  }
+
+  return rows;
+}
+
+function parseGoodreadsBooks(csvText: string): GoodreadsCsvBook[] {
+  const rows = parseCsvRows(csvText);
+  return rows
+    .slice(1)
+    .map((row) => ({
+      title: row[GOODREADS_TITLE_COLUMN_INDEX]?.trim() || '',
+      author: row[GOODREADS_AUTHOR_COLUMN_INDEX]?.trim() || '',
+    }))
+    .filter((book) => book.title.length > 0 && book.author.length > 0);
+}
+
 export default function SettingsScreen() {
   const { user, signOut, updateProfile } = useAuth();
   const { theme, setTheme, colors } = useTheme();
@@ -52,6 +130,155 @@ export default function SettingsScreen() {
   const [name, setName] = useState(user?.name || '');
   const [isLoading, setIsLoading] = useState(false);
   const [notifications, setNotifications] = useState(true);
+  const [showGoodreadsImportModal, setShowGoodreadsImportModal] = useState(false);
+  const [isImportingGoodreads, setIsImportingGoodreads] = useState(false);
+
+  const promptShelfSelection = async (): Promise<Bookshelf | 'create' | null> => {
+    const result = await bookshelvesService.getUserBookshelves();
+    if (result.error) {
+      Alert.alert('Import Error', result.error.message);
+      return null;
+    }
+
+    const shelves = result.data || [];
+
+    return new Promise((resolve) => {
+      Alert.alert(
+        'Import Destination',
+        'Add to existing bookshelf? or Create new bookshelf',
+        [
+          {
+            text: 'Add to existing bookshelf',
+            onPress: () => {
+              if (shelves.length === 0) {
+                Alert.alert(
+                  'No bookshelves found',
+                  'You do not have any bookshelves yet. We will create a new bookshelf for this import.'
+                );
+                resolve('create');
+                return;
+              }
+
+              Alert.alert(
+                'Choose Bookshelf',
+                'Select an existing bookshelf for imported books.',
+                [
+                  ...shelves.map((shelf) => ({
+                    text: shelf.name,
+                    onPress: () => resolve(shelf),
+                  })),
+                  { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
+                ]
+              );
+            },
+          },
+          { text: 'Create new bookshelf', onPress: () => resolve('create') },
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
+        ]
+      );
+    });
+  };
+
+  const ensureDestinationShelf = async (): Promise<Bookshelf | null> => {
+    const selection = await promptShelfSelection();
+    if (!selection) {
+      return null;
+    }
+
+    if (selection !== 'create') {
+      return selection;
+    }
+
+    const created = await bookshelvesService.createBookshelf({
+      name: `Goodreads Import ${new Date().toLocaleDateString()}`,
+      description: 'Imported from Goodreads CSV',
+      is_public: false,
+    });
+
+    if (created.error || !created.data) {
+      Alert.alert('Import Error', created.error?.message || 'Failed to create bookshelf');
+      return null;
+    }
+
+    return created.data;
+  };
+
+  const handleGoodreadsImport = async () => {
+    const destinationShelf = await ensureDestinationShelf();
+    if (!destinationShelf) {
+      return;
+    }
+
+    try {
+      setIsImportingGoodreads(true);
+
+      const picked = await DocumentPicker.getDocumentAsync({
+        type: 'text/csv',
+        copyToCacheDirectory: true,
+      });
+
+      if (picked.canceled || !picked.assets?.[0]?.uri) {
+        return;
+      }
+
+      const csvContent = await FileSystem.readAsStringAsync(picked.assets[0].uri);
+      const csvBooks = parseGoodreadsBooks(csvContent);
+
+      if (csvBooks.length === 0) {
+        Alert.alert('Import Error', 'No valid books found in CSV.');
+        return;
+      }
+
+      const uniquePairs = Array.from(
+        new Map(csvBooks.map((book) => [`${book.title.toLowerCase()}::${book.author.toLowerCase()}`, book])).values()
+      );
+
+      let importedCount = 0;
+      let missingCount = 0;
+
+      for (const csvBook of uniquePairs) {
+        const { data: matchedBook, error: matchError } = await supabase
+          .from('books')
+          .select('id,title,author')
+          .eq('title', csvBook.title)
+          .eq('author', csvBook.author)
+          .limit(1)
+          .maybeSingle();
+
+        if (matchError) {
+          console.error('Book match query failed:', matchError);
+          continue;
+        }
+
+        if (!matchedBook) {
+          missingCount += 1;
+          continue;
+        }
+
+        const createResult = await booksService.createBook({
+          title: matchedBook.title,
+          author: matchedBook.author,
+          shelf_id: destinationShelf.id,
+          book_id: matchedBook.id,
+        });
+
+        if (!createResult.error) {
+          importedCount += 1;
+        }
+      }
+
+      setShowGoodreadsImportModal(false);
+      Alert.alert(
+        'Goodreads Import Complete',
+        `Added ${importedCount} book${importedCount === 1 ? '' : 's'} to "${destinationShelf.name}".${missingCount > 0 ? `\n${missingCount} book${missingCount === 1 ? '' : 's'} did not match books in our catalog.` : ''}`
+      );
+    } catch (error) {
+      console.error('Goodreads import failed:', error);
+      Alert.alert('Import Error', 'Failed to import Goodreads CSV. Please try again.');
+    } finally {
+      setIsImportingGoodreads(false);
+    }
+  };
 
   /**
    * Handle profile save
@@ -319,6 +546,20 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Import Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Import</Text>
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
+            <SettingsRow
+              icon="cloud-upload-outline"
+              title="Import from Goodreads"
+              subtitle="Upload your Goodreads CSV export"
+              colors={colors}
+              onPress={() => setShowGoodreadsImportModal(true)}
+            />
+          </View>
+        </View>
+
         {/* About Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>About</Text>
@@ -357,6 +598,45 @@ export default function SettingsScreen() {
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      <Modal
+        visible={showGoodreadsImportModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowGoodreadsImportModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowGoodreadsImportModal(false)}
+        >
+          <Pressable
+            style={[styles.modalCard, { backgroundColor: colors.card }]}
+            onPress={() => {}}
+          >
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Import from Goodreads</Text>
+            <Text style={[styles.modalBody, { color: colors.textSecondary }]}>
+              Import your books from Goodreads CSV export. How to export your library:{'\n\n'}
+              (1) Go to Goodreads.com and log in {'\u2022'}{'\n'}
+              (2) Click 'My Books' and then 'Import and export'{"\n"}
+              (3) Click 'Export Library' to download CSV file{"\n"}
+              (4) Tap the button below to select the file.
+            </Text>
+
+            <Button
+              title={isImportingGoodreads ? 'Importing...' : 'Select CSV file'}
+              onPress={handleGoodreadsImport}
+              disabled={isImportingGoodreads}
+              colors={colors}
+            />
+            {isImportingGoodreads && (
+              <View style={styles.importingRow}>
+                <ActivityIndicator color={colors.primary} size="small" />
+                <Text style={[styles.importingText, { color: colors.textSecondary }]}>Import in progress...</Text>
+              </View>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -597,5 +877,33 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 40,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    padding: Spacing.lg,
+  },
+  modalCard: {
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+    ...Shadows.md,
+  },
+  modalTitle: {
+    fontSize: Typography.sizes.xl,
+    fontWeight: Typography.weights.bold,
+  },
+  modalBody: {
+    fontSize: Typography.sizes.md,
+    lineHeight: 22,
+  },
+  importingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  importingText: {
+    fontSize: Typography.sizes.sm,
   },
 });
