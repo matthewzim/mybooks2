@@ -65,6 +65,16 @@ function shelfWithBooks(raw: any): Bookshelf & { books: Book[] } {
  * Provides methods for managing user bookshelves
  */
 class BookshelvesService {
+
+  private shuffleArray<T>(items: T[]): T[] {
+    const shuffled = [...items];
+    for (let i = shuffled.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
   /**
    * Get all bookshelves for the current user
    * Ordered by position for consistent display
@@ -409,6 +419,70 @@ class BookshelvesService {
       if (error) throw error;
 
       return { data: data as { id: string; name: string | null }[], error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: { message: handleSupabaseError(error) },
+      };
+    }
+  }
+
+  /**
+   * Get a random selection of public bookshelves from other users.
+   * Includes bookshelf preview books and basic owner info.
+   */
+  async getRandomPublicBookshelfPreviews(
+    limit: number = 6
+  ): Promise<ApiResponse<({ owner: { id: string; name: string | null } } & Bookshelf & { books: Book[] })[]>> {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const currentUserId = session.session?.user?.id;
+
+      let queryBuilder = supabase
+        .from(TABLES.BOOKSHELVES)
+        .select(
+          `
+          *,
+          bookshelf_items(*, book:books(*))
+        `
+        )
+        .eq('is_public', true)
+        .limit(60);
+
+      if (currentUserId) {
+        queryBuilder = queryBuilder.neq('user_id', currentUserId);
+      }
+
+      const { data, error } = await queryBuilder;
+
+      if (error) throw error;
+
+      const shelves = (data || []).map(shelfWithBooks);
+      if (shelves.length === 0) {
+        return { data: [], error: null };
+      }
+
+      const selectedShelves = this.shuffleArray(shelves).slice(0, limit);
+      const userIds = [...new Set(selectedShelves.map((shelf) => shelf.user_id))];
+
+      const { data: usersData, error: usersError } = await supabase
+        .from(TABLES.USERS)
+        .select('id, name')
+        .in('id', userIds);
+
+      if (usersError) throw usersError;
+
+      const usersById = new Map((usersData || []).map((user) => [user.id, user]));
+
+      const shelvesWithOwners = selectedShelves.map((shelf) => ({
+        ...shelf,
+        owner: {
+          id: shelf.user_id,
+          name: usersById.get(shelf.user_id)?.name || null,
+        },
+      }));
+
+      return { data: shelvesWithOwners, error: null };
     } catch (error) {
       return {
         data: null,
