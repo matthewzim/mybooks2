@@ -6,3 +6,4 @@
 
 export { useBooks } from './useBooks';
 export { useBookshelves } from './useBookshelves';
+export { useSpineImageUrl } from './useSpineImageUrl';
