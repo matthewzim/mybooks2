@@ -26,7 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { BookSpine as BookSpineConstants, Shadows } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getSpineImageUrl } from '@/services/storage';
+import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import type { Book } from '@/types';
 
 interface DraggableBookSpineProps {
@@ -153,7 +153,7 @@ export function DraggableBookSpine({
   });
 
   // Get the book spine image URL from the book-spines bucket
-  const spineImageUrl = getSpineImageUrl(book.image_url);
+  const spineImageUrl = useSpineImageUrl(book.image_url);
   const hasValidUrl = Boolean(spineImageUrl);
   const backgroundColor = getBookColor(book.title);
 
@@ -170,7 +170,7 @@ export function DraggableBookSpine({
             <Image
               source={{ uri: spineImageUrl! }}
               style={[styles.stackedImage, { transform: [{ rotate: '-90deg' }] }]}
-              contentFit="cover"
+              contentFit="contain"
               cachePolicy="memory-disk"
             />
           ) : (
@@ -193,7 +193,7 @@ export function DraggableBookSpine({
           <Image
             source={{ uri: spineImageUrl! }}
             style={styles.image}
-            contentFit="cover"
+            contentFit="contain"
             cachePolicy="memory-disk"
           />
         ) : (

@@ -283,18 +283,75 @@ export const storageService = new StorageService();
  * @param imageUrlOrPath - Full URL or path within the bucket
  * @returns Full public URL for the image, or null if input is invalid
  */
-export function getSpineImageUrl(imageUrlOrPath: string | null | undefined): string | null {
+function extractStoragePathFromUrl(
+  imageUrlOrPath: string,
+  bucket: string
+): string | null {
+  try {
+    const urlObj = new URL(imageUrlOrPath);
+    const publicPrefix = `/storage/v1/object/public/${bucket}/`;
+    const signedPrefix = `/storage/v1/object/sign/${bucket}/`;
+
+    if (urlObj.pathname.includes(publicPrefix)) {
+      return decodeURIComponent(urlObj.pathname.split(publicPrefix)[1]?.split('?')[0] || '');
+    }
+
+    if (urlObj.pathname.includes(signedPrefix)) {
+      return decodeURIComponent(urlObj.pathname.split(signedPrefix)[1]?.split('?')[0] || '');
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getSpineImageUrl(
+  imageUrlOrPath: string | null | undefined
+): Promise<string | null> {
   if (!imageUrlOrPath) {
     return null;
   }
 
-  // If it's already a full URL (from the bucket or elsewhere), return as-is
-  if (imageUrlOrPath.startsWith('http://') || imageUrlOrPath.startsWith('https://')) {
+  const isFullUrl =
+    imageUrlOrPath.startsWith('http://') || imageUrlOrPath.startsWith('https://');
+
+  // Non-Supabase absolute URL (e.g. external CDN) can be used as-is.
+  if (isFullUrl) {
+    const extractedPath = extractStoragePathFromUrl(
+      imageUrlOrPath,
+      STORAGE_BUCKETS.BOOK_SPINES
+    );
+
+    if (!extractedPath) {
+      return imageUrlOrPath;
+    }
+
+    // Use a signed URL so private buckets still render correctly.
+    const { data, error } = await supabase.storage
+      .from(STORAGE_BUCKETS.BOOK_SPINES)
+      .createSignedUrl(extractedPath, 3600);
+
+    if (!error && data?.signedUrl) {
+      return data.signedUrl;
+    }
+
+    // Fall back to the existing URL for public buckets.
     return imageUrlOrPath;
   }
 
-  // Otherwise, construct the public URL from the bucket path
-  const { data: { publicUrl } } = supabase.storage
+  // Relative path in the bucket → prefer signed URL, then public URL fallback.
+  const { data: signedData, error: signedError } = await supabase.storage
+    .from(STORAGE_BUCKETS.BOOK_SPINES)
+    .createSignedUrl(imageUrlOrPath, 3600);
+
+  if (!signedError && signedData?.signedUrl) {
+    return signedData.signedUrl;
+  }
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage
     .from(STORAGE_BUCKETS.BOOK_SPINES)
     .getPublicUrl(imageUrlOrPath);
 

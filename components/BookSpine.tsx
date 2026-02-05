@@ -22,7 +22,7 @@ import {
 import { Image } from 'expo-image';
 import { BookSpine as BookSpineConstants, Shadows } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getSpineImageUrl } from '@/services/storage';
+import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import type { Book } from '@/types';
 
 interface BookSpineProps {
@@ -56,7 +56,7 @@ export function BookSpine({
   const [hasError, setHasError] = useState(false);
 
   // Get the book spine image URL from the book-spines bucket
-  const spineImageUrl = getSpineImageUrl(book.image_url);
+  const spineImageUrl = useSpineImageUrl(book.image_url);
   const hasImage = Boolean(spineImageUrl) && !hasError;
   const backgroundColor = getBookColor(book.title);
 
@@ -77,7 +77,7 @@ export function BookSpine({
           <Image
             source={{ uri: spineImageUrl! }}
             style={styles.image}
-            contentFit="cover"
+            contentFit="contain"
             transition={200}
             cachePolicy="memory-disk"
             onLoadStart={() => setIsLoading(true)}

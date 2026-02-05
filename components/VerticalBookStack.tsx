@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { BookSpine as BookSpineConstants, Shadows } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getSpineImageUrl } from '@/services/storage';
+import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import type { Book } from '@/types';
 
 interface VerticalBookStackProps {
@@ -65,78 +65,117 @@ export function VerticalBookStack({
   return (
     <View style={[styles.container, { width: stackWidth, height: totalHeight }]}>
       {sortedBooks.map((book, index) => {
-        const spineImageUrl = getSpineImageUrl(book.image_url);
-        const hasValidUrl = Boolean(spineImageUrl);
-        const backgroundColor = getBookColor(book.title);
-
         // Books higher in stack appear higher (smaller bottom offset)
         const bottomOffset = (sortedBooks.length - 1 - index) * STACK_OFFSET;
         const isTopBook = index === sortedBooks.length - 1;
 
         return (
-          <Pressable
+          <StackedBookItem
             key={book.id}
-            style={({ pressed }) => [
-              styles.stackedBook,
-              {
-                width: stackWidth,
-                height: stackHeight,
-                bottom: bottomOffset,
-                zIndex: index,
-              },
-              pressed && styles.pressed,
-            ]}
-            onPress={() => onBookPress(book)}
-            accessibilityRole="button"
-            accessibilityLabel={`${book.title} by ${book.author} (in stack, position ${index + 1} of ${sortedBooks.length})`}
-          >
-            {hasValidUrl ? (
-              <View style={[styles.stackedImageContainer, { backgroundColor }]}>
-                <Image
-                  source={{ uri: spineImageUrl! }}
-                  style={[styles.stackedImage, { transform: [{ rotate: '-90deg' }] }]}
-                  contentFit="cover"
-                  cachePolicy="memory-disk"
-                />
-              </View>
-            ) : (
-              <View style={[styles.stackedPlaceholder, { backgroundColor }]}>
-                <Text style={[styles.stackedTitle, { color: colors.textOnDark }]} numberOfLines={1}>
-                  {book.title}
-                </Text>
-              </View>
-            )}
-            {/* Top edge effect */}
-            <View style={[styles.stackedTopEdge, { backgroundColor: colors.overlayLight }]} />
-
-            {/* Edit mode overlay - show unstack button on top book */}
-            {isEditing && isTopBook && onUnstackBook && (
-              <View style={[styles.editOverlay, { backgroundColor: colors.overlay }]}>
-                <View style={[styles.stackBadge, { backgroundColor: colors.overlayDark }]}>
-                  <Ionicons name="layers" size={12} color={colors.textOnDark} />
-                  <Text style={[styles.stackBadgeText, { color: colors.textOnDark }]}>{sortedBooks.length}</Text>
-                </View>
-                <Pressable
-                  style={[styles.unstackButton, { backgroundColor: colors.primary }]}
-                  onPress={() => onUnstackBook(book)}
-                  hitSlop={8}
-                >
-                  <Ionicons name="arrow-up-outline" size={14} color={colors.textInverse} />
-                </Pressable>
-              </View>
-            )}
-
-            {/* Stack count badge (view mode) */}
-            {!isEditing && isTopBook && sortedBooks.length > 1 && (
-              <View style={[styles.stackCountBadge, { backgroundColor: colors.overlayDark }]}>
-                <Ionicons name="layers" size={10} color={colors.textOnDark} />
-                <Text style={[styles.stackCountText, { color: colors.textOnDark }]}>{sortedBooks.length}</Text>
-              </View>
-            )}
-          </Pressable>
+            book={book}
+            index={index}
+            stackCount={sortedBooks.length}
+            stackWidth={stackWidth}
+            stackHeight={stackHeight}
+            bottomOffset={bottomOffset}
+            isTopBook={isTopBook}
+            isEditing={isEditing}
+            onBookPress={onBookPress}
+            onUnstackBook={onUnstackBook}
+          />
         );
       })}
     </View>
+  );
+}
+
+interface StackedBookItemProps {
+  book: Book;
+  index: number;
+  stackCount: number;
+  stackWidth: number;
+  stackHeight: number;
+  bottomOffset: number;
+  isTopBook: boolean;
+  isEditing: boolean;
+  onBookPress: (book: Book) => void;
+  onUnstackBook?: (book: Book) => void;
+}
+
+function StackedBookItem({
+  book,
+  index,
+  stackCount,
+  stackWidth,
+  stackHeight,
+  bottomOffset,
+  isTopBook,
+  isEditing,
+  onBookPress,
+  onUnstackBook,
+}: StackedBookItemProps) {
+  const { colors } = useTheme();
+  const spineImageUrl = useSpineImageUrl(book.image_url);
+  const hasValidUrl = Boolean(spineImageUrl);
+  const backgroundColor = getBookColor(book.title);
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.stackedBook,
+        {
+          width: stackWidth,
+          height: stackHeight,
+          bottom: bottomOffset,
+          zIndex: index,
+        },
+        pressed && styles.pressed,
+      ]}
+      onPress={() => onBookPress(book)}
+      accessibilityRole="button"
+      accessibilityLabel={`${book.title} by ${book.author} (in stack, position ${index + 1} of ${stackCount})`}
+    >
+      {hasValidUrl ? (
+        <View style={[styles.stackedImageContainer, { backgroundColor }]}> 
+          <Image
+            source={{ uri: spineImageUrl! }}
+            style={[styles.stackedImage, { transform: [{ rotate: '-90deg' }] }]}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+          />
+        </View>
+      ) : (
+        <View style={[styles.stackedPlaceholder, { backgroundColor }]}> 
+          <Text style={[styles.stackedTitle, { color: colors.textOnDark }]} numberOfLines={1}>
+            {book.title}
+          </Text>
+        </View>
+      )}
+      <View style={[styles.stackedTopEdge, { backgroundColor: colors.overlayLight }]} />
+
+      {isEditing && isTopBook && onUnstackBook && (
+        <View style={[styles.editOverlay, { backgroundColor: colors.overlay }]}> 
+          <View style={[styles.stackBadge, { backgroundColor: colors.overlayDark }]}> 
+            <Ionicons name="layers" size={12} color={colors.textOnDark} />
+            <Text style={[styles.stackBadgeText, { color: colors.textOnDark }]}>{stackCount}</Text>
+          </View>
+          <Pressable
+            style={[styles.unstackButton, { backgroundColor: colors.primary }]}
+            onPress={() => onUnstackBook(book)}
+            hitSlop={8}
+          >
+            <Ionicons name="arrow-up-outline" size={14} color={colors.textInverse} />
+          </Pressable>
+        </View>
+      )}
+
+      {!isEditing && isTopBook && stackCount > 1 && (
+        <View style={[styles.stackCountBadge, { backgroundColor: colors.overlayDark }]}> 
+          <Ionicons name="layers" size={10} color={colors.textOnDark} />
+          <Text style={[styles.stackCountText, { color: colors.textOnDark }]}>{stackCount}</Text>
+        </View>
+      )}
+    </Pressable>
   );
 }
 

@@ -33,7 +33,7 @@ import {
   BookshelfDimensions,
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getSpineImageUrl } from '@/services/storage';
+import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import type { Book, ShelfStyle } from '@/types';
 
 interface EditableBookshelfGridProps {
@@ -442,7 +442,7 @@ interface StackedBookSpineProps {
 
 function StackedBookSpine({ book, onPress, width, height }: StackedBookSpineProps) {
   const { colors } = useTheme();
-  const spineImageUrl = getSpineImageUrl(book.image_url);
+  const spineImageUrl = useSpineImageUrl(book.image_url);
   const hasValidUrl = Boolean(spineImageUrl);
   const backgroundColor = getBookColor(book.title);
 
@@ -463,7 +463,7 @@ function StackedBookSpine({ book, onPress, width, height }: StackedBookSpineProp
           <Image
             source={{ uri: spineImageUrl! }}
             style={[styles.stackedImage, { transform: [{ rotate: '-90deg' }] }]}
-            contentFit="cover"
+            contentFit="contain"
             cachePolicy="memory-disk"
           />
         </View>
