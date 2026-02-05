@@ -136,10 +136,10 @@ function StackedBookItem({
       accessibilityLabel={`${book.title} by ${book.author} (in stack, position ${index + 1} of ${stackCount})`}
     >
       {hasValidUrl ? (
-        <View style={[styles.stackedImageContainer, { backgroundColor }]}> 
+        <View style={[styles.stackedImageContainer, { backgroundColor }]}>
           <Image
             source={{ uri: spineImageUrl! }}
-            style={[styles.stackedImage, { transform: [{ rotate: '-90deg' }] }]}
+            style={{ width: stackHeight, height: stackWidth, transform: [{ rotate: '-90deg' }] }}
             contentFit="cover"
             cachePolicy="memory-disk"
           />
@@ -197,10 +197,8 @@ const styles = StyleSheet.create({
   stackedImageContainer: {
     flex: 1,
     overflow: 'hidden',
-  },
-  stackedImage: {
-    width: '100%',
-    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stackedPlaceholder: {
     flex: 1,

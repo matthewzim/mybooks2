@@ -167,12 +167,14 @@ export function DraggableBookSpine({
       return (
         <View style={[styles.stackedContainer, { width: stackedWidth, height: stackedHeight, backgroundColor: colors.backgroundDark }]}>
           {hasValidUrl ? (
-            <Image
-              source={{ uri: spineImageUrl! }}
-              style={[styles.stackedImage, { transform: [{ rotate: '-90deg' }] }]}
-              contentFit="contain"
-              cachePolicy="memory-disk"
-            />
+            <View style={styles.stackedImageWrapper}>
+              <Image
+                source={{ uri: spineImageUrl! }}
+                style={{ width: stackedHeight, height: stackedWidth, transform: [{ rotate: '-90deg' }] }}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+            </View>
           ) : (
             <View style={[styles.stackedPlaceholder, { backgroundColor }]}>
               <Text style={[styles.stackedTitle, { color: colors.textOnDark }]} numberOfLines={1}>
@@ -193,7 +195,7 @@ export function DraggableBookSpine({
           <Image
             source={{ uri: spineImageUrl! }}
             style={styles.image}
-            contentFit="contain"
+            contentFit="cover"
             cachePolicy="memory-disk"
           />
         ) : (
@@ -296,9 +298,11 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     overflow: 'hidden',
   },
-  stackedImage: {
-    width: '100%',
-    height: '100%',
+  stackedImageWrapper: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
   stackedPlaceholder: {
     flex: 1,
