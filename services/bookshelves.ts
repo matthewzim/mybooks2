@@ -145,9 +145,9 @@ class BookshelvesService {
    *
    * @returns Bookshelves with preview books
    */
-  async getBookshelvesWithPreviews(): Promise<
-    ApiResponse<(Bookshelf & { books: Book[] })[]>
-  > {
+  async getBookshelvesWithPreviews(
+    previewLimit: number | null = 3
+  ): Promise<ApiResponse<(Bookshelf & { books: Book[] })[]>> {
     try {
       const { data: session } = await supabase.auth.getSession();
       if (!session.session?.user) {
@@ -168,12 +168,13 @@ class BookshelvesService {
 
       if (error) throw error;
 
-      // Transform and limit books to first 3 for preview
+      // Transform and limit preview books when requested
       const shelves = (data || []).map((raw: any) => {
         const shelf = shelfWithBooks(raw);
         return {
           ...shelf,
-          books: shelf.books.slice(0, 3),
+          books:
+            previewLimit === null ? shelf.books : shelf.books.slice(0, previewLimit),
         };
       });
 

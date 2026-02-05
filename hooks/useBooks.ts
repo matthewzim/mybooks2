@@ -10,6 +10,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { booksService } from '@/services/books';
+import { bookshelvesService } from '@/services/bookshelves';
+import { widgetManager } from '@/utils';
 import type { Book, CreateBookInput, UpdateBookInput, LoadingState } from '@/types';
 
 interface UseBooksReturn {
@@ -35,6 +37,15 @@ export function useBooks(shelfId: string): UseBooksReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadingState, setLoadingState] = useState<LoadingState>('idle');
+
+
+  const syncWidgetShelf = useCallback(async (targetShelfId: string) => {
+    const shelfResult = await bookshelvesService.getBookshelfById(targetShelfId);
+    if (shelfResult.data) {
+      await widgetManager.syncLibrarySnapshot([shelfResult.data]);
+    }
+    widgetManager.reloadWidgetTimelines();
+  }, []);
 
   /**
    * Fetch all books on the shelf
@@ -83,6 +94,7 @@ export function useBooks(shelfId: string): UseBooksReturn {
         if (result.data) {
           // Add new book to local state
           setBooks((prev) => [...prev, result.data!]);
+          await syncWidgetShelf(shelfId);
           return result.data;
         }
 
@@ -92,7 +104,7 @@ export function useBooks(shelfId: string): UseBooksReturn {
         return null;
       }
     },
-    [shelfId]
+    [shelfId, syncWidgetShelf]
   );
 
   /**
@@ -113,6 +125,7 @@ export function useBooks(shelfId: string): UseBooksReturn {
           setBooks((prev) =>
             prev.map((book) => (book.id === id ? result.data! : book))
           );
+          await syncWidgetShelf(updates.shelf_id || shelfId);
           return result.data;
         }
 
@@ -122,7 +135,7 @@ export function useBooks(shelfId: string): UseBooksReturn {
         return null;
       }
     },
-    []
+    [shelfId, syncWidgetShelf]
   );
 
   /**
@@ -139,12 +152,13 @@ export function useBooks(shelfId: string): UseBooksReturn {
 
       // Remove book from local state
       setBooks((prev) => prev.filter((book) => book.id !== id));
+      await syncWidgetShelf(shelfId);
       return true;
     } catch (err) {
       setError('Failed to delete book');
       return false;
     }
-  }, []);
+  }, [shelfId, syncWidgetShelf]);
 
   /**
    * Move a book to a different shelf
@@ -161,13 +175,15 @@ export function useBooks(shelfId: string): UseBooksReturn {
 
         // Remove book from current shelf's local state
         setBooks((prev) => prev.filter((book) => book.id !== bookId));
+        await syncWidgetShelf(shelfId);
+        await syncWidgetShelf(newShelfId);
         return true;
       } catch (err) {
         setError('Failed to move book');
         return false;
       }
     },
-    []
+    [shelfId, syncWidgetShelf]
   );
 
   /**
@@ -192,6 +208,7 @@ export function useBooks(shelfId: string): UseBooksReturn {
           return false;
         }
 
+        await syncWidgetShelf(shelfId);
         return true;
       } catch (err) {
         fetchBooks();
@@ -199,7 +216,7 @@ export function useBooks(shelfId: string): UseBooksReturn {
         return false;
       }
     },
-    [shelfId, books, fetchBooks]
+    [shelfId, books, fetchBooks, syncWidgetShelf]
   );
 
   /**
@@ -217,13 +234,14 @@ export function useBooks(shelfId: string): UseBooksReturn {
 
         // Refresh books to get updated stack state
         await fetchBooks();
+        await syncWidgetShelf(shelfId);
         return true;
       } catch (err) {
         setError('Failed to stack book');
         return false;
       }
     },
-    [fetchBooks]
+    [fetchBooks, shelfId, syncWidgetShelf]
   );
 
   /**
@@ -241,13 +259,14 @@ export function useBooks(shelfId: string): UseBooksReturn {
 
         // Refresh books to get updated stack state
         await fetchBooks();
+        await syncWidgetShelf(shelfId);
         return true;
       } catch (err) {
         setError('Failed to unstack book');
         return false;
       }
     },
-    [fetchBooks]
+    [fetchBooks, shelfId, syncWidgetShelf]
   );
 
   // Fetch books when shelfId changes
