@@ -32,6 +32,7 @@ import {
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { SpineCropper } from './SpineCropper';
+import { SpineFramer } from './SpineFramer';
 
 interface CameraScannerProps {
   onCapture: (imageUri: string) => Promise<void>;
@@ -48,6 +49,7 @@ export function CameraScanner({
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
   const [rawCapturedImage, setRawCapturedImage] = useState<string | null>(null);
+  const [framedImage, setFramedImage] = useState<string | null>(null);
   const [croppedImage, setCroppedImage] = useState<string | null>(null);
   const cameraRef = useRef<CameraView>(null);
 
@@ -102,6 +104,20 @@ export function CameraScanner({
   };
 
   /**
+   * Handle frame completion - proceed to corner cropper with zoomed-in image
+   */
+  const handleFrameComplete = (framedUri: string) => {
+    setFramedImage(framedUri);
+  };
+
+  /**
+   * Handle frame cancel - go back to camera
+   */
+  const handleFrameCancel = () => {
+    setRawCapturedImage(null);
+  };
+
+  /**
    * Handle crop completion
    */
   const handleCropComplete = (croppedUri: string) => {
@@ -109,10 +125,10 @@ export function CameraScanner({
   };
 
   /**
-   * Handle crop cancel - go back to camera
+   * Handle crop cancel - go back to framing step
    */
   const handleCropCancel = () => {
-    setRawCapturedImage(null);
+    setFramedImage(null);
   };
 
   /**
@@ -135,6 +151,7 @@ export function CameraScanner({
    */
   const startOver = () => {
     setRawCapturedImage(null);
+    setFramedImage(null);
     setCroppedImage(null);
   };
 
@@ -177,11 +194,22 @@ export function CameraScanner({
     );
   }
 
-  // Cropping mode - show spine cropper
-  if (rawCapturedImage && !croppedImage) {
+  // Framing mode - zoom and position the spine area
+  if (rawCapturedImage && !framedImage && !croppedImage) {
+    return (
+      <SpineFramer
+        imageUri={rawCapturedImage}
+        onFrameComplete={handleFrameComplete}
+        onCancel={handleFrameCancel}
+      />
+    );
+  }
+
+  // Cropping mode - fine-tune corners on the zoomed-in framed image
+  if (framedImage && !croppedImage) {
     return (
       <SpineCropper
-        imageUri={rawCapturedImage}
+        imageUri={framedImage}
         onCropComplete={handleCropComplete}
         onCancel={handleCropCancel}
       />
