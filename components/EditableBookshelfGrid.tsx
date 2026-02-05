@@ -80,6 +80,7 @@ export function EditableBookshelfGrid({
   onUnstackBook,
 }: EditableBookshelfGridProps) {
   const { colors } = useTheme();
+  const fullShelfBorderWidth = BookshelfDimensions.shelfThickness / 2;
   const { width: screenWidth } = useWindowDimensions();
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [localBooks, setLocalBooks] = useState<Book[]>(books);
@@ -319,7 +320,7 @@ export function EditableBookshelfGrid({
             style={[
               styles.shelfContainer,
               shelfStyle === 'full' && {
-                borderWidth: BookshelfDimensions.shelfThickness / 2,
+                borderWidth: fullShelfBorderWidth,
                 borderColor: BookshelfDimensions.shelfColor,
                 borderRadius: 4,
               },
@@ -327,7 +328,17 @@ export function EditableBookshelfGrid({
           >
             {/* Shelf back - only shown in 'full' style */}
             {shelfStyle === 'full' && (
-              <View style={[styles.shelfBack, { height: rowHeight + 20 }]} />
+              <View
+                style={[
+                  styles.shelfBack,
+                  {
+                    height: rowHeight + 20,
+                    left: fullShelfBorderWidth,
+                    right: fullShelfBorderWidth,
+                    bottom: fullShelfBorderWidth,
+                  },
+                ]}
+              />
             )}
 
             {/* Books row */}
@@ -543,12 +554,8 @@ const styles = StyleSheet.create({
   },
   shelfBack: {
     position: 'absolute',
-    left: Spacing.md - 4,
-    right: Spacing.md - 4,
-    bottom: BookshelfDimensions.shelfThickness - 4,
     backgroundColor: BookshelfDimensions.backColor,
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
+    borderRadius: 2,
   },
   booksRow: {
     flexDirection: 'row',
