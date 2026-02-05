@@ -2,33 +2,29 @@
  * Widget Utilities
  *
  * Utilities for managing iOS home screen widget data.
- *
- * iOS Widget Implementation Notes:
- * --------------------------------
- * Expo's widget support is still experimental. For a production widget, you'll need to:
- *
- * 1. Create a native iOS Widget Extension (Swift/SwiftUI)
- * 2. Use App Groups to share data between the main app and widget
- * 3. Store widget data using UserDefaults in the shared App Group
- *
- * This file provides utilities to:
- * - Prepare widget data
- * - Update widget through shared storage
- * - Handle widget deep links
- *
- * Setup Steps:
- * 1. In Xcode, add a Widget Extension target to your project
- * 2. Create an App Group (e.g., "group.com.yourcompany.virtuallibrary")
- * 3. Enable App Groups capability for both the main app and widget
- * 4. Use SharedUserDefaults to store/read bookshelf data
+ * Supports a native Swift WidgetExtension through an App Group container.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NativeModules, Platform } from 'react-native';
 import type { WidgetData, WidgetBookshelf, WidgetBook, Bookshelf, Book } from '@/types';
 
-// Keys for widget storage
+// Keys for JS fallback storage
 const WIDGET_DATA_KEY = '@virtual_library_widget_data';
 const WIDGET_SELECTED_SHELF_KEY = '@virtual_library_widget_shelf';
+
+const WIDGET_APP_GROUP = 'group.com.virtualibrary.mybooks';
+
+interface WidgetBridge {
+  updateWidgetData: (payload: string) => void;
+  setSelectedShelf: (shelfId: string) => void;
+  reloadTimelines: () => void;
+}
+
+const widgetBridge: WidgetBridge | null =
+  Platform.OS === 'ios' && NativeModules.VirtualLibraryWidgetBridge
+    ? (NativeModules.VirtualLibraryWidgetBridge as WidgetBridge)
+    : null;
 
 /**
  * Widget Manager Class
@@ -37,7 +33,6 @@ const WIDGET_SELECTED_SHELF_KEY = '@virtual_library_widget_shelf';
 class WidgetManager {
   /**
    * Transform a bookshelf to widget-compatible format
-   * Widget needs minimal data to keep size small
    */
   transformBookshelfForWidget(
     bookshelf: Bookshelf,
@@ -46,7 +41,11 @@ class WidgetManager {
     return {
       id: bookshelf.id,
       name: bookshelf.name,
-      books: books.slice(0, 6).map(this.transformBookForWidget), // Max 6 books for widget
+      books: books
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .slice(0, 18)
+        .map(this.transformBookForWidget),
     };
   }
 
@@ -64,7 +63,6 @@ class WidgetManager {
 
   /**
    * Save widget data to shared storage
-   * In production, this should write to UserDefaults in App Group
    */
   async saveWidgetData(bookshelf: WidgetBookshelf | null): Promise<void> {
     try {
@@ -75,15 +73,55 @@ class WidgetManager {
 
       await AsyncStorage.setItem(WIDGET_DATA_KEY, JSON.stringify(widgetData));
 
-      // In production with native widget:
-      // 1. Write to UserDefaults in shared App Group
-      // 2. Call WidgetKit.WidgetCenter.shared.reloadAllTimelines()
-      // Example (native code needed):
-      // NativeModules.WidgetBridge.updateWidget(widgetData);
-
-      console.log('Widget data saved');
+      if (widgetBridge) {
+        widgetBridge.updateWidgetData(
+          JSON.stringify({
+            appGroup: WIDGET_APP_GROUP,
+            selectedShelfId: bookshelf?.id ?? null,
+            shelves: bookshelf ? [bookshelf] : [],
+            lastUpdated: widgetData.lastUpdated,
+          })
+        );
+      }
     } catch (error) {
       console.error('Failed to save widget data:', error);
+    }
+  }
+
+  /**
+   * Pushes a complete shelf list snapshot for configurable widget shelf selection.
+   */
+  async syncLibrarySnapshot(
+    shelves: (Bookshelf & { books: Book[] })[]
+  ): Promise<void> {
+    try {
+      const widgetShelves = shelves.map((shelf) =>
+        this.transformBookshelfForWidget(shelf, shelf.books)
+      );
+
+      const selectedShelfId = await this.getSelectedWidgetShelf();
+
+      if (widgetBridge) {
+        widgetBridge.updateWidgetData(
+          JSON.stringify({
+            appGroup: WIDGET_APP_GROUP,
+            selectedShelfId,
+            shelves: widgetShelves,
+            lastUpdated: new Date().toISOString(),
+          })
+        );
+      }
+    } catch (error) {
+      console.error('Failed syncing widget library snapshot:', error);
+    }
+  }
+
+  /**
+   * Request timeline reload when shelf books are updated.
+   */
+  reloadWidgetTimelines(): void {
+    if (widgetBridge) {
+      widgetBridge.reloadTimelines();
     }
   }
 
@@ -106,6 +144,9 @@ class WidgetManager {
   async setSelectedWidgetShelf(shelfId: string): Promise<void> {
     try {
       await AsyncStorage.setItem(WIDGET_SELECTED_SHELF_KEY, shelfId);
+      if (widgetBridge) {
+        widgetBridge.setSelectedShelf(shelfId);
+      }
     } catch (error) {
       console.error('Failed to set widget shelf:', error);
     }
@@ -133,6 +174,7 @@ class WidgetManager {
     const widgetBookshelf = this.transformBookshelfForWidget(bookshelf, books);
     await this.saveWidgetData(widgetBookshelf);
     await this.setSelectedWidgetShelf(bookshelf.id);
+    this.reloadWidgetTimelines();
   }
 
   /**
@@ -149,7 +191,6 @@ class WidgetManager {
 
   /**
    * Handle deep link from widget tap
-   * Returns the route to navigate to
    */
   handleWidgetDeepLink(url: string): {
     route: string;
@@ -158,7 +199,6 @@ class WidgetManager {
     try {
       const urlObj = new URL(url);
 
-      // Handle different widget actions
       if (urlObj.pathname.includes('bookshelf')) {
         const shelfId = urlObj.searchParams.get('id');
         if (shelfId) {
@@ -180,7 +220,6 @@ class WidgetManager {
         }
       }
 
-      // Default: open home
       return { route: '/(tabs)' };
     } catch (error) {
       console.error('Failed to parse widget deep link:', error);
@@ -189,7 +228,6 @@ class WidgetManager {
   }
 }
 
-// Export singleton instance
 export const widgetManager = new WidgetManager();
 
 export default widgetManager;

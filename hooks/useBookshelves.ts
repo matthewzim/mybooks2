@@ -10,6 +10,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { bookshelvesService } from '@/services/bookshelves';
+import { widgetManager } from '@/utils';
 import type {
   Bookshelf,
   Book,
@@ -62,7 +63,15 @@ export function useBookshelves(): UseBookshelvesReturn {
         setError(result.error.message);
         setLoadingState('error');
       } else {
-        setBookshelves(result.data || []);
+        const previewShelves = result.data || [];
+        setBookshelves(previewShelves);
+
+        // Widget gets full shelf snapshots so all widget sizes can render enough spines.
+        const fullShelfResult = await bookshelvesService.getBookshelvesWithPreviews(null);
+        if (!fullShelfResult.error && fullShelfResult.data) {
+          await widgetManager.syncLibrarySnapshot(fullShelfResult.data);
+        }
+
         setLoadingState('success');
       }
     } catch (err) {
