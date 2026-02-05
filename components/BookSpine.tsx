@@ -20,7 +20,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { BookSpine as BookSpineConstants, Shadows } from '@/constants/theme';
+import { BookSpine as BookSpineConstants } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import type { Book } from '@/types';
@@ -73,11 +73,11 @@ export function BookSpine({
     >
       {hasImage ? (
         // Book spine image from book-spines bucket
-        <View style={[styles.imageContainer, { backgroundColor }]}>
+        <View style={styles.imageContainer}>
           <Image
             source={{ uri: spineImageUrl! }}
             style={styles.image}
-            contentFit="contain"
+            contentFit="fill"
             transition={200}
             cachePolicy="memory-disk"
             onLoadStart={() => setIsLoading(true)}
@@ -114,17 +114,13 @@ export function BookSpine({
         </View>
       )}
 
-      {/* Book spine edge effect */}
-      <View style={[styles.spineEdge, { backgroundColor: colors.overlayLight }]} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 2,
     overflow: 'hidden',
-    ...Shadows.md,
   },
   pressed: {
     opacity: 0.9,
@@ -165,13 +161,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     position: 'absolute',
     bottom: 8,
-  },
-  spineEdge: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: 3,
   },
 });
 
