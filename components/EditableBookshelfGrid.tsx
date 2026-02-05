@@ -473,8 +473,8 @@ function StackedBookSpine({ book, onPress, width, height }: StackedBookSpineProp
           {/* For stacked books, we show the spine rotated */}
           <Image
             source={{ uri: spineImageUrl! }}
-            style={[styles.stackedImage, { transform: [{ rotate: '-90deg' }] }]}
-            contentFit="contain"
+            style={{ width: height, height: width, transform: [{ rotate: '-90deg' }] }}
+            contentFit="cover"
             cachePolicy="memory-disk"
           />
         </View>
@@ -596,15 +596,8 @@ const styles = StyleSheet.create({
   stackedImageContainer: {
     flex: 1,
     overflow: 'hidden',
-  },
-  stackedImage: {
-    width: '100%',
-    height: '100%',
-  },
-  stackedImageWrapper: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   stackedPlaceholder: {
     flex: 1,

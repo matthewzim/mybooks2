@@ -77,7 +77,7 @@ export function BookSpine({
           <Image
             source={{ uri: spineImageUrl! }}
             style={styles.image}
-            contentFit="contain"
+            contentFit="cover"
             transition={200}
             cachePolicy="memory-disk"
             onLoadStart={() => setIsLoading(true)}
