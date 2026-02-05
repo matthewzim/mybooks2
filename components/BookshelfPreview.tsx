@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Spacing, BorderRadius, Typography } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getSpineImageUrl } from '@/services/storage';
+import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import type { Bookshelf, Book } from '@/types';
 
 interface BookshelfPreviewProps {
@@ -89,7 +89,7 @@ interface BookPreviewSpineProps {
 }
 
 function BookPreviewSpine({ book }: BookPreviewSpineProps) {
-  const spineImageUrl = getSpineImageUrl(book.image_url);
+  const spineImageUrl = useSpineImageUrl(book.image_url);
   const hasImage = !!spineImageUrl;
 
   const getBookColor = (title: string): string => {
