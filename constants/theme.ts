@@ -91,14 +91,14 @@ export const LightTheme: ThemeColors = {
   secondaryLight: '#94a3b8',
 
   // Accent colors
-  accent: '#e94560',
-  accentLight: '#ff6b6b',
+  accent: '#6366f1',
+  accentLight: '#818cf8',
 
   // Background colors
-  background: '#ffffff',
-  backgroundDark: '#f8fafc',
+  background: '#f8fafc',
+  backgroundDark: '#f1f5f9',
   card: '#ffffff',
-  cardDark: '#f1f5f9',
+  cardDark: '#f8fafc',
 
   // Text colors
   text: '#1e293b',
@@ -128,8 +128,8 @@ export const LightTheme: ThemeColors = {
   info: '#64748b',
 
   // Border colors
-  border: '#e2e8f0',
-  borderLight: '#f1f5f9',
+  border: '#dbe3ef',
+  borderLight: '#eef2f7',
 
   // Rating star colors
   starFilled: '#f59e0b',
@@ -161,14 +161,14 @@ export const DarkTheme: ThemeColors = {
   secondaryLight: '#94a3b8',
 
   // Accent colors
-  accent: '#f472b6',
-  accentLight: '#fb7185',
+  accent: '#818cf8',
+  accentLight: '#a5b4fc',
 
   // Background colors
-  background: '#0f172a',
-  backgroundDark: '#020617',
-  card: '#1e293b',
-  cardDark: '#0f172a',
+  background: '#0b1220',
+  backgroundDark: '#111a2c',
+  card: '#131d31',
+  cardDark: '#0b1220',
 
   // Text colors
   text: '#f1f5f9',
@@ -198,8 +198,8 @@ export const DarkTheme: ThemeColors = {
   info: '#94a3b8',
 
   // Border colors
-  border: '#334155',
-  borderLight: '#1e293b',
+  border: '#24324a',
+  borderLight: '#1a2639',
 
   // Rating star colors
   starFilled: '#f59e0b',
@@ -222,29 +222,29 @@ export const DarkTheme: ThemeColors = {
  */
 export const StandardTheme: ThemeColors = {
   // Primary colors
-  primary: '#78350f',
-  primaryLight: '#92400e',
-  primaryDark: '#451a03',
+  primary: '#57534e',
+  primaryLight: '#78716c',
+  primaryDark: '#44403c',
 
   // Secondary colors
-  secondary: '#a16207',
-  secondaryLight: '#ca8a04',
+  secondary: '#78716c',
+  secondaryLight: '#a8a29e',
 
   // Accent colors
-  accent: '#dc2626',
-  accentLight: '#ef4444',
+  accent: '#6366f1',
+  accentLight: '#818cf8',
 
   // Background colors
-  background: '#fef3c7',
-  backgroundDark: '#fde68a',
-  card: '#fffbeb',
-  cardDark: '#fef3c7',
+  background: '#fafaf9',
+  backgroundDark: '#f5f5f4',
+  card: '#ffffff',
+  cardDark: '#f5f5f4',
 
   // Text colors
-  text: '#451a03',
-  textSecondary: '#78350f',
-  textLight: '#a16207',
-  textInverse: '#fffbeb',
+  text: '#292524',
+  textSecondary: '#57534e',
+  textLight: '#a8a29e',
+  textInverse: '#ffffff',
 
   // Bookshelf colors (wood tones)
   bookshelfWood: '#8B4513',
@@ -259,7 +259,7 @@ export const StandardTheme: ThemeColors = {
 
   // Input colors
   inputBackground: '#fffbeb',
-  inputBorder: '#d97706',
+  inputBorder: '#d6d3d1',
 
   // Status colors
   success: '#15803d',
@@ -268,8 +268,8 @@ export const StandardTheme: ThemeColors = {
   info: '#0369a1',
 
   // Border colors
-  border: '#d97706',
-  borderLight: '#fbbf24',
+  border: '#d6d3d1',
+  borderLight: '#e7e5e4',
 
   // Rating star colors
   starFilled: '#f59e0b',

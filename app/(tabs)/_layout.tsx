@@ -2,10 +2,6 @@
  * Tabs Layout
  *
  * Main tab navigation for the authenticated app.
- * Includes:
- * - Home (My Shelves)
- * - Explore
- * - Settings
  */
 
 import React from 'react';
@@ -24,46 +20,47 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
+          borderTopWidth: 1,
+          elevation: 0,
+          shadowOpacity: 0,
         },
         headerStyle: {
-          backgroundColor: colors.primary,
+          backgroundColor: colors.background,
         },
-        headerTintColor: colors.textInverse,
+        headerTintColor: colors.text,
+        headerShadowVisible: false,
         headerTitleStyle: {
           fontWeight: '600',
         },
       }}
     >
-      {/* Home Tab - My Bookshelves */}
       <Tabs.Screen
         name="index"
         options={{
           title: 'My Library',
           tabBarLabel: 'Home',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="library" size={size} color={color} />
+            <Ionicons name="library-outline" size={size} color={color} />
           ),
         }}
       />
 
-      {/* Explore Tab */}
       <Tabs.Screen
         name="community"
         options={{
           title: 'Explore',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people" size={size} color={color} />
+            <Ionicons name="compass-outline" size={size} color={color} />
           ),
         }}
       />
 
-      {/* Settings Tab */}
       <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings" size={size} color={color} />
+            <Ionicons name="settings-outline" size={size} color={color} />
           ),
         }}
       />

@@ -1,12 +1,5 @@
 /**
  * Home Screen (My Library)
- *
- * Displays the user's bookshelves with previews.
- * Features:
- * - List of bookshelf previews
- * - Add new bookshelf button
- * - Pull to refresh
- * - Empty state for new users
  */
 
 import React, { useCallback, useState } from 'react';
@@ -28,11 +21,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { BookshelfPreview } from '@/components/BookshelfPreview';
 import { LoadingView, EmptyState } from '@/components/ui';
 import { FREE_TIER_LIMITS } from '@/services/stripe';
-import {
-  Spacing,
-  BorderRadius,
-  Typography,
-} from '@/constants/theme';
+import { Spacing, BorderRadius, Typography } from '@/constants/theme';
 import type { Bookshelf } from '@/types';
 
 export default function HomeScreen() {
@@ -47,25 +36,16 @@ export default function HomeScreen() {
   } = useBookshelves();
   const [refreshing, setRefreshing] = useState(false);
 
-  /**
-   * Handle pull to refresh
-   */
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchBookshelves();
     setRefreshing(false);
   }, [fetchBookshelves]);
 
-  /**
-   * Navigate to bookshelf detail
-   */
   const handleBookshelfPress = (bookshelf: Bookshelf) => {
     router.push(`/bookshelf/${bookshelf.id}`);
   };
 
-  /**
-   * Handle bookshelf deletion
-   */
   const handleDeleteBookshelf = async (bookshelf: Bookshelf) => {
     const success = await deleteBookshelf(bookshelf.id);
     if (!success) {
@@ -73,11 +53,7 @@ export default function HomeScreen() {
     }
   };
 
-  /**
-   * Navigate to create bookshelf screen
-   */
   const handleAddBookshelf = () => {
-    // Check if user has reached free tier limit
     if (!user?.is_premium && bookshelfCount >= FREE_TIER_LIMITS.MAX_BOOKSHELVES) {
       Alert.alert(
         'Bookshelf Limit Reached',
@@ -96,7 +72,6 @@ export default function HomeScreen() {
     router.push('/create-bookshelf');
   };
 
-  // Loading state
   if (isLoading && bookshelves.length === 0) {
     return <LoadingView message="Loading your library..." colors={colors} />;
   }
@@ -106,40 +81,16 @@ export default function HomeScreen() {
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-          />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Welcome Header */}
         <View style={styles.header}>
-          <View>
-            <Text style={[styles.greeting, { color: colors.text }]}>
-              Hello, {user?.name || 'Book Lover'}!
-            </Text>
-            <Text style={[styles.subGreeting, { color: colors.textSecondary }]}>
-              {bookshelves.length > 0
-                ? `You have ${bookshelves.length} ${
-                    bookshelves.length === 1 ? 'bookshelf' : 'bookshelves'
-                  }`
-                : 'Start building your library'}
-            </Text>
-          </View>
-
-          {/* Premium badge */}
-          {user?.is_premium && (
-            <View style={[styles.premiumBadge, { backgroundColor: colors.primaryLight }]}>
-              <Ionicons name="star" size={14} color={colors.starFilled} />
-              <Text style={[styles.premiumText, { color: colors.textInverse }]}>Premium</Text>
-            </View>
-          )}
+          <Text style={[styles.heading, { color: colors.text }]}>My Library</Text>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>
+            {bookshelves.length} {bookshelves.length === 1 ? 'bookshelf' : 'bookshelves'}
+          </Text>
         </View>
 
-        {/* Bookshelves List */}
         {bookshelves.length > 0 ? (
           <View style={styles.bookshelvesContainer}>
             {bookshelves.map((shelf) => (
@@ -155,30 +106,28 @@ export default function HomeScreen() {
         ) : (
           <EmptyState
             icon="library-outline"
-            title="No Bookshelves Yet"
-            description="Create your first bookshelf to start organizing your book collection."
+            title="No bookshelves yet"
+            description="Create a shelf to start organizing your books."
             actionLabel="Create Bookshelf"
             onAction={handleAddBookshelf}
             colors={colors}
           />
         )}
 
-        {/* Add Bookshelf Button */}
         {bookshelves.length > 0 && (
           <Pressable
             style={({ pressed }) => [
               styles.addButton,
-              { backgroundColor: colors.backgroundDark, borderColor: colors.border },
-              pressed && { backgroundColor: colors.border },
+              { backgroundColor: colors.card, borderColor: colors.border },
+              pressed && { opacity: 0.85 },
             ]}
             onPress={handleAddBookshelf}
           >
-            <Ionicons name="add-circle" size={24} color={colors.primary} />
-            <Text style={[styles.addButtonText, { color: colors.primary }]}>Add New Bookshelf</Text>
+            <Ionicons name="add" size={18} color={colors.primary} />
+            <Text style={[styles.addButtonText, { color: colors.primary }]}>New bookshelf</Text>
           </Pressable>
         )}
 
-        {/* Bottom spacing */}
         <View style={styles.bottomPadding} />
       </ScrollView>
     </SafeAreaView>
@@ -196,53 +145,38 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.md,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    marginBottom: Spacing.md,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.md,
+    gap: 6,
   },
-  greeting: {
-    fontSize: Typography.sizes.xl,
-    fontWeight: Typography.weights.bold,
-  },
-  subGreeting: {
-    fontSize: Typography.sizes.md,
-    marginTop: 4,
-  },
-  premiumBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.sm,
-    borderRadius: BorderRadius.full,
-  },
-  premiumText: {
-    fontSize: Typography.sizes.xs,
+  heading: {
+    fontSize: Typography.sizes.xxl,
     fontWeight: Typography.weights.semibold,
+    letterSpacing: -0.3,
+  },
+  meta: {
+    fontSize: Typography.sizes.sm,
   },
   bookshelvesContainer: {
-    paddingTop: Spacing.sm,
+    paddingTop: Spacing.xs,
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.xs,
     marginHorizontal: Spacing.md,
     marginTop: Spacing.md,
-    padding: Spacing.lg,
+    paddingVertical: Spacing.md,
     borderRadius: BorderRadius.lg,
-    borderWidth: 2,
-    borderStyle: 'dashed',
+    borderWidth: 1,
   },
   addButtonText: {
     fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.semibold,
+    fontWeight: Typography.weights.medium,
   },
   bottomPadding: {
-    height: 40,
+    height: 32,
   },
 });
