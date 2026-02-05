@@ -103,7 +103,7 @@ function BookPreviewSpine({ book }: BookPreviewSpineProps) {
 
   return (
     <View style={[styles.bookSpine, { backgroundColor: hasImage ? undefined : getBookColor(book.title) }]}>
-      {hasImage ? <Image source={{ uri: spineImageUrl }} style={styles.bookImage} contentFit="cover" /> : <View style={styles.bookPlaceholder} />}
+      {hasImage ? <Image source={{ uri: spineImageUrl }} style={styles.bookImage} contentFit="contain" /> : <View style={styles.bookPlaceholder} />}
     </View>
   );
 }

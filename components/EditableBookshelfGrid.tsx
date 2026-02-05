@@ -463,7 +463,7 @@ function StackedBookSpine({ book, onPress, width, height }: StackedBookSpineProp
           <Image
             source={{ uri: spineImageUrl! }}
             style={[styles.stackedImage, { transform: [{ rotate: '-90deg' }] }]}
-            contentFit="cover"
+            contentFit="contain"
             cachePolicy="memory-disk"
           />
         </View>

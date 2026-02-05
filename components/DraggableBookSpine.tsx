@@ -170,7 +170,7 @@ export function DraggableBookSpine({
             <Image
               source={{ uri: spineImageUrl! }}
               style={[styles.stackedImage, { transform: [{ rotate: '-90deg' }] }]}
-              contentFit="cover"
+              contentFit="contain"
               cachePolicy="memory-disk"
             />
           ) : (
@@ -193,7 +193,7 @@ export function DraggableBookSpine({
           <Image
             source={{ uri: spineImageUrl! }}
             style={styles.image}
-            contentFit="cover"
+            contentFit="contain"
             cachePolicy="memory-disk"
           />
         ) : (
