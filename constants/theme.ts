@@ -374,6 +374,8 @@ export const BookSpine = {
   // Default dimensions
   width: 50,
   height: 180,
+  minWidth: 20,
+  maxWidth: 100,
   minHeight: 120,
   maxHeight: 220,
 
