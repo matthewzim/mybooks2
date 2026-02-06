@@ -10,16 +10,16 @@
  * - Rotate button for quick stack toggle
  * - Animated position updates
  * - Stacked (horizontal) display mode
+ * - Position-based drop target calculation for variable-width books
  */
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
-  withTiming,
   runOnJS,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +28,7 @@ import { BookSpine as BookSpineConstants, Shadows } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import type { Book } from '@/types';
+import type { BookPosition } from './EditableBookshelfGrid';
 
 interface DraggableBookSpineProps {
   book: Book;
@@ -39,11 +40,8 @@ interface DraggableBookSpineProps {
   onDragEnd: (fromIndex: number, toIndex: number) => void;
   onDragMove: (index: number, translationX: number, translationY: number) => void;
   onToggleStack: (book: Book) => void;
-  onStackOnBook?: (bookId: string, targetBookId: string) => void;
-  positions: { x: number; y: number }[];
+  bookPositions: BookPosition[];
   totalBooks: number;
-  booksPerRow: number;
-  stackableBooks?: Book[]; // Other stacked books that can be stacked upon
 }
 
 /**
@@ -68,11 +66,8 @@ export function DraggableBookSpine({
   onDragEnd,
   onDragMove,
   onToggleStack,
-  onStackOnBook,
-  positions,
+  bookPositions,
   totalBooks,
-  booksPerRow,
-  stackableBooks = [],
 }: DraggableBookSpineProps) {
   const { colors } = useTheme();
   const translateX = useSharedValue(0);
@@ -81,28 +76,48 @@ export function DraggableBookSpine({
   const zIndex = useSharedValue(0);
   const isDragging = useSharedValue(false);
 
-  // Calculate target index based on current position
-  const calculateTargetIndex = (tx: number, ty: number): number => {
-    'worklet';
-    const currentRow = Math.floor(index / booksPerRow);
-    const currentCol = index % booksPerRow;
+  // Calculate target index based on drag position using actual book positions
+  const findDropTarget = useCallback(
+    (tx: number, ty: number): number => {
+      if (bookPositions.length === 0 || index >= bookPositions.length) {
+        return index;
+      }
 
-    // Calculate how many positions we've moved
-    const colOffset = Math.round(tx / width);
-    const rowOffset = Math.round(ty / height);
+      const myPos = bookPositions[index];
+      if (!myPos) return index;
 
-    let newCol = currentCol + colOffset;
-    let newRow = currentRow + rowOffset;
+      const draggedCenterX = myPos.x + tx + width / 2;
+      const draggedCenterY = myPos.y + ty;
 
-    // Clamp to valid range
-    newRow = Math.max(0, Math.min(newRow, Math.floor((totalBooks - 1) / booksPerRow)));
-    newCol = Math.max(0, Math.min(newCol, booksPerRow - 1));
+      let bestIndex = index;
+      let bestDistance = Infinity;
 
-    let newIndex = newRow * booksPerRow + newCol;
-    newIndex = Math.max(0, Math.min(newIndex, totalBooks - 1));
+      bookPositions.forEach((pos, i) => {
+        const centerX = pos.x + pos.width / 2;
+        const centerY = pos.y;
+        // Weight vertical distance more heavily since rows are separated
+        const dx = draggedCenterX - centerX;
+        const dy = (draggedCenterY - centerY) * 1.5;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < bestDistance) {
+          bestDistance = dist;
+          bestIndex = i;
+        }
+      });
 
-    return newIndex;
-  };
+      return Math.max(0, Math.min(bestIndex, totalBooks - 1));
+    },
+    [bookPositions, index, width, totalBooks]
+  );
+
+  // JS-thread handler that computes drop target and calls onDragEnd
+  const handleDragEndJS = useCallback(
+    (tx: number, ty: number) => {
+      const targetIndex = findDropTarget(tx, ty);
+      onDragEnd(index, targetIndex);
+    },
+    [findDropTarget, onDragEnd, index]
+  );
 
   const dragGesture = Gesture.Pan()
     .enabled(isEditing)
@@ -119,7 +134,9 @@ export function DraggableBookSpine({
       runOnJS(onDragMove)(index, event.translationX, event.translationY);
     })
     .onEnd(() => {
-      const targetIndex = calculateTargetIndex(translateX.value, translateY.value);
+      // Capture translation values before animating back
+      const tx = translateX.value;
+      const ty = translateY.value;
 
       isDragging.value = false;
       translateX.value = withSpring(0);
@@ -127,7 +144,7 @@ export function DraggableBookSpine({
       scale.value = withSpring(1);
       zIndex.value = 0;
 
-      runOnJS(onDragEnd)(index, targetIndex);
+      runOnJS(handleDragEndJS)(tx, ty);
     });
 
   const longPressGesture = Gesture.LongPress()
@@ -165,25 +182,46 @@ export function DraggableBookSpine({
     if (book.is_stacked) {
       // Stacked (horizontal) view - book laying flat
       return (
-        <View style={[styles.stackedContainer, { width: stackedWidth, height: stackedHeight, backgroundColor: colors.backgroundDark }]}>
+        <View
+          style={[
+            styles.stackedContainer,
+            {
+              width: stackedWidth,
+              height: stackedHeight,
+              backgroundColor: colors.backgroundDark,
+            },
+          ]}
+        >
           {hasValidUrl ? (
             <View style={styles.stackedImageWrapper}>
               <Image
                 source={{ uri: spineImageUrl! }}
-                style={{ width: stackedHeight, height: stackedWidth, transform: [{ rotate: '-90deg' }] }}
-                contentFit="cover"
+                style={{
+                  width: stackedHeight,
+                  height: stackedWidth,
+                  transform: [{ rotate: '-90deg' }],
+                }}
+                contentFit="contain"
                 cachePolicy="memory-disk"
               />
             </View>
           ) : (
             <View style={[styles.stackedPlaceholder, { backgroundColor }]}>
-              <Text style={[styles.stackedTitle, { color: colors.textOnDark }]} numberOfLines={1}>
+              <Text
+                style={[styles.stackedTitle, { color: colors.textOnDark }]}
+                numberOfLines={1}
+              >
                 {book.title}
               </Text>
             </View>
           )}
           {/* Top edge effect for stacked book */}
-          <View style={[styles.stackedEdge, { backgroundColor: colors.overlayLight }]} />
+          <View
+            style={[
+              styles.stackedEdge,
+              { backgroundColor: colors.overlayLight },
+            ]}
+          />
         </View>
       );
     }
@@ -195,21 +233,32 @@ export function DraggableBookSpine({
           <Image
             source={{ uri: spineImageUrl! }}
             style={styles.image}
-            contentFit="cover"
+            contentFit="contain"
             cachePolicy="memory-disk"
           />
         ) : (
           <View style={[styles.placeholder, { backgroundColor }]}>
-            <Text style={[styles.placeholderTitle, { color: colors.textOnDark }]} numberOfLines={3}>
+            <Text
+              style={[styles.placeholderTitle, { color: colors.textOnDark }]}
+              numberOfLines={3}
+            >
               {book.title}
             </Text>
-            <Text style={[styles.placeholderAuthor, { color: colors.textOnDarkMuted }]} numberOfLines={2}>
+            <Text
+              style={[
+                styles.placeholderAuthor,
+                { color: colors.textOnDarkMuted },
+              ]}
+              numberOfLines={2}
+            >
               {book.author}
             </Text>
           </View>
         )}
         {/* Book spine edge effect */}
-        <View style={[styles.spineEdge, { backgroundColor: colors.overlayLight }]} />
+        <View
+          style={[styles.spineEdge, { backgroundColor: colors.overlayLight }]}
+        />
       </View>
     );
   };
@@ -229,8 +278,15 @@ export function DraggableBookSpine({
 
         {/* Edit mode indicator */}
         {isEditing && (
-          <View style={[styles.editOverlay, { backgroundColor: colors.overlay }]}>
-            <View style={[styles.dragHandle, { backgroundColor: colors.overlayDark }]}>
+          <View
+            style={[styles.editOverlay, { backgroundColor: colors.overlay }]}
+          >
+            <View
+              style={[
+                styles.dragHandle,
+                { backgroundColor: colors.overlayDark },
+              ]}
+            >
               <Ionicons name="move" size={16} color={colors.textOnDark} />
             </View>
             <Pressable

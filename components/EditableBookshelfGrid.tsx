@@ -10,9 +10,11 @@
  * - Rotate books 90 degrees to stack flat
  * - Visual feedback during drag operations
  * - Automatic position calculation for stacked books
+ * - Variable-width book spines based on natural image dimensions
+ * - No gaps between adjacent book spines
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   ScrollView,
@@ -21,6 +23,7 @@ import {
   Text,
   ActivityIndicator,
   useWindowDimensions,
+  Image as RNImage,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,6 +37,7 @@ import {
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
+import { getSpineImageUrl } from '@/services/storage';
 import type { Book, ShelfStyle } from '@/types';
 
 interface EditableBookshelfGridProps {
@@ -49,9 +53,6 @@ interface EditableBookshelfGridProps {
   onUnstackBook?: (book: Book) => Promise<boolean>;
 }
 
-// Number of books per row
-const BOOKS_PER_ROW = 5;
-
 // Vertical offset between books in a stack
 const STACK_OFFSET = 4;
 
@@ -65,6 +66,15 @@ interface LayoutItem {
   height: number;
   isStacked: boolean;
   isVerticalStack: boolean;
+  bookIndex?: number; // index into localBooks for single books
+}
+
+// Position of each book on the grid (for drag calculations)
+export interface BookPosition {
+  x: number;
+  y: number;
+  width: number;
+  rowIndex: number;
 }
 
 export function EditableBookshelfGrid({
@@ -85,6 +95,11 @@ export function EditableBookshelfGrid({
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [localBooks, setLocalBooks] = useState<Book[]>(books);
 
+  // Track natural image dimensions for each book: bookId -> { width, height }
+  const [imageDimensions, setImageDimensions] = useState<
+    Record<string, { width: number; height: number }>
+  >({});
+
   // Sync local state with prop changes (when not dragging)
   React.useEffect(() => {
     if (draggingIndex === null) {
@@ -92,30 +107,64 @@ export function EditableBookshelfGrid({
     }
   }, [books, draggingIndex]);
 
-  // Calculate book dimensions based on screen width
+  // Fetch natural image dimensions for all books with images
+  useEffect(() => {
+    let cancelled = false;
+
+    localBooks.forEach((book) => {
+      if (book.image_url && !imageDimensions[book.id]) {
+        getSpineImageUrl(book.image_url).then((url) => {
+          if (cancelled || !url) return;
+          RNImage.getSize(
+            url,
+            (w, h) => {
+              if (!cancelled) {
+                setImageDimensions((prev) => ({
+                  ...prev,
+                  [book.id]: { width: w, height: h },
+                }));
+              }
+            },
+            () => {
+              // getSize failed — leave dimensions unknown, will use default width
+            }
+          );
+        });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [localBooks]);
+
+  // Calculate shelf height (fixed for all shelves)
   const availableWidth = screenWidth - Spacing.md * 2;
-  const bookWidth = Math.floor(availableWidth / BOOKS_PER_ROW);
-  const bookHeight = Math.min(
-    Math.floor(bookWidth * 3.6),
-    BookSpineConstants.maxHeight
+  const shelfHeight = Math.min(
+    BookSpineConstants.maxHeight,
+    Math.floor(((availableWidth / 5) * 3.6))
   );
 
-  // Calculate positions for drag operations
-  const positions = useMemo(() => {
-    return localBooks.map((_, index) => {
-      const row = Math.floor(index / BOOKS_PER_ROW);
-      const col = index % BOOKS_PER_ROW;
-      return {
-        x: col * bookWidth,
-        y: row * bookHeight,
-      };
-    });
-  }, [localBooks, bookWidth, bookHeight]);
+  // Compute display width for a single book based on its natural image dimensions
+  const getBookDisplayWidth = useCallback(
+    (book: Book): number => {
+      const dims = imageDimensions[book.id];
+      if (dims) {
+        const aspectRatio = dims.width / dims.height;
+        const naturalWidth = Math.round(shelfHeight * aspectRatio);
+        return Math.max(
+          BookSpineConstants.minWidth,
+          Math.min(BookSpineConstants.maxWidth, naturalWidth)
+        );
+      }
+      return BookSpineConstants.width; // default 50px while loading or for placeholders
+    },
+    [imageDimensions, shelfHeight]
+  );
 
-  // Group books by stack_id and organize into layout items
+  // Group books by stack_id and organize into layout items with proper widths
   const processedItems = useMemo(() => {
     const stackGroups = new Map<string, Book[]>();
-    const standaloneBooks: Book[] = [];
 
     // Group books by stack_id
     localBooks.forEach((book) => {
@@ -123,52 +172,56 @@ export function EditableBookshelfGrid({
         const existing = stackGroups.get(book.stack_id) || [];
         existing.push(book);
         stackGroups.set(book.stack_id, existing);
-      } else {
-        standaloneBooks.push(book);
       }
     });
 
     // Sort books within each stack by stack_position
-    stackGroups.forEach((stackBooks, stackId) => {
-      stackBooks.sort((a, b) => (a.stack_position || 0) - (b.stack_position || 0));
+    stackGroups.forEach((stackBooks) => {
+      stackBooks.sort(
+        (a, b) => (a.stack_position || 0) - (b.stack_position || 0)
+      );
     });
 
     // Build layout items based on position order
     const items: { position: number; layoutItem: LayoutItem }[] = [];
     const processedStackIds = new Set<string>();
+    let flatIdx = 0;
 
     localBooks.forEach((book) => {
       if (book.stack_id) {
-        // Only process each stack once (using the lowest position book in the stack)
         if (processedStackIds.has(book.stack_id)) return;
         processedStackIds.add(book.stack_id);
 
         const stackBooks = stackGroups.get(book.stack_id)!;
-        const stackHeight = bookWidth + (stackBooks.length - 1) * STACK_OFFSET;
+        const stackedBookWidth = getBookDisplayWidth(stackBooks[0]);
+        const stackDisplayHeight =
+          stackedBookWidth + (stackBooks.length - 1) * STACK_OFFSET;
 
         items.push({
           position: Math.min(...stackBooks.map((b) => b.position)),
           layoutItem: {
             item: stackBooks,
-            width: bookHeight, // Stacked books use height as width
-            height: stackHeight,
+            width: shelfHeight, // Stacked books use height as width (rotated)
+            height: stackDisplayHeight,
             isStacked: true,
             isVerticalStack: true,
           },
         });
       } else {
-        // Standalone book
         const isStacked = book.is_stacked || false;
+        const bookW = getBookDisplayWidth(book);
         items.push({
           position: book.position,
           layoutItem: {
             item: book,
-            width: isStacked ? bookHeight : bookWidth,
-            height: isStacked ? bookWidth : bookHeight,
+            width: isStacked ? shelfHeight : bookW,
+            height: isStacked ? bookW : shelfHeight,
             isStacked,
             isVerticalStack: false,
+            bookIndex: flatIdx,
           },
         });
+        flatIdx++;
       }
     });
 
@@ -176,7 +229,41 @@ export function EditableBookshelfGrid({
     items.sort((a, b) => a.position - b.position);
 
     return items.map((i) => i.layoutItem);
-  }, [localBooks, bookWidth, bookHeight]);
+  }, [localBooks, shelfHeight, getBookDisplayWidth]);
+
+  // Compute flat book positions for drag-and-drop (only non-stacked, non-vertical-stack books)
+  const bookPositions = useMemo(() => {
+    const positions: BookPosition[] = [];
+    let currentX = 0;
+    let currentRowIndex = 0;
+    let currentRowWidth = 0;
+
+    // We need to walk through processedItems and track positions for single books
+    processedItems.forEach((layoutItem) => {
+      if (currentRowWidth + layoutItem.width > availableWidth && currentRowWidth > 0) {
+        currentRowIndex++;
+        currentX = 0;
+        currentRowWidth = 0;
+      }
+
+      if (!layoutItem.isVerticalStack && layoutItem.item !== 'add') {
+        const book = layoutItem.item as Book;
+        if (!book.is_stacked) {
+          positions.push({
+            x: currentX,
+            y: currentRowIndex * (shelfHeight + Spacing.lg),
+            width: layoutItem.width,
+            rowIndex: currentRowIndex,
+          });
+        }
+      }
+
+      currentX += layoutItem.width;
+      currentRowWidth += layoutItem.width;
+    });
+
+    return positions;
+  }, [processedItems, availableWidth, shelfHeight]);
 
   // Group processed items into rows
   const rows = useMemo(() => {
@@ -184,10 +271,11 @@ export function EditableBookshelfGrid({
     let currentRow: LayoutItem[] = [];
     let currentRowWidth = 0;
 
-    // Add items (books and stacks)
     processedItems.forEach((layoutItem) => {
-      // Check if this item fits in the current row
-      if (currentRowWidth + layoutItem.width > availableWidth && currentRow.length > 0) {
+      if (
+        currentRowWidth + layoutItem.width > availableWidth &&
+        currentRow.length > 0
+      ) {
         result.push(currentRow);
         currentRow = [];
         currentRowWidth = 0;
@@ -199,21 +287,23 @@ export function EditableBookshelfGrid({
 
     // Add the "add" button
     if (!isEditing) {
-      const addButtonWidth = bookWidth;
-      if (currentRowWidth + addButtonWidth > availableWidth && currentRow.length > 0) {
+      const addButtonWidth = BookSpineConstants.width;
+      if (
+        currentRowWidth + addButtonWidth > availableWidth &&
+        currentRow.length > 0
+      ) {
         result.push(currentRow);
         currentRow = [];
       }
       currentRow.push({
         item: 'add' as const,
         width: addButtonWidth,
-        height: bookHeight,
+        height: shelfHeight,
         isStacked: false,
         isVerticalStack: false,
       });
     }
 
-    // Push the last row if it has items
     if (currentRow.length > 0) {
       result.push(currentRow);
     }
@@ -224,7 +314,7 @@ export function EditableBookshelfGrid({
     }
 
     return result;
-  }, [processedItems, bookWidth, bookHeight, availableWidth, isEditing]);
+  }, [processedItems, availableWidth, shelfHeight, isEditing]);
 
   // Handle drag start
   const handleDragStart = useCallback((index: number) => {
@@ -233,7 +323,7 @@ export function EditableBookshelfGrid({
 
   // Handle drag move
   const handleDragMove = useCallback(
-    (index: number, translationX: number, translationY: number) => {
+    (_index: number, _translationX: number, _translationY: number) => {
       // Could add visual feedback for potential drop position here
     },
     []
@@ -272,14 +362,13 @@ export function EditableBookshelfGrid({
   // Calculate the max height needed for each row
   const getRowHeight = useCallback(
     (row: LayoutItem[]): number => {
-      // Find the maximum height in the row
-      let maxHeight = bookHeight;
+      let maxHeight = shelfHeight;
       row.forEach((item) => {
         maxHeight = Math.max(maxHeight, item.height);
       });
       return maxHeight;
     },
-    [bookHeight]
+    [shelfHeight]
   );
 
   // Handle unstacking a book from a vertical stack
@@ -296,7 +385,9 @@ export function EditableBookshelfGrid({
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading books...</Text>
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+          Loading books...
+        </Text>
       </View>
     );
   }
@@ -341,7 +432,7 @@ export function EditableBookshelfGrid({
               />
             )}
 
-            {/* Books row */}
+            {/* Books row - no gaps between spines */}
             <View style={[styles.booksRow, { minHeight: rowHeight }]}>
               {row.map((layoutItem, itemIndex) => {
                 // Handle "add" button
@@ -349,24 +440,29 @@ export function EditableBookshelfGrid({
                   return (
                     <AddBookButton
                       key="add-button"
-                      width={bookWidth}
-                      height={bookHeight}
+                      width={BookSpineConstants.width}
+                      height={shelfHeight}
                       onPress={onAddBook}
                     />
                   );
                 }
 
                 // Handle vertical stack (array of books)
-                if (layoutItem.isVerticalStack && Array.isArray(layoutItem.item)) {
+                if (
+                  layoutItem.isVerticalStack &&
+                  Array.isArray(layoutItem.item)
+                ) {
                   const stackBooks = layoutItem.item;
-                  const stackKey = stackBooks[0].stack_id || stackBooks[0].id;
+                  const stackKey =
+                    stackBooks[0].stack_id || stackBooks[0].id;
+                  const stackBookWidth = getBookDisplayWidth(stackBooks[0]);
 
                   return (
-                    <View key={stackKey} style={styles.bookWrapper}>
+                    <View key={stackKey}>
                       <VerticalBookStack
                         books={stackBooks}
-                        stackWidth={bookHeight}
-                        stackHeight={bookWidth}
+                        stackWidth={shelfHeight}
+                        stackHeight={stackBookWidth}
                         onBookPress={onBookPress}
                         isEditing={isEditing}
                         onUnstackBook={handleUnstackBook}
@@ -378,6 +474,7 @@ export function EditableBookshelfGrid({
                 // Handle single book
                 const book = layoutItem.item as Book;
                 const currentIndex = flatIndex++;
+                const bookW = layoutItem.width;
 
                 if (isEditing) {
                   return (
@@ -385,51 +482,43 @@ export function EditableBookshelfGrid({
                       key={book.id}
                       book={book}
                       index={currentIndex}
-                      width={bookWidth}
-                      height={bookHeight}
+                      width={bookW}
+                      height={shelfHeight}
                       isEditing={isEditing}
                       onDragStart={handleDragStart}
                       onDragEnd={handleDragEnd}
                       onDragMove={handleDragMove}
                       onToggleStack={handleToggleStack}
-                      positions={positions}
-                      totalBooks={localBooks.length}
-                      booksPerRow={BOOKS_PER_ROW}
+                      bookPositions={bookPositions}
+                      totalBooks={localBooks.filter((b) => !b.stack_id && !b.is_stacked).length}
                     />
                   );
                 }
 
                 return (
-                  <View key={book.id} style={styles.bookWrapper}>
+                  <View key={book.id}>
                     {book.is_stacked ? (
                       <StackedBookSpine
                         book={book}
                         onPress={onBookPress}
-                        width={bookHeight}
-                        height={bookWidth}
+                        width={shelfHeight}
+                        height={bookW}
                       />
                     ) : (
                       <BookSpine
                         book={book}
                         onPress={onBookPress}
-                        width={bookWidth}
-                        height={bookHeight}
+                        width={bookW}
+                        height={shelfHeight}
                       />
                     )}
                   </View>
                 );
               })}
-
-              {/* Fill remaining space with empty slots if needed */}
-              {!isEditing && row.length > 0 && row.length < BOOKS_PER_ROW && (
-                <View style={{ flex: 1 }} />
-              )}
             </View>
 
             {/* Shelf surface - only shown in 'bottom' style (full style uses border instead) */}
-            {shelfStyle === 'bottom' && (
-              <View style={styles.shelfSurface} />
-            )}
+            {shelfStyle === 'bottom' && <View style={styles.shelfSurface} />}
           </View>
         );
       })}
@@ -451,7 +540,12 @@ interface StackedBookSpineProps {
   height: number;
 }
 
-function StackedBookSpine({ book, onPress, width, height }: StackedBookSpineProps) {
+function StackedBookSpine({
+  book,
+  onPress,
+  width,
+  height,
+}: StackedBookSpineProps) {
   const { colors } = useTheme();
   const spineImageUrl = useSpineImageUrl(book.image_url);
   const hasValidUrl = Boolean(spineImageUrl);
@@ -473,20 +567,32 @@ function StackedBookSpine({ book, onPress, width, height }: StackedBookSpineProp
           {/* For stacked books, we show the spine rotated */}
           <Image
             source={{ uri: spineImageUrl! }}
-            style={{ width: height, height: width, transform: [{ rotate: '-90deg' }] }}
-            contentFit="cover"
+            style={{
+              width: height,
+              height: width,
+              transform: [{ rotate: '-90deg' }],
+            }}
+            contentFit="contain"
             cachePolicy="memory-disk"
           />
         </View>
       ) : (
         <View style={[styles.stackedPlaceholder, { backgroundColor }]}>
-          <Text style={[styles.stackedTitle, { color: colors.textOnDark }]} numberOfLines={1}>
+          <Text
+            style={[styles.stackedTitle, { color: colors.textOnDark }]}
+            numberOfLines={1}
+          >
             {book.title}
           </Text>
         </View>
       )}
       {/* Top edge effect */}
-      <View style={[styles.stackedTopEdge, { backgroundColor: colors.overlayLight }]} />
+      <View
+        style={[
+          styles.stackedTopEdge,
+          { backgroundColor: colors.overlayLight },
+        ]}
+      />
     </Pressable>
   );
 }
@@ -495,12 +601,12 @@ function StackedBookSpine({ book, onPress, width, height }: StackedBookSpineProp
  * Get a consistent color for a book based on its title
  */
 function getBookColor(title: string): string {
-  const colors = BookSpineConstants.colors;
+  const bookColors = BookSpineConstants.colors;
   let hash = 0;
   for (let i = 0; i < title.length; i++) {
     hash = title.charCodeAt(i) + ((hash << 5) - hash);
   }
-  return colors[Math.abs(hash) % colors.length];
+  return bookColors[Math.abs(hash) % bookColors.length];
 }
 
 /**
@@ -518,7 +624,12 @@ function AddBookButton({ width, height, onPress }: AddBookButtonProps) {
     <Pressable
       style={({ pressed }) => [
         styles.addButton,
-        { width, height, backgroundColor: colors.backgroundDark, borderColor: colors.border },
+        {
+          width,
+          height,
+          backgroundColor: colors.backgroundDark,
+          borderColor: colors.border,
+        },
         pressed && { backgroundColor: colors.border, opacity: 0.8 },
       ]}
       onPress={onPress}
@@ -526,7 +637,9 @@ function AddBookButton({ width, height, onPress }: AddBookButtonProps) {
       accessibilityLabel="Add a new book"
     >
       <Ionicons name="add" size={32} color={colors.primary} />
-      <Text style={[styles.addButtonText, { color: colors.primary }]}>Add Book</Text>
+      <Text style={[styles.addButtonText, { color: colors.primary }]}>
+        Add Book
+      </Text>
     </Pressable>
   );
 }
@@ -561,12 +674,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'flex-start',
-    paddingHorizontal: Spacing.sm,
     zIndex: 1,
     flexWrap: 'nowrap',
-  },
-  bookWrapper: {
-    // Container for individual books
   },
   shelfSurface: {
     height: BookshelfDimensions.shelfThickness,

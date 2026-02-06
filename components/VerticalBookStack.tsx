@@ -140,7 +140,7 @@ function StackedBookItem({
           <Image
             source={{ uri: spineImageUrl! }}
             style={{ width: stackHeight, height: stackWidth, transform: [{ rotate: '-90deg' }] }}
-            contentFit="cover"
+            contentFit="contain"
             cachePolicy="memory-disk"
           />
         </View>

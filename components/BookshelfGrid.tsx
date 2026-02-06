@@ -6,13 +6,14 @@
  * Expands dynamically as more books are added.
  *
  * Features:
- * - Single column layout with horizontal rows
+ * - Variable-width book spines based on natural image dimensions
+ * - No gaps between adjacent book spines
  * - Minimum 3 rows, expands as needed
  * - Visual shelf appearance with wood texture
  * - Add book button at the end
  */
 
-import React from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   ScrollView,
@@ -21,6 +22,7 @@ import {
   Text,
   ActivityIndicator,
   useWindowDimensions,
+  Image as RNImage,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BookSpine } from './BookSpine';
@@ -30,6 +32,7 @@ import {
   BookSpine as BookSpineConstants,
   BookshelfDimensions,
 } from '@/constants/theme';
+import { getSpineImageUrl } from '@/services/storage';
 import type { Book, ShelfStyle } from '@/types';
 
 interface BookshelfGridProps {
@@ -40,8 +43,11 @@ interface BookshelfGridProps {
   shelfStyle?: ShelfStyle;
 }
 
-// Number of books per row
-const BOOKS_PER_ROW = 5;
+// Layout item for variable-width packing
+interface GridLayoutItem {
+  item: Book | 'add';
+  width: number;
+}
 
 export function BookshelfGrid({
   books,
@@ -52,26 +58,106 @@ export function BookshelfGrid({
 }: BookshelfGridProps) {
   const { width: screenWidth } = useWindowDimensions();
 
-  // Calculate book dimensions based on screen width
+  // Track natural image dimensions for each book: bookId -> { width, height }
+  const [imageDimensions, setImageDimensions] = useState<
+    Record<string, { width: number; height: number }>
+  >({});
+
+  // Calculate shelf height (fixed for all shelves)
   const availableWidth = screenWidth - Spacing.md * 2;
-  const bookWidth = Math.floor(availableWidth / BOOKS_PER_ROW);
   const bookHeight = Math.min(
-    Math.floor(bookWidth * 3.6), // Aspect ratio for book spine
+    Math.floor((availableWidth / 5) * 3.6),
     BookSpineConstants.maxHeight
   );
 
-  // Group books into rows
-  const rows: (Book | 'add')[][] = [];
-  const allItems: (Book | 'add')[] = [...books, 'add'];
+  // Fetch natural image dimensions for all books with images
+  useEffect(() => {
+    let cancelled = false;
 
-  for (let i = 0; i < allItems.length; i += BOOKS_PER_ROW) {
-    rows.push(allItems.slice(i, i + BOOKS_PER_ROW));
-  }
+    books.forEach((book) => {
+      if (book.image_url && !imageDimensions[book.id]) {
+        getSpineImageUrl(book.image_url).then((url) => {
+          if (cancelled || !url) return;
+          RNImage.getSize(
+            url,
+            (w, h) => {
+              if (!cancelled) {
+                setImageDimensions((prev) => ({
+                  ...prev,
+                  [book.id]: { width: w, height: h },
+                }));
+              }
+            },
+            () => {
+              // getSize failed — leave dimensions unknown, will use default width
+            }
+          );
+        });
+      }
+    });
 
-  // Ensure minimum 3 rows
-  while (rows.length < BookshelfDimensions.minRows) {
-    rows.push([]);
-  }
+    return () => {
+      cancelled = true;
+    };
+  }, [books]);
+
+  // Compute display width for a single book based on its natural image dimensions
+  const getBookDisplayWidth = useCallback(
+    (book: Book): number => {
+      const dims = imageDimensions[book.id];
+      if (dims) {
+        const aspectRatio = dims.width / dims.height;
+        const naturalWidth = Math.round(bookHeight * aspectRatio);
+        return Math.max(
+          BookSpineConstants.minWidth,
+          Math.min(BookSpineConstants.maxWidth, naturalWidth)
+        );
+      }
+      return BookSpineConstants.width; // default 50px
+    },
+    [imageDimensions, bookHeight]
+  );
+
+  // Build layout items with variable widths
+  const layoutItems: GridLayoutItem[] = useMemo(() => {
+    const items: GridLayoutItem[] = books.map((book) => ({
+      item: book,
+      width: getBookDisplayWidth(book),
+    }));
+    items.push({ item: 'add', width: BookSpineConstants.width });
+    return items;
+  }, [books, getBookDisplayWidth]);
+
+  // Group layout items into rows by accumulated width
+  const rows = useMemo(() => {
+    const result: GridLayoutItem[][] = [];
+    let currentRow: GridLayoutItem[] = [];
+    let currentRowWidth = 0;
+
+    layoutItems.forEach((layoutItem) => {
+      if (
+        currentRowWidth + layoutItem.width > availableWidth &&
+        currentRow.length > 0
+      ) {
+        result.push(currentRow);
+        currentRow = [];
+        currentRowWidth = 0;
+      }
+      currentRow.push(layoutItem);
+      currentRowWidth += layoutItem.width;
+    });
+
+    if (currentRow.length > 0) {
+      result.push(currentRow);
+    }
+
+    // Ensure minimum 3 rows
+    while (result.length < BookshelfDimensions.minRows) {
+      result.push([]);
+    }
+
+    return result;
+  }, [layoutItems, availableWidth]);
 
   if (isLoading) {
     return (
@@ -103,42 +189,32 @@ export function BookshelfGrid({
           {/* Shelf back - only shown in 'full' style */}
           {shelfStyle === 'full' && <View style={styles.shelfBack} />}
 
-          {/* Books row */}
-          <View style={[styles.booksRow, { height: bookHeight }]}>
-            {row.map((item, bookIndex) => {
-              if (item === 'add') {
+          {/* Books row - no gaps between spines */}
+          <View style={[styles.booksRow, { minHeight: bookHeight }]}>
+            {row.map((layoutItem) => {
+              if (layoutItem.item === 'add') {
                 return (
                   <AddBookButton
                     key="add-button"
-                    width={bookWidth}
+                    width={layoutItem.width}
                     height={bookHeight}
                     onPress={onAddBook}
                   />
                 );
               }
 
+              const book = layoutItem.item;
               return (
-                <View key={item.id} style={styles.bookWrapper}>
+                <View key={book.id}>
                   <BookSpine
-                    book={item}
+                    book={book}
                     onPress={onBookPress}
-                    width={bookWidth}
+                    width={layoutItem.width}
                     height={bookHeight}
                   />
                 </View>
               );
             })}
-
-            {/* Fill empty slots */}
-            {row.length < BOOKS_PER_ROW &&
-              Array.from({ length: BOOKS_PER_ROW - row.length }).map(
-                (_, index) => (
-                  <View
-                    key={`empty-${index}`}
-                    style={[styles.emptySlot, { width: bookWidth }]}
-                  />
-                )
-              )}
           </View>
 
           {/* Shelf surface - only shown in 'bottom' style */}
@@ -216,21 +292,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'flex-start',
-    paddingHorizontal: Spacing.sm,
     zIndex: 1,
-  },
-  bookWrapper: {
-    // Shadow for individual books
-  },
-  emptySlot: {
-    // Placeholder for empty book slots
+    flexWrap: 'nowrap',
   },
   shelfSurface: {
     height: BookshelfDimensions.shelfThickness,
     backgroundColor: BookshelfDimensions.shelfColor,
     borderRadius: 2,
     marginTop: -2,
-    // Wood grain effect
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
