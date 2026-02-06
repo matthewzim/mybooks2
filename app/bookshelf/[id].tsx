@@ -27,6 +27,7 @@ import { useBooks } from '@/hooks/useBooks';
 import { EditableBookshelfGrid } from '@/components/EditableBookshelfGrid';
 import { BookDetailModal } from '@/components/BookDetailModal';
 import { BookshelfEditModal } from '@/components/BookshelfEditModal';
+import { BrowseBooksModal } from '@/components/BrowseBooksModal';
 import { LoadingView, EmptyState } from '@/components/ui';
 import { Spacing, Typography, BorderRadius } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -43,6 +44,7 @@ export default function BookshelfDetailScreen() {
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [isBookModalVisible, setIsBookModalVisible] = useState(false);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [isBrowseModalVisible, setIsBrowseModalVisible] = useState(false);
 
   /**
    * Fetch bookshelf data
@@ -116,7 +118,7 @@ export default function BookshelfDetailScreen() {
       },
       {
         text: 'Browse Community',
-        onPress: () => router.push('/(tabs)/community'),
+        onPress: () => setIsBrowseModalVisible(true),
       },
     ]);
   };
@@ -388,6 +390,14 @@ export default function BookshelfDetailScreen() {
           bookshelf={bookshelf}
           onClose={() => setIsEditModalVisible(false)}
           onSave={handleSaveBookshelf}
+        />
+
+        {/* Browse Community Books Modal */}
+        <BrowseBooksModal
+          visible={isBrowseModalVisible}
+          shelfId={id || ''}
+          onClose={() => setIsBrowseModalVisible(false)}
+          onBookAdded={fetchBooks}
         />
       </SafeAreaView>
     </>

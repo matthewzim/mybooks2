@@ -18,12 +18,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { FREE_TIER_LIMITS, bookshelvesService, booksService } from '@/services';
+import { FREE_TIER_LIMITS, bookshelvesService } from '@/services';
 import { UserSearchResult } from '@/components/UserSearchResult';
 import { BookshelfPreview } from '@/components/BookshelfPreview';
 import { Input, EmptyState, Button } from '@/components/ui';
 import { Spacing, Typography, BorderRadius } from '@/constants/theme';
-import type { Bookshelf, Book, CommunityBookSpine } from '@/types';
+import type { Bookshelf, Book } from '@/types';
 
 interface PublicBookshelfPreview extends Bookshelf {
   books: Book[];
@@ -39,11 +39,6 @@ export default function CommunityScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
-
-  // Book search state (kept for top-level search control)
-  const [searchQuery, setSearchQuery] = useState('');
-  const [bookSearchResults, setBookSearchResults] = useState<CommunityBookSpine[]>([]);
-  const [isSearchingBooks, setIsSearchingBooks] = useState(false);
 
   // User search state
   const [userSearchQuery, setUserSearchQuery] = useState('');
@@ -77,32 +72,6 @@ export default function CommunityScreen() {
       setIsLoadingPublicBookshelves(false);
     }
   }, [canAccessCommunity, loadPublicBookshelfPreviews]);
-
-  useEffect(() => {
-    const searchBooks = async () => {
-      const trimmedQuery = searchQuery.trim();
-
-      if (!trimmedQuery) {
-        setBookSearchResults([]);
-        setIsSearchingBooks(false);
-        return;
-      }
-
-      setIsSearchingBooks(true);
-      const result = await booksService.getCommunityBooks(0, 2, trimmedQuery);
-
-      if (result.data) {
-        setBookSearchResults(result.data.data);
-      } else {
-        setBookSearchResults([]);
-      }
-
-      setIsSearchingBooks(false);
-    };
-
-    const timeoutId = setTimeout(searchBooks, 300);
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery]);
 
   useEffect(() => {
     const searchUsers = async () => {
@@ -173,60 +142,6 @@ export default function CommunityScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Book Search Bar (Top) */}
-        <View style={[styles.searchContainer, { backgroundColor: colors.background }]}> 
-          <View style={styles.userSearchHeader}>
-            <Ionicons name="book" size={18} color={colors.primary} />
-            <Text style={[styles.userSearchLabel, { color: colors.primary }]}>Browse Books</Text>
-          </View>
-          <Input
-            placeholder="Search by title or author..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            leftIcon="search"
-            rightIcon={searchQuery ? 'close-circle' : undefined}
-            onRightIconPress={() => {
-              setSearchQuery('');
-              setBookSearchResults([]);
-            }}
-            containerStyle={styles.searchInput}
-            colors={colors}
-          />
-
-          {(bookSearchResults.length > 0 || isSearchingBooks) && (
-            <View style={[styles.bookSearchResults, { backgroundColor: colors.backgroundDark }]}> 
-              {isSearchingBooks ? (
-                <View style={styles.searchingIndicator}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                  <Text style={[styles.searchingText, { color: colors.textSecondary }]}>Searching books...</Text>
-                </View>
-              ) : (
-                bookSearchResults.map((bookResult) => (
-                  <View key={bookResult.id} style={styles.bookResultRow}>
-                    <Ionicons name="book-outline" size={16} color={colors.textSecondary} />
-                    <View style={styles.bookResultTextContainer}>
-                      <Text style={[styles.bookResultTitle, { color: colors.text }]} numberOfLines={1}>
-                        {bookResult.title}
-                      </Text>
-                      <Text style={[styles.bookResultAuthor, { color: colors.textSecondary }]} numberOfLines={1}>
-                        {bookResult.author}
-                      </Text>
-                    </View>
-                  </View>
-                ))
-              )}
-            </View>
-          )}
-
-          {searchQuery.trim() && !isSearchingBooks && bookSearchResults.length === 0 && (
-            <View style={styles.noResultsContainer}>
-              <Text style={[styles.noResultsText, { color: colors.textSecondary }]}>No books found</Text>
-            </View>
-          )}
-        </View>
-
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
         {/* User Search Bar */}
         <View style={[styles.userSearchContainer, { backgroundColor: colors.background }]}> 
           <View style={styles.userSearchHeader}>
@@ -333,28 +248,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     maxHeight: 200,
   },
-  bookSearchResults: {
-    marginTop: Spacing.xs,
-    borderRadius: BorderRadius.md,
-    overflow: 'hidden',
-  },
-  bookResultRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  bookResultTextContainer: {
-    flex: 1,
-  },
-  bookResultTitle: {
-    fontSize: Typography.sizes.sm,
-    fontWeight: Typography.weights.medium,
-  },
-  bookResultAuthor: {
-    fontSize: Typography.sizes.xs,
-  },
   searchingIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -371,15 +264,6 @@ const styles = StyleSheet.create({
   },
   noResultsText: {
     fontSize: Typography.sizes.sm,
-  },
-  divider: {
-    height: 1,
-    marginHorizontal: Spacing.md,
-    marginTop: Spacing.sm,
-  },
-  searchContainer: {
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
   },
   searchInput: {
     marginBottom: 0,
