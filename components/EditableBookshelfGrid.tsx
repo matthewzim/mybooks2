@@ -231,14 +231,21 @@ export function EditableBookshelfGrid({
     return items.map((i) => i.layoutItem);
   }, [localBooks, shelfHeight, getBookDisplayWidth]);
 
-  // Compute flat book positions for drag-and-drop (only non-stacked, non-vertical-stack books)
+  // Build ordered array of draggable books (single books only, matching flatIndex order)
+  const draggableBooks = useMemo(() => {
+    return processedItems
+      .filter((li) => !li.isVerticalStack && li.item !== 'add')
+      .map((li) => li.item as Book);
+  }, [processedItems]);
+
+  // Compute positions for all draggable books (for drag-and-drop target calculation)
   const bookPositions = useMemo(() => {
     const positions: BookPosition[] = [];
     let currentX = 0;
     let currentRowIndex = 0;
     let currentRowWidth = 0;
 
-    // We need to walk through processedItems and track positions for single books
+    // Walk through processedItems and track positions for all single books
     processedItems.forEach((layoutItem) => {
       if (currentRowWidth + layoutItem.width > availableWidth && currentRowWidth > 0) {
         currentRowIndex++;
@@ -247,15 +254,12 @@ export function EditableBookshelfGrid({
       }
 
       if (!layoutItem.isVerticalStack && layoutItem.item !== 'add') {
-        const book = layoutItem.item as Book;
-        if (!book.is_stacked) {
-          positions.push({
-            x: currentX,
-            y: currentRowIndex * (shelfHeight + Spacing.lg),
-            width: layoutItem.width,
-            rowIndex: currentRowIndex,
-          });
-        }
+        positions.push({
+          x: currentX,
+          y: currentRowIndex * (shelfHeight + Spacing.lg),
+          width: layoutItem.width,
+          rowIndex: currentRowIndex,
+        });
       }
 
       currentX += layoutItem.width;
@@ -336,10 +340,23 @@ export function EditableBookshelfGrid({
 
       if (fromIndex === toIndex) return;
 
-      // Create new order
-      const newBooks = [...localBooks];
-      const [movedBook] = newBooks.splice(fromIndex, 1);
-      newBooks.splice(toIndex, 0, movedBook);
+      // Reorder within the draggable books array (maps 1:1 with flatIndex)
+      const newDraggable = [...draggableBooks];
+      const [movedBook] = newDraggable.splice(fromIndex, 1);
+      newDraggable.splice(toIndex, 0, movedBook);
+
+      // Rebuild full book list: keep vertical stack books in place,
+      // replace single books with the reordered draggable books
+      const newBooks: Book[] = [];
+      let draggableIdx = 0;
+
+      for (const layoutItem of processedItems) {
+        if (layoutItem.isVerticalStack && Array.isArray(layoutItem.item)) {
+          newBooks.push(...(layoutItem.item as Book[]));
+        } else if (layoutItem.item !== 'add') {
+          newBooks.push(newDraggable[draggableIdx++]);
+        }
+      }
 
       // Update local state immediately for responsiveness
       setLocalBooks(newBooks);
@@ -348,7 +365,7 @@ export function EditableBookshelfGrid({
       const orderedIds = newBooks.map((book) => book.id);
       await onReorderBooks(orderedIds);
     },
-    [localBooks, onReorderBooks]
+    [draggableBooks, processedItems, onReorderBooks]
   );
 
   // Handle stack toggle
@@ -482,7 +499,7 @@ export function EditableBookshelfGrid({
                       onDragMove={handleDragMove}
                       onToggleStack={handleToggleStack}
                       bookPositions={bookPositions}
-                      totalBooks={localBooks.filter((b) => !b.stack_id && !b.is_stacked).length}
+                      totalBooks={draggableBooks.length}
                     />
                   );
                 }
