@@ -420,15 +420,7 @@ export function EditableBookshelfGrid({
             {/* Shelf back - only shown in 'full' style */}
             {shelfStyle === 'full' && (
               <View
-                style={[
-                  styles.shelfBack,
-                  {
-                    height: rowHeight + 20,
-                    left: fullShelfBorderWidth,
-                    right: fullShelfBorderWidth,
-                    bottom: fullShelfBorderWidth,
-                  },
-                ]}
+                style={styles.shelfBack}
               />
             )}
 
@@ -669,8 +661,11 @@ const styles = StyleSheet.create({
   },
   shelfBack: {
     position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     backgroundColor: BookshelfDimensions.backColor,
-    borderRadius: 2,
   },
   booksRow: {
     flexDirection: 'row',

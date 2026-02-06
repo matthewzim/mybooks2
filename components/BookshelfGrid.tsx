@@ -280,13 +280,11 @@ const styles = StyleSheet.create({
   },
   shelfBack: {
     position: 'absolute',
-    left: Spacing.md - 4,
-    right: Spacing.md - 4,
-    bottom: BookshelfDimensions.shelfThickness - 4,
-    height: 200,
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     backgroundColor: BookshelfDimensions.backColor,
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
   },
   booksRow: {
     flexDirection: 'row',
