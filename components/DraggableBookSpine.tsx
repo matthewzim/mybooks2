@@ -184,12 +184,12 @@ export function DraggableBookSpine({
       return (
         <View
           style={[
-            styles.stackedContainer,
+            hasValidUrl ? styles.stackedContainerImage : styles.stackedContainer,
             {
               width: stackedWidth,
               height: stackedHeight,
-              backgroundColor: colors.backgroundDark,
             },
+            !hasValidUrl && { backgroundColor: colors.backgroundDark },
           ]}
         >
           {hasValidUrl ? (
@@ -215,13 +215,15 @@ export function DraggableBookSpine({
               </Text>
             </View>
           )}
-          {/* Top edge effect for stacked book */}
-          <View
-            style={[
-              styles.stackedEdge,
-              { backgroundColor: colors.overlayLight },
-            ]}
-          />
+          {/* Top edge effect for stacked book - only for placeholder */}
+          {!hasValidUrl && (
+            <View
+              style={[
+                styles.stackedEdge,
+                { backgroundColor: colors.overlayLight },
+              ]}
+            />
+          )}
         </View>
       );
     }
@@ -352,6 +354,9 @@ const styles = StyleSheet.create({
   // Stacked (horizontal) book styles
   stackedContainer: {
     borderRadius: 2,
+    overflow: 'hidden',
+  },
+  stackedContainerImage: {
     overflow: 'hidden',
   },
   stackedImageWrapper: {

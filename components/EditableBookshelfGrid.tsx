@@ -554,7 +554,7 @@ function StackedBookSpine({
   return (
     <Pressable
       style={({ pressed }) => [
-        styles.stackedBook,
+        hasValidUrl ? styles.stackedBookImage : styles.stackedBook,
         { width, height },
         pressed && styles.pressed,
       ]}
@@ -563,7 +563,7 @@ function StackedBookSpine({
       accessibilityLabel={`${book.title} by ${book.author} (stacked)`}
     >
       {hasValidUrl ? (
-        <View style={[styles.stackedImageContainer, { backgroundColor }]}>
+        <View style={styles.stackedImageContainer}>
           {/* For stacked books, we show the spine rotated */}
           <Image
             source={{ uri: spineImageUrl! }}
@@ -586,13 +586,15 @@ function StackedBookSpine({
           </Text>
         </View>
       )}
-      {/* Top edge effect */}
-      <View
-        style={[
-          styles.stackedTopEdge,
-          { backgroundColor: colors.overlayLight },
-        ]}
-      />
+      {/* Top edge effect - only for placeholder */}
+      {!hasValidUrl && (
+        <View
+          style={[
+            styles.stackedTopEdge,
+            { backgroundColor: colors.overlayLight },
+          ]}
+        />
+      )}
     </Pressable>
   );
 }
@@ -697,6 +699,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 4,
+  },
+  stackedBookImage: {
+    overflow: 'hidden',
   },
   pressed: {
     opacity: 0.9,

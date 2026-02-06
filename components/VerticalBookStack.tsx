@@ -65,8 +65,8 @@ export function VerticalBookStack({
   return (
     <View style={[styles.container, { width: stackWidth, height: totalHeight }]}>
       {sortedBooks.map((book, index) => {
-        // Books higher in stack appear higher (smaller bottom offset)
-        const bottomOffset = (sortedBooks.length - 1 - index) * STACK_OFFSET;
+        // Books higher in stack (higher stack_position) have higher bottom offset
+        const bottomOffset = index * STACK_OFFSET;
         const isTopBook = index === sortedBooks.length - 1;
 
         return (
@@ -122,7 +122,7 @@ function StackedBookItem({
   return (
     <Pressable
       style={({ pressed }) => [
-        styles.stackedBook,
+        hasValidUrl ? styles.stackedBookImage : styles.stackedBook,
         {
           width: stackWidth,
           height: stackHeight,
@@ -136,7 +136,7 @@ function StackedBookItem({
       accessibilityLabel={`${book.title} by ${book.author} (in stack, position ${index + 1} of ${stackCount})`}
     >
       {hasValidUrl ? (
-        <View style={[styles.stackedImageContainer, { backgroundColor }]}>
+        <View style={styles.stackedImageContainer}>
           <Image
             source={{ uri: spineImageUrl! }}
             style={{ width: stackHeight, height: stackWidth, transform: [{ rotate: '-90deg' }] }}
@@ -145,13 +145,15 @@ function StackedBookItem({
           />
         </View>
       ) : (
-        <View style={[styles.stackedPlaceholder, { backgroundColor }]}> 
+        <View style={[styles.stackedPlaceholder, { backgroundColor }]}>
           <Text style={[styles.stackedTitle, { color: colors.textOnDark }]} numberOfLines={1}>
             {book.title}
           </Text>
         </View>
       )}
-      <View style={[styles.stackedTopEdge, { backgroundColor: colors.overlayLight }]} />
+      {!hasValidUrl && (
+        <View style={[styles.stackedTopEdge, { backgroundColor: colors.overlayLight }]} />
+      )}
 
       {isEditing && isTopBook && onUnstackBook && (
         <View style={[styles.editOverlay, { backgroundColor: colors.overlay }]}> 
@@ -189,6 +191,11 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     overflow: 'hidden',
     ...Shadows.md,
+  },
+  stackedBookImage: {
+    position: 'absolute',
+    left: 0,
+    overflow: 'hidden',
   },
   pressed: {
     opacity: 0.9,
