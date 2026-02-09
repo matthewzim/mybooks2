@@ -192,9 +192,12 @@ export function useBooks(shelfId: string): UseBooksReturn {
   const reorderBooks = useCallback(
     async (orderedIds: string[]): Promise<boolean> => {
       try {
-        // Optimistically update local state
+        // Optimistically update local state with corrected position values
         const reorderedBooks = orderedIds
-          .map((id) => books.find((book) => book.id === id))
+          .map((id, index) => {
+            const book = books.find((b) => b.id === id);
+            return book ? { ...book, position: index } : undefined;
+          })
           .filter((book): book is Book => book !== undefined);
 
         setBooks(reorderedBooks);

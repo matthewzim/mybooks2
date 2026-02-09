@@ -358,11 +358,15 @@ export function EditableBookshelfGrid({
         }
       }
 
+      // Update position fields to match new array order so the
+      // processedItems sort keeps the intended sequence.
+      const updatedBooks = newBooks.map((book, i) => ({ ...book, position: i }));
+
       // Update local state immediately for responsiveness
-      setLocalBooks(newBooks);
+      setLocalBooks(updatedBooks);
 
       // Persist the new order
-      const orderedIds = newBooks.map((book) => book.id);
+      const orderedIds = updatedBooks.map((book) => book.id);
       await onReorderBooks(orderedIds);
     },
     [draggableBooks, processedItems, onReorderBooks]
