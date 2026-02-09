@@ -201,7 +201,7 @@ export function DraggableBookSpine({
                   height: stackedWidth,
                   transform: [{ rotate: '-90deg' }],
                 }}
-                contentFit="contain"
+                contentFit="cover"
                 cachePolicy="memory-disk"
               />
             </View>

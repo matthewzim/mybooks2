@@ -581,7 +581,7 @@ function StackedBookSpine({
               height: width,
               transform: [{ rotate: '-90deg' }],
             }}
-            contentFit="contain"
+            contentFit="cover"
             cachePolicy="memory-disk"
           />
         </View>
