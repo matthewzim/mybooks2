@@ -145,13 +145,41 @@ export function EditableBookshelfGrid({
     Math.floor(((availableWidth / 5) * 3.6))
   );
 
+  // Find the maximum actual image height across all books (for proportional scaling)
+  const maxImageHeight = useMemo(() => {
+    let maxH = 0;
+    Object.values(imageDimensions).forEach((dims) => {
+      if (dims.height > maxH) maxH = dims.height;
+    });
+    return maxH;
+  }, [imageDimensions]);
+
+  // Compute display height for a single book proportional to its actual image height
+  const getBookDisplayHeight = useCallback(
+    (book: Book): number => {
+      const dims = imageDimensions[book.id];
+      if (dims && maxImageHeight > 0) {
+        const proportionalHeight = Math.round(
+          shelfHeight * (dims.height / maxImageHeight)
+        );
+        return Math.max(
+          BookSpineConstants.minHeight,
+          Math.min(BookSpineConstants.maxHeight, proportionalHeight)
+        );
+      }
+      return shelfHeight; // default for books without image dimensions
+    },
+    [imageDimensions, shelfHeight, maxImageHeight]
+  );
+
   // Compute display width for a single book based on its natural image dimensions
   const getBookDisplayWidth = useCallback(
     (book: Book): number => {
       const dims = imageDimensions[book.id];
       if (dims) {
+        const displayHeight = getBookDisplayHeight(book);
         const aspectRatio = dims.width / dims.height;
-        const naturalWidth = Math.round(shelfHeight * aspectRatio);
+        const naturalWidth = Math.round(displayHeight * aspectRatio);
         return Math.max(
           BookSpineConstants.minWidth,
           Math.min(BookSpineConstants.maxWidth, naturalWidth)
@@ -159,7 +187,7 @@ export function EditableBookshelfGrid({
       }
       return BookSpineConstants.width; // default 50px while loading or for placeholders
     },
-    [imageDimensions, shelfHeight]
+    [imageDimensions, getBookDisplayHeight]
   );
 
   // Group books by stack_id and organize into layout items with proper widths
@@ -194,6 +222,7 @@ export function EditableBookshelfGrid({
 
         const stackBooks = stackGroups.get(book.stack_id)!;
         const stackedBookWidth = getBookDisplayWidth(stackBooks[0]);
+        const stackBookHeight = getBookDisplayHeight(stackBooks[0]);
         const stackDisplayHeight =
           stackedBookWidth + (stackBooks.length - 1) * STACK_OFFSET;
 
@@ -201,7 +230,7 @@ export function EditableBookshelfGrid({
           position: Math.min(...stackBooks.map((b) => b.position)),
           layoutItem: {
             item: stackBooks,
-            width: shelfHeight, // Stacked books use height as width (rotated)
+            width: stackBookHeight, // Stacked books use their height as width (rotated)
             height: stackDisplayHeight,
             isStacked: true,
             isVerticalStack: true,
@@ -210,12 +239,13 @@ export function EditableBookshelfGrid({
       } else {
         const isStacked = book.is_stacked || false;
         const bookW = getBookDisplayWidth(book);
+        const bookH = getBookDisplayHeight(book);
         items.push({
           position: book.position,
           layoutItem: {
             item: book,
-            width: isStacked ? shelfHeight : bookW,
-            height: isStacked ? bookW : shelfHeight,
+            width: isStacked ? bookH : bookW,
+            height: isStacked ? bookW : bookH,
             isStacked,
             isVerticalStack: false,
             bookIndex: flatIdx,
@@ -229,7 +259,7 @@ export function EditableBookshelfGrid({
     items.sort((a, b) => a.position - b.position);
 
     return items.map((i) => i.layoutItem);
-  }, [localBooks, shelfHeight, getBookDisplayWidth]);
+  }, [localBooks, shelfHeight, getBookDisplayWidth, getBookDisplayHeight]);
 
   // Build ordered array of draggable books (single books only, matching flatIndex order)
   const draggableBooks = useMemo(() => {
@@ -469,12 +499,13 @@ export function EditableBookshelfGrid({
                   const stackKey =
                     stackBooks[0].stack_id || stackBooks[0].id;
                   const stackBookWidth = getBookDisplayWidth(stackBooks[0]);
+                  const stackBookHeight = getBookDisplayHeight(stackBooks[0]);
 
                   return (
                     <View key={stackKey}>
                       <VerticalBookStack
                         books={stackBooks}
-                        stackWidth={shelfHeight}
+                        stackWidth={stackBookHeight}
                         stackHeight={stackBookWidth}
                         onBookPress={onBookPress}
                         isEditing={isEditing}
@@ -487,7 +518,12 @@ export function EditableBookshelfGrid({
                 // Handle single book
                 const book = layoutItem.item as Book;
                 const currentIndex = flatIndex++;
-                const bookW = layoutItem.width;
+                // Layout dimensions (pre-swapped for stacked books)
+                const layoutW = layoutItem.width;
+                const layoutH = layoutItem.height;
+                // Upright dimensions (DraggableBookSpine handles stacking internally)
+                const uprightW = book.is_stacked ? layoutH : layoutW;
+                const uprightH = book.is_stacked ? layoutW : layoutH;
 
                 if (isEditing) {
                   return (
@@ -495,8 +531,8 @@ export function EditableBookshelfGrid({
                       key={book.id}
                       book={book}
                       index={currentIndex}
-                      width={bookW}
-                      height={shelfHeight}
+                      width={uprightW}
+                      height={uprightH}
                       isEditing={isEditing}
                       onDragStart={handleDragStart}
                       onDragEnd={handleDragEnd}
@@ -514,15 +550,15 @@ export function EditableBookshelfGrid({
                       <StackedBookSpine
                         book={book}
                         onPress={onBookPress}
-                        width={shelfHeight}
-                        height={bookW}
+                        width={layoutW}
+                        height={layoutH}
                       />
                     ) : (
                       <BookSpine
                         book={book}
                         onPress={onBookPress}
-                        width={bookW}
-                        height={shelfHeight}
+                        width={layoutW}
+                        height={layoutH}
                       />
                     )}
                   </View>
