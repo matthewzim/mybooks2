@@ -47,6 +47,7 @@ interface BookshelfGridProps {
 interface GridLayoutItem {
   item: Book | 'add';
   width: number;
+  height: number;
 }
 
 export function BookshelfGrid({
@@ -101,13 +102,41 @@ export function BookshelfGrid({
     };
   }, [books]);
 
+  // Find the maximum actual image height across all books (for proportional scaling)
+  const maxImageHeight = useMemo(() => {
+    let maxH = 0;
+    Object.values(imageDimensions).forEach((dims) => {
+      if (dims.height > maxH) maxH = dims.height;
+    });
+    return maxH;
+  }, [imageDimensions]);
+
+  // Compute display height for a single book proportional to its actual image height
+  const getBookDisplayHeight = useCallback(
+    (book: Book): number => {
+      const dims = imageDimensions[book.id];
+      if (dims && maxImageHeight > 0) {
+        const proportionalHeight = Math.round(
+          bookHeight * (dims.height / maxImageHeight)
+        );
+        return Math.max(
+          BookSpineConstants.minHeight,
+          Math.min(BookSpineConstants.maxHeight, proportionalHeight)
+        );
+      }
+      return bookHeight; // default for books without image dimensions
+    },
+    [imageDimensions, bookHeight, maxImageHeight]
+  );
+
   // Compute display width for a single book based on its natural image dimensions
   const getBookDisplayWidth = useCallback(
     (book: Book): number => {
       const dims = imageDimensions[book.id];
       if (dims) {
+        const displayHeight = getBookDisplayHeight(book);
         const aspectRatio = dims.width / dims.height;
-        const naturalWidth = Math.round(bookHeight * aspectRatio);
+        const naturalWidth = Math.round(displayHeight * aspectRatio);
         return Math.max(
           BookSpineConstants.minWidth,
           Math.min(BookSpineConstants.maxWidth, naturalWidth)
@@ -115,18 +144,19 @@ export function BookshelfGrid({
       }
       return BookSpineConstants.width; // default 50px
     },
-    [imageDimensions, bookHeight]
+    [imageDimensions, getBookDisplayHeight]
   );
 
-  // Build layout items with variable widths
+  // Build layout items with variable widths and heights
   const layoutItems: GridLayoutItem[] = useMemo(() => {
     const items: GridLayoutItem[] = books.map((book) => ({
       item: book,
       width: getBookDisplayWidth(book),
+      height: getBookDisplayHeight(book),
     }));
-    items.push({ item: 'add', width: BookSpineConstants.width });
+    items.push({ item: 'add', width: BookSpineConstants.width, height: bookHeight });
     return items;
-  }, [books, getBookDisplayWidth]);
+  }, [books, getBookDisplayWidth, getBookDisplayHeight, bookHeight]);
 
   // Group layout items into rows by accumulated width
   const rows = useMemo(() => {
@@ -190,14 +220,14 @@ export function BookshelfGrid({
           {shelfStyle === 'full' && <View style={styles.shelfBack} />}
 
           {/* Books row - no gaps between spines */}
-          <View style={[styles.booksRow, { minHeight: bookHeight }]}>
+          <View style={[styles.booksRow, { minHeight: row.length > 0 ? Math.max(bookHeight, ...row.map((li) => li.height)) : bookHeight }]}>
             {row.map((layoutItem) => {
               if (layoutItem.item === 'add') {
                 return (
                   <AddBookButton
                     key="add-button"
                     width={layoutItem.width}
-                    height={bookHeight}
+                    height={layoutItem.height}
                     onPress={onAddBook}
                   />
                 );
@@ -210,7 +240,7 @@ export function BookshelfGrid({
                     book={book}
                     onPress={onBookPress}
                     width={layoutItem.width}
-                    height={bookHeight}
+                    height={layoutItem.height}
                   />
                 </View>
               );
