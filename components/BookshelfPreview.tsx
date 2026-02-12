@@ -16,8 +16,8 @@ import type { Bookshelf, Book } from '@/types';
 
 // Scaled-down dimensions for the preview shelf
 const PREVIEW_BOOK_WIDTH = 26;
-const PREVIEW_BOOK_HEIGHT = 70;
-const PREVIEW_SHELF_THICKNESS = 8;
+const PREVIEW_BOOK_HEIGHT = 100;
+const PREVIEW_SHELF_THICKNESS = 10;
 const PREVIEW_BORDER_WIDTH = 3;
 
 interface BookshelfPreviewProps {
