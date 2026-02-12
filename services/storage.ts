@@ -363,6 +363,54 @@ function extractStoragePathFromUrl(
   }
 }
 
+export async function getCoverImageUrl(
+  imageUrlOrPath: string | null | undefined
+): Promise<string | null> {
+  if (!imageUrlOrPath) {
+    return null;
+  }
+
+  const isFullUrl =
+    imageUrlOrPath.startsWith('http://') || imageUrlOrPath.startsWith('https://');
+
+  if (isFullUrl) {
+    const extractedPath = extractStoragePathFromUrl(
+      imageUrlOrPath,
+      STORAGE_BUCKETS.BOOK_COVERS
+    );
+
+    if (!extractedPath) {
+      return imageUrlOrPath;
+    }
+
+    const { data, error } = await supabase.storage
+      .from(STORAGE_BUCKETS.BOOK_COVERS)
+      .createSignedUrl(extractedPath, 3600);
+
+    if (!error && data?.signedUrl) {
+      return data.signedUrl;
+    }
+
+    return imageUrlOrPath;
+  }
+
+  const { data: signedData, error: signedError } = await supabase.storage
+    .from(STORAGE_BUCKETS.BOOK_COVERS)
+    .createSignedUrl(imageUrlOrPath, 3600);
+
+  if (!signedError && signedData?.signedUrl) {
+    return signedData.signedUrl;
+  }
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage
+    .from(STORAGE_BUCKETS.BOOK_COVERS)
+    .getPublicUrl(imageUrlOrPath);
+
+  return publicUrl;
+}
+
 export async function getSpineImageUrl(
   imageUrlOrPath: string | null | undefined
 ): Promise<string | null> {
