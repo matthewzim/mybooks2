@@ -41,8 +41,7 @@ function getBookColor(title: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-// Vertical offset between books in the stack
-const STACK_OFFSET = 4;
+// No offset — each book sits flush on the previous one (no overlap, no gap)
 
 export function VerticalBookStack({
   books,
@@ -59,14 +58,14 @@ export function VerticalBookStack({
     (a, b) => (a.stack_position || 0) - (b.stack_position || 0)
   );
 
-  // Calculate total height of the stack
-  const totalHeight = stackHeight + (sortedBooks.length - 1) * STACK_OFFSET;
+  // Calculate total height of the stack (each book adds exactly stackHeight)
+  const totalHeight = sortedBooks.length * stackHeight;
 
   return (
     <View style={[styles.container, { width: stackWidth, height: totalHeight }]}>
       {sortedBooks.map((book, index) => {
         // Books higher in stack (higher stack_position) have higher bottom offset
-        const bottomOffset = index * STACK_OFFSET;
+        const bottomOffset = index * stackHeight;
         const isTopBook = index === sortedBooks.length - 1;
 
         return (
