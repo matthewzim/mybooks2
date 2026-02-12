@@ -373,6 +373,16 @@ export function EditableBookshelfGrid({
 
       if (fromIndex === toIndex) return;
 
+      const draggedBook = draggableBooks[fromIndex];
+      const targetBook = draggableBooks[toIndex];
+
+      // If both books are stacked (laying flat), create a vertical stack pile
+      if (draggedBook?.is_stacked && targetBook?.is_stacked && onStackBooks) {
+        const success = await onStackBooks(draggedBook.id, targetBook.id);
+        if (success) return;
+        // If stacking failed, fall through to regular reorder
+      }
+
       // Reorder within the draggable books array (maps 1:1 with flatIndex)
       const newDraggable = [...draggableBooks];
       const [movedBook] = newDraggable.splice(fromIndex, 1);
@@ -402,7 +412,7 @@ export function EditableBookshelfGrid({
       const orderedIds = updatedBooks.map((book) => book.id);
       await onReorderBooks(orderedIds);
     },
-    [draggableBooks, processedItems, onReorderBooks]
+    [draggableBooks, processedItems, onReorderBooks, onStackBooks]
   );
 
   // Handle stack toggle
