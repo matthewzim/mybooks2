@@ -1,15 +1,24 @@
 /**
  * BookshelfPreview Component
+ *
+ * Displays a compact preview of a bookshelf on the My Library page.
+ * Shows the first row of books with the chosen shelf layout style.
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { Spacing, BorderRadius, Typography } from '@/constants/theme';
+import { Spacing, BorderRadius, Typography, BookshelfDimensions } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import type { Bookshelf, Book } from '@/types';
+
+// Scaled-down dimensions for the preview shelf
+const PREVIEW_BOOK_WIDTH = 26;
+const PREVIEW_BOOK_HEIGHT = 70;
+const PREVIEW_SHELF_THICKNESS = 8;
+const PREVIEW_BORDER_WIDTH = 3;
 
 interface BookshelfPreviewProps {
   bookshelf: Bookshelf;
@@ -20,6 +29,16 @@ interface BookshelfPreviewProps {
 
 export function BookshelfPreview({ bookshelf, books, onPress, onDelete }: BookshelfPreviewProps) {
   const { colors } = useTheme();
+  const { width: screenWidth } = useWindowDimensions();
+  const shelfStyle = bookshelf.shelf_style || 'full';
+  const totalBooks = books.length;
+
+  // Calculate how many books fit in one preview row
+  const cardInnerWidth = screenWidth - Spacing.md * 4; // 2x margin + 2x padding
+  const shelfInnerWidth =
+    shelfStyle === 'full' ? cardInnerWidth - PREVIEW_BORDER_WIDTH * 2 : cardInnerWidth;
+  const booksPerRow = Math.max(1, Math.floor(shelfInnerWidth / PREVIEW_BOOK_WIDTH));
+  const firstRowBooks = books.slice(0, booksPerRow);
 
   const handleDelete = () => {
     Alert.alert(
@@ -31,9 +50,6 @@ export function BookshelfPreview({ bookshelf, books, onPress, onDelete }: Booksh
       ]
     );
   };
-
-  const previewBooks = books.slice(0, 4);
-  const totalBooks = books.length;
 
   return (
     <Pressable
@@ -59,7 +75,12 @@ export function BookshelfPreview({ bookshelf, books, onPress, onDelete }: Booksh
 
         <View style={styles.headerActions}>
           {onDelete && (
-            <Pressable style={styles.iconButton} onPress={handleDelete} hitSlop={8} accessibilityLabel="Delete bookshelf">
+            <Pressable
+              style={styles.iconButton}
+              onPress={handleDelete}
+              hitSlop={8}
+              accessibilityLabel="Delete bookshelf"
+            >
               <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
             </Pressable>
           )}
@@ -67,18 +88,39 @@ export function BookshelfPreview({ bookshelf, books, onPress, onDelete }: Booksh
         </View>
       </View>
 
-      <View style={styles.booksRow}>
-        {previewBooks.length > 0 ? (
-          previewBooks.map((book) => <BookPreviewSpine key={book.id} book={book} />)
-        ) : (
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No books yet</Text>
-        )}
+      {/* Shelf row preview with chosen shelf layout */}
+      <View
+        style={[
+          styles.shelfRow,
+          shelfStyle === 'full' && {
+            borderWidth: PREVIEW_BORDER_WIDTH,
+            borderColor: BookshelfDimensions.shelfColor,
+          },
+        ]}
+      >
+        {shelfStyle === 'full' && <View style={styles.shelfBack} />}
 
-        {totalBooks > 4 && (
-          <View style={[styles.moreIndicator, { borderColor: colors.border }]}>
-            <Text style={[styles.moreText, { color: colors.textSecondary }]}>+{totalBooks - 4}</Text>
-          </View>
-        )}
+        <View style={[styles.booksRow, { minHeight: PREVIEW_BOOK_HEIGHT }]}>
+          {firstRowBooks.length > 0 ? (
+            firstRowBooks.map((book) => <BookPreviewSpine key={book.id} book={book} />)
+          ) : (
+            <View style={styles.emptyShelf}>
+              <Text
+                style={[
+                  styles.emptyText,
+                  {
+                    color:
+                      shelfStyle === 'full' ? colors.textOnDarkMuted : colors.textSecondary,
+                  },
+                ]}
+              >
+                No books yet
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {shelfStyle === 'bottom' && <View style={styles.shelfSurface} />}
       </View>
     </Pressable>
   );
@@ -103,7 +145,11 @@ function BookPreviewSpine({ book }: BookPreviewSpineProps) {
 
   return (
     <View style={[styles.bookSpine, { backgroundColor: hasImage ? undefined : getBookColor(book.title) }]}>
-      {hasImage ? <Image source={{ uri: spineImageUrl }} style={styles.bookImage} contentFit="cover" /> : <View style={styles.bookPlaceholder} />}
+      {hasImage ? (
+        <Image source={{ uri: spineImageUrl }} style={styles.bookImage} contentFit="cover" />
+      ) : (
+        <View style={styles.bookPlaceholder} />
+      )}
     </View>
   );
 }
@@ -123,7 +169,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   headerLeft: {
     flex: 1,
@@ -145,16 +191,48 @@ const styles = StyleSheet.create({
   iconButton: {
     padding: Spacing.xs,
   },
+  // Shelf row styles
+  shelfRow: {
+    overflow: 'hidden',
+  },
+  shelfBack: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: BookshelfDimensions.backColor,
+  },
   booksRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: Spacing.xs,
-    minHeight: 56,
+    justifyContent: 'flex-start',
+    zIndex: 1,
+    flexWrap: 'nowrap',
   },
+  shelfSurface: {
+    height: PREVIEW_SHELF_THICKNESS,
+    backgroundColor: BookshelfDimensions.shelfColor,
+    borderRadius: 2,
+    marginTop: -1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 4,
+  },
+  emptyShelf: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: Typography.sizes.sm,
+  },
+  // Book spine styles
   bookSpine: {
-    width: 24,
-    height: 52,
-    borderRadius: 4,
+    width: PREVIEW_BOOK_WIDTH,
+    height: PREVIEW_BOOK_HEIGHT,
     overflow: 'hidden',
   },
   bookImage: {
@@ -163,21 +241,6 @@ const styles = StyleSheet.create({
   },
   bookPlaceholder: {
     flex: 1,
-  },
-  emptyText: {
-    fontSize: Typography.sizes.sm,
-  },
-  moreIndicator: {
-    width: 24,
-    height: 52,
-    borderRadius: 4,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  moreText: {
-    fontSize: Typography.sizes.xs,
-    fontWeight: Typography.weights.medium,
   },
 });
 
