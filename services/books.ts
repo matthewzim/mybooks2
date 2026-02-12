@@ -38,6 +38,7 @@ function toBook(row: any): Book {
     title: book.title ?? row.title,
     author: book.author ?? row.author,
     image_url: book.image_url ?? row.image_url ?? null,
+    cover_image_url: book.cover_image_url ?? row.cover_image_url ?? null,
     isbn: book.isbn ?? row.isbn ?? null,
     uploaded_by_user_id: book.uploaded_by_user_id ?? row.uploaded_by_user_id,
     is_community: book.is_community ?? row.is_community ?? false,
@@ -218,6 +219,7 @@ class BooksService {
       if (updates.title !== undefined) bookUpdates.title = updates.title;
       if (updates.author !== undefined) bookUpdates.author = updates.author;
       if (updates.image_url !== undefined) bookUpdates.image_url = updates.image_url;
+      if (updates.cover_image_url !== undefined) bookUpdates.cover_image_url = updates.cover_image_url;
       if (updates.isbn !== undefined) bookUpdates.isbn = updates.isbn;
 
       // Per-user bookshelf_item fields

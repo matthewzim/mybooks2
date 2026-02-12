@@ -137,6 +137,63 @@ class StorageService {
   }
 
   /**
+   * Upload a book cover image fetched from a remote URL to Supabase Storage.
+   *
+   * @param remoteUrl - Remote image URL (e.g. from Google Books API)
+   * @param bookId - Global book ID used to organise the file path
+   * @returns Public URL of the uploaded cover image
+   */
+  async uploadBookCover(
+    remoteUrl: string,
+    bookId: string
+  ): Promise<ApiResponse<string>> {
+    try {
+      // Download the image to a temporary local file
+      const tmpPath = `${FileSystem.cacheDirectory}cover_${bookId}_${Date.now()}.jpg`;
+      const downloadResult = await FileSystem.downloadAsync(remoteUrl, tmpPath);
+
+      if (downloadResult.status !== 200) {
+        throw new Error(`Failed to download cover image (HTTP ${downloadResult.status})`);
+      }
+
+      // Read the downloaded file as base64
+      const base64 = await FileSystem.readAsStringAsync(tmpPath, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      const fileName = `${bookId}/cover.jpg`;
+      const contentType = 'image/jpeg';
+
+      // Upload to the book-covers bucket (upsert so re-fetches overwrite)
+      const { data, error } = await supabase.storage
+        .from(STORAGE_BUCKETS.BOOK_COVERS)
+        .upload(fileName, decode(base64), {
+          contentType,
+          upsert: true,
+        });
+
+      if (error) throw error;
+
+      // Get the public URL
+      const {
+        data: { publicUrl },
+      } = supabase.storage
+        .from(STORAGE_BUCKETS.BOOK_COVERS)
+        .getPublicUrl(data.path);
+
+      // Clean up temp file (fire-and-forget)
+      FileSystem.deleteAsync(tmpPath, { idempotent: true }).catch(() => {});
+
+      return { data: publicUrl, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: { message: handleSupabaseError(error) },
+      };
+    }
+  }
+
+  /**
    * Delete a file from storage
    *
    * @param bucket - Storage bucket name

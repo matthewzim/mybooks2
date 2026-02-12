@@ -54,6 +54,7 @@ export interface DbBook {
   title: string;
   author: string;
   image_url: string | null;
+  cover_image_url: string | null;
   uploaded_by_user_id: string;
   is_community: boolean;
   isbn: string | null;
@@ -91,6 +92,7 @@ export interface Book {
   title: string;
   author: string;
   image_url: string | null;
+  cover_image_url: string | null;
   shelf_id: string;
   position: number;
   review: string | null;
@@ -181,6 +183,7 @@ export interface UpdateBookInput {
   title?: string;
   author?: string;
   image_url?: string;
+  cover_image_url?: string | null;
   shelf_id?: string;
   position?: number;
   review?: string | null;
