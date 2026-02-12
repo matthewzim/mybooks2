@@ -53,8 +53,7 @@ interface EditableBookshelfGridProps {
   onUnstackBook?: (book: Book) => Promise<boolean>;
 }
 
-// Vertical offset between books in a stack
-const STACK_OFFSET = 4;
+// No offset — each stacked book sits flush on the previous one
 
 // Type for shelf items - can be a book, a vertical stack, or "add" button
 type ShelfItem = Book | Book[] | 'add';
@@ -226,8 +225,7 @@ export function EditableBookshelfGrid({
         const stackBooks = stackGroups.get(book.stack_id)!;
         const stackedBookWidth = getBookDisplayWidth(stackBooks[0]);
         const stackBookHeight = getBookDisplayHeight(stackBooks[0]);
-        const stackDisplayHeight =
-          stackedBookWidth + (stackBooks.length - 1) * STACK_OFFSET;
+        const stackDisplayHeight = stackBooks.length * stackedBookWidth;
 
         items.push({
           position: Math.min(...stackBooks.map((b) => b.position)),
