@@ -91,6 +91,7 @@ export function EditableBookshelfGrid({
 }: EditableBookshelfGridProps) {
   const { colors } = useTheme();
   const fullShelfBorderWidth = BookshelfDimensions.shelfThickness / 2;
+  const fullShelfMargin = Spacing.xs;
   const { width: screenWidth } = useWindowDimensions();
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [localBooks, setLocalBooks] = useState<Book[]>(books);
@@ -139,7 +140,9 @@ export function EditableBookshelfGrid({
   }, [localBooks]);
 
   // Calculate shelf height (fixed for all shelves)
-  const availableWidth = screenWidth - Spacing.md * 2;
+  const availableWidth = shelfStyle === 'full'
+    ? screenWidth - (fullShelfMargin * 2) - (fullShelfBorderWidth * 2)
+    : screenWidth - Spacing.md * 2;
   const shelfHeight = Math.min(
     BookSpineConstants.maxHeight,
     Math.floor(((availableWidth / 5) * 3.6))
@@ -286,7 +289,7 @@ export function EditableBookshelfGrid({
       if (!layoutItem.isVerticalStack && layoutItem.item !== 'add') {
         positions.push({
           x: currentX,
-          y: currentRowIndex * (shelfHeight + Spacing.lg),
+          y: currentRowIndex * (shelfHeight + (shelfStyle === 'full' ? fullShelfBorderWidth : Spacing.lg)),
           width: layoutItem.width,
           rowIndex: currentRowIndex,
         });
@@ -297,7 +300,7 @@ export function EditableBookshelfGrid({
     });
 
     return positions;
-  }, [processedItems, availableWidth, shelfHeight]);
+  }, [processedItems, availableWidth, shelfHeight, shelfStyle, fullShelfBorderWidth]);
 
   // Group processed items into rows
   const rows = useMemo(() => {
@@ -464,7 +467,11 @@ export function EditableBookshelfGrid({
               shelfStyle === 'full' && {
                 borderWidth: fullShelfBorderWidth,
                 borderColor: BookshelfDimensions.shelfColor,
-                borderRadius: 4,
+                borderRadius: 0,
+                marginBottom: 0,
+                paddingHorizontal: 0,
+                marginHorizontal: fullShelfMargin,
+                ...(rowIndex > 0 && { borderTopWidth: 0 }),
               },
             ]}
           >
