@@ -64,8 +64,12 @@ export function BookshelfGrid({
     Record<string, { width: number; height: number }>
   >({});
 
-  // Calculate shelf height (fixed for all shelves)
-  const availableWidth = screenWidth - Spacing.md * 2;
+  // Calculate shelf layout
+  const fullShelfMargin = Spacing.xs;
+  const fullShelfBorderWidth = BookshelfDimensions.shelfThickness / 2;
+  const availableWidth = shelfStyle === 'full'
+    ? screenWidth - (fullShelfMargin * 2) - (fullShelfBorderWidth * 2)
+    : screenWidth - Spacing.md * 2;
   const bookHeight = Math.min(
     Math.floor((availableWidth / 5) * 3.6),
     BookSpineConstants.maxHeight
@@ -210,9 +214,13 @@ export function BookshelfGrid({
           style={[
             styles.shelfContainer,
             shelfStyle === 'full' && {
-              borderWidth: BookshelfDimensions.shelfThickness / 2,
+              borderWidth: fullShelfBorderWidth,
               borderColor: BookshelfDimensions.shelfColor,
-              borderRadius: 4,
+              borderRadius: 0,
+              marginBottom: 0,
+              paddingHorizontal: 0,
+              marginHorizontal: fullShelfMargin,
+              ...(rowIndex > 0 && { borderTopWidth: 0 }),
             },
           ]}
         >
