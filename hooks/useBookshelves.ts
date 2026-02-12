@@ -57,20 +57,17 @@ export function useBookshelves(): UseBookshelvesReturn {
     setError(null);
 
     try {
-      const result = await bookshelvesService.getBookshelvesWithPreviews();
+      const result = await bookshelvesService.getBookshelvesWithPreviews(null);
 
       if (result.error) {
         setError(result.error.message);
         setLoadingState('error');
       } else {
-        const previewShelves = result.data || [];
-        setBookshelves(previewShelves);
+        const shelves = result.data || [];
+        setBookshelves(shelves);
 
         // Widget gets full shelf snapshots so all widget sizes can render enough spines.
-        const fullShelfResult = await bookshelvesService.getBookshelvesWithPreviews(null);
-        if (!fullShelfResult.error && fullShelfResult.data) {
-          await widgetManager.syncLibrarySnapshot(fullShelfResult.data);
-        }
+        await widgetManager.syncLibrarySnapshot(shelves);
 
         setLoadingState('success');
       }
