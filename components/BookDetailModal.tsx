@@ -24,6 +24,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { booksService } from '@/services/books';
 import { googleBooksService } from '@/services/googleBooks';
+import { getCoverImageUrl } from '@/services/storage';
 import { Button, Rating } from '@/components/ui';
 import {
   BorderRadius,
@@ -96,13 +97,16 @@ export function BookDetailModal({
   useEffect(() => {
     if (!visible || !book) return;
 
-    // Already have a cached cover — nothing to do
+    let cancelled = false;
+
+    // Already have a cached cover — resolve its URL (handles signed URLs for private buckets)
     if (book.cover_image_url) {
-      setCoverImageUrl(book.cover_image_url);
+      getCoverImageUrl(book.cover_image_url).then((resolved) => {
+        if (!cancelled) setCoverImageUrl(resolved);
+      });
       return;
     }
 
-    let cancelled = false;
     setIsCoverLoading(true);
 
     googleBooksService
@@ -111,10 +115,11 @@ export function BookDetailModal({
         title: book.title,
         author: book.author,
       })
-      .then((result) => {
+      .then(async (result) => {
         if (cancelled) return;
         if (result.data) {
-          setCoverImageUrl(result.data);
+          const resolved = await getCoverImageUrl(result.data);
+          if (!cancelled) setCoverImageUrl(resolved);
         }
       })
       .finally(() => {
@@ -385,6 +390,7 @@ export function BookDetailModal({
                           style={styles.coverImage}
                           contentFit="cover"
                           transition={200}
+                          onError={() => setCoverImageUrl(null)}
                         />
                       ) : isCoverLoading ? (
                         <View style={[styles.coverImage, styles.thumbnailPlaceholder, { backgroundColor: bookColor }]}>

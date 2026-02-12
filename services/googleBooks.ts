@@ -42,7 +42,7 @@ class GoogleBooksService {
     author: string
   ): Promise<string | null> {
     try {
-      const query = `intitle:${title}+inauthor:${author}`;
+      const query = `intitle:${title} inauthor:${author}`;
       const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=5&fields=totalItems,items(id,volumeInfo/title,volumeInfo/authors,volumeInfo/imageLinks)`;
 
       const response = await fetch(url);
