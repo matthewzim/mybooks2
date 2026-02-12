@@ -66,6 +66,7 @@ export const supabase: SupabaseClient<Database> = createClient<Database>(
  */
 export const STORAGE_BUCKETS = {
   BOOK_SPINES: 'book-spines',
+  BOOK_COVERS: 'book-covers',
   AVATARS: 'avatars',
 } as const;
 

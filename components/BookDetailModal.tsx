@@ -23,6 +23,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { booksService } from '@/services/books';
+import { googleBooksService } from '@/services/googleBooks';
 import { Button, Rating } from '@/components/ui';
 import {
   BorderRadius,
@@ -72,6 +73,9 @@ export function BookDetailModal({
   const [review, setReview] = useState('');
   const [rating, setRating] = useState(0);
 
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [isCoverLoading, setIsCoverLoading] = useState(false);
+
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const cardTranslateY = useRef(new Animated.Value(24)).current;
@@ -84,8 +88,43 @@ export function BookDetailModal({
       setReview(book.review || '');
       setRating(book.rating || 0);
       setIsEditing(false);
+      setCoverImageUrl(book.cover_image_url || null);
     }
   }, [book]);
+
+  // Fetch cover image from Google Books when the modal opens
+  useEffect(() => {
+    if (!visible || !book) return;
+
+    // Already have a cached cover — nothing to do
+    if (book.cover_image_url) {
+      setCoverImageUrl(book.cover_image_url);
+      return;
+    }
+
+    let cancelled = false;
+    setIsCoverLoading(true);
+
+    googleBooksService
+      .fetchAndCacheCover({
+        book_id: book.book_id,
+        title: book.title,
+        author: book.author,
+      })
+      .then((result) => {
+        if (cancelled) return;
+        if (result.data) {
+          setCoverImageUrl(result.data);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsCoverLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, book]);
 
   useEffect(() => {
     if (visible && book) {
@@ -339,11 +378,22 @@ export function BookDetailModal({
               ) : (
                 <>
                   <View style={styles.topSection}>
-                    <View style={[styles.thumbnailShell, { backgroundColor: colors.bookBase }]}>
-                      {book.image_url ? (
-                        <Image source={{ uri: book.image_url }} style={styles.thumbnail} contentFit="cover" />
+                    <View style={[styles.coverShell, { backgroundColor: colors.bookBase }]}>
+                      {coverImageUrl ? (
+                        <Image
+                          source={{ uri: coverImageUrl }}
+                          style={styles.coverImage}
+                          contentFit="cover"
+                          transition={200}
+                        />
+                      ) : isCoverLoading ? (
+                        <View style={[styles.coverImage, styles.thumbnailPlaceholder, { backgroundColor: bookColor }]}>
+                          <Text style={[styles.coverLoadingText, { color: colors.textOnDark }]}>Loading cover…</Text>
+                        </View>
+                      ) : book.image_url ? (
+                        <Image source={{ uri: book.image_url }} style={styles.coverImage} contentFit="cover" />
                       ) : (
-                        <View style={[styles.thumbnail, styles.thumbnailPlaceholder, { backgroundColor: bookColor }]}>
+                        <View style={[styles.coverImage, styles.thumbnailPlaceholder, { backgroundColor: bookColor }]}>
                           <Text style={[styles.placeholderInitial, { color: colors.textOnDark }]}>
                             {book.title.charAt(0).toUpperCase()}
                           </Text>
@@ -443,15 +493,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.md,
   },
-  thumbnailShell: {
+  coverShell: {
     padding: Spacing.xs,
     borderRadius: BorderRadius.md,
     marginBottom: Spacing.md,
   },
-  thumbnail: {
-    width: 92,
-    height: 138,
+  coverImage: {
+    width: 128,
+    height: 192,
     borderRadius: BorderRadius.sm,
+  },
+  coverLoadingText: {
+    fontSize: Typography.sizes.xs,
+    textAlign: 'center',
   },
   thumbnailPlaceholder: {
     justifyContent: 'center',
