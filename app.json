@@ -47,6 +47,22 @@
       "expo-router",
       "expo-secure-store",
       [
+        "expo-widgets",
+        {
+          "ios": {
+            "widgets": [
+              {
+                "name": "BookshelfWidget",
+                "src": "./widgets/BookshelfWidget.tsx",
+                "displayName": "My Bookshelf",
+                "description": "Show one shelf from your library.",
+                "supportedFamilies": ["systemSmall", "systemMedium", "systemLarge"]
+              }
+            ]
+          }
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "Allow Virtual Library to access your camera to scan book spines."
