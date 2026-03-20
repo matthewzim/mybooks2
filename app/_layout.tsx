@@ -130,6 +130,16 @@ function RootLayoutContent() {
             presentation: 'modal',
           }}
         />
+
+        {/* Onboarding flow */}
+        <Stack.Screen
+          name="onboarding"
+          options={{
+            headerShown: false,
+            presentation: 'fullScreenModal',
+            gestureEnabled: false,
+          }}
+        />
       </Stack>
     </>
   );
