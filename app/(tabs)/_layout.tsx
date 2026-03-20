@@ -8,6 +8,7 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { BorderRadius, Spacing, Typography, getFontFamily } from '@/constants/theme';
 
 export default function TabsLayout() {
   const { colors } = useTheme();
@@ -23,6 +24,16 @@ export default function TabsLayout() {
           borderTopWidth: 1,
           elevation: 0,
           shadowOpacity: 0,
+          height: 64,
+          paddingTop: Spacing.xs,
+          paddingBottom: Spacing.xs,
+        },
+        tabBarItemStyle: {
+          borderRadius: BorderRadius.lg,
+        },
+        tabBarLabelStyle: {
+          fontFamily: getFontFamily('medium'),
+          fontSize: Typography.sizes.xs,
         },
         headerStyle: {
           backgroundColor: colors.background,
@@ -30,7 +41,7 @@ export default function TabsLayout() {
         headerTintColor: colors.text,
         headerShadowVisible: false,
         headerTitleStyle: {
-          fontWeight: '600',
+          fontFamily: getFontFamily('semibold'),
         },
       }}
     >

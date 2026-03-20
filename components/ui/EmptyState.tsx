@@ -9,7 +9,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, Typography, ThemeColors } from '@/constants/theme';
+import { BorderRadius, Colors, Spacing, Typography, ThemeColors, getFontFamily } from '@/constants/theme';
 import { Button } from './Button';
 
 interface EmptyStateProps {
@@ -32,13 +32,15 @@ export function EmptyState({
   const themeColors = colors || Colors;
 
   return (
-    <View style={styles.container}>
-      <Ionicons name={icon} size={64} color={themeColors.textLight} />
+    <View style={[styles.container, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+      <View style={[styles.iconWrap, { backgroundColor: themeColors.backgroundDark }]}>
+        <Ionicons name={icon} size={32} color={themeColors.primary} />
+      </View>
       <Text style={[styles.title, { color: themeColors.text }]}>{title}</Text>
       {description && <Text style={[styles.description, { color: themeColors.textSecondary }]}>{description}</Text>}
       {actionLabel && onAction && (
         <View style={styles.buttonContainer}>
-          <Button title={actionLabel} onPress={onAction} colors={themeColors} />
+          <Button title={actionLabel} onPress={onAction} colors={themeColors} fullWidth />
         </View>
       )}
     </View>
@@ -47,25 +49,36 @@ export function EmptyState({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing.xl,
+    marginHorizontal: Spacing.md,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    gap: Spacing.md,
+  },
+  iconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     fontSize: Typography.sizes.xl,
-    fontWeight: Typography.weights.semibold,
-    marginTop: Spacing.lg,
+    fontFamily: getFontFamily('semibold'),
     textAlign: 'center',
   },
   description: {
     fontSize: Typography.sizes.md,
-    marginTop: Spacing.sm,
+    fontFamily: getFontFamily('regular'),
     textAlign: 'center',
     maxWidth: 280,
+    lineHeight: 20,
   },
   buttonContainer: {
-    marginTop: Spacing.xl,
+    marginTop: Spacing.xs,
+    width: '100%',
   },
 });
 

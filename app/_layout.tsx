@@ -18,9 +18,11 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Platform } from 'react-native';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { stripeService } from '@/services/stripe';
+import { getFontFamily } from '@/constants/theme';
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -41,7 +43,7 @@ function RootLayoutContent() {
           },
           headerTintColor: colors.textInverse,
           headerTitleStyle: {
-            fontWeight: '600',
+            fontFamily: getFontFamily('semibold'),
           },
           contentStyle: {
             backgroundColor: colors.background,
@@ -134,11 +136,7 @@ function RootLayoutContent() {
 }
 
 export default function RootLayout() {
-  // Load custom fonts (optional - using system fonts by default)
-  const [fontsLoaded] = useFonts({
-    // Add custom fonts here if needed
-    // 'CustomFont-Regular': require('@/assets/fonts/CustomFont-Regular.ttf'),
-  });
+  const [fontsLoaded] = useFonts({});
 
   // Hide splash screen when fonts are loaded
   useEffect(() => {
@@ -146,6 +144,46 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      return;
+    }
+
+    const linkDefinitions = [
+      {
+        id: 'plus-jakarta-preconnect',
+        rel: 'preconnect',
+        href: 'https://fonts.googleapis.com',
+      },
+      {
+        id: 'plus-jakarta-preconnect-gstatic',
+        rel: 'preconnect',
+        href: 'https://fonts.gstatic.com',
+        crossOrigin: 'anonymous',
+      },
+      {
+        id: 'plus-jakarta-stylesheet',
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap',
+      },
+    ];
+
+    linkDefinitions.forEach(({ id, ...attributes }) => {
+      if (document.getElementById(id)) {
+        return;
+      }
+
+      const link = document.createElement('link');
+      link.id = id;
+
+      Object.entries(attributes).forEach(([key, value]) => {
+        link.setAttribute(key, value);
+      });
+
+      document.head.appendChild(link);
+    });
+  }, []);
 
   // Show nothing while fonts are loading
   if (!fontsLoaded) {

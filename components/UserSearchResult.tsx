@@ -8,7 +8,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, Typography, BorderRadius } from '@/constants/theme';
+import { Spacing, Typography, BorderRadius, getFontFamily } from '@/constants/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface UserSearchResultProps {
   user: {
@@ -19,32 +20,30 @@ interface UserSearchResultProps {
 }
 
 export function UserSearchResult({ user, onPress }: UserSearchResultProps) {
+  const { colors } = useTheme();
   const displayName = user.name || 'Anonymous User';
 
   return (
     <Pressable
       style={({ pressed }) => [
         styles.container,
-        pressed && styles.pressed,
+        {
+          backgroundColor: pressed ? colors.backgroundDark : colors.card,
+          borderColor: colors.border,
+        },
       ]}
       onPress={() => onPress(user)}
     >
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>
-          {displayName.charAt(0).toUpperCase()}
-        </Text>
+      <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+        <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase()}</Text>
       </View>
       <View style={styles.info}>
-        <Text style={styles.name} numberOfLines={1}>
+        <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
           {displayName}
         </Text>
-        <Text style={styles.hint}>View public bookshelves</Text>
+        <Text style={[styles.hint, { color: colors.textSecondary }]}>View public bookshelves</Text>
       </View>
-      <Ionicons
-        name="chevron-forward"
-        size={20}
-        color={Colors.textSecondary}
-      />
+      <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
     </Pressable>
   );
 }
@@ -55,23 +54,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
-    backgroundColor: Colors.background,
-  },
-  pressed: {
-    backgroundColor: Colors.backgroundDark,
+    borderWidth: 1,
+    borderRadius: BorderRadius.lg,
   },
   avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
     fontSize: Typography.sizes.lg,
-    fontWeight: Typography.weights.bold,
-    color: Colors.textInverse,
+    fontFamily: getFontFamily('bold'),
+    color: '#ffffff',
   },
   info: {
     flex: 1,
@@ -79,13 +75,12 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.semibold,
-    color: Colors.text,
+    fontFamily: getFontFamily('semibold'),
   },
   hint: {
     fontSize: Typography.sizes.sm,
-    color: Colors.textSecondary,
-    marginTop: 2,
+    fontFamily: getFontFamily('regular'),
+    marginTop: Spacing.xxs,
   },
 });
 

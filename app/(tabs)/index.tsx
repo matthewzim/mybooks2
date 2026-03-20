@@ -21,7 +21,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { BookshelfPreview } from '@/components/BookshelfPreview';
 import { LoadingView, EmptyState } from '@/components/ui';
 import { FREE_TIER_LIMITS } from '@/services/stripe';
-import { Spacing, BorderRadius, Typography } from '@/constants/theme';
+import { Spacing, BorderRadius, Typography, getFontFamily } from '@/constants/theme';
 import type { Bookshelf } from '@/types';
 
 export default function HomeScreen() {
@@ -85,10 +85,23 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Text style={[styles.heading, { color: colors.text }]}>My Library</Text>
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>
-            {bookshelves.length} {bookshelves.length === 1 ? 'bookshelf' : 'bookshelves'}
-          </Text>
+          <View style={styles.headerText}>
+            <Text style={[styles.eyebrow, { color: colors.primary }]}>Your shelves</Text>
+            <Text style={[styles.heading, { color: colors.text }]}>My Library</Text>
+            <Text style={[styles.subheading, { color: colors.textSecondary }]}>
+              {bookshelves.length === 0
+                ? 'Build a reading space that feels intentional from the first shelf onward.'
+                : `${bookshelves.length} ${bookshelves.length === 1 ? 'bookshelf' : 'bookshelves'} organized and ready to explore.`}
+            </Text>
+          </View>
+
+          <Pressable
+            style={[styles.headerBadge, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={handleAddBookshelf}
+          >
+            <Ionicons name="add" size={16} color={colors.primary} />
+            <Text style={[styles.headerBadgeText, { color: colors.primary }]}>New</Text>
+          </Pressable>
         </View>
 
         {bookshelves.length > 0 ? (
@@ -119,7 +132,7 @@ export default function HomeScreen() {
             style={({ pressed }) => [
               styles.addButton,
               { backgroundColor: colors.card, borderColor: colors.border },
-              pressed && { opacity: 0.85 },
+              pressed && { opacity: 0.92 },
             ]}
             onPress={handleAddBookshelf}
           >
@@ -143,23 +156,51 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: Spacing.md,
+    paddingBottom: Spacing.xl,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.sm,
     paddingBottom: Spacing.md,
-    gap: 6,
+    gap: Spacing.md,
+  },
+  headerText: {
+    flex: 1,
+    gap: Spacing.xs,
+  },
+  eyebrow: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: getFontFamily('semibold'),
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
   },
   heading: {
     fontSize: Typography.sizes.xxl,
-    fontWeight: Typography.weights.semibold,
-    letterSpacing: -0.3,
+    fontFamily: getFontFamily('bold'),
   },
-  meta: {
-    fontSize: Typography.sizes.sm,
+  subheading: {
+    fontSize: Typography.sizes.md,
+    fontFamily: getFontFamily('regular'),
+    lineHeight: 20,
   },
   bookshelvesContainer: {
     paddingTop: Spacing.xs,
+  },
+  headerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  headerBadgeText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: getFontFamily('semibold'),
   },
   addButton: {
     flexDirection: 'row',
@@ -174,9 +215,9 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.medium,
+    fontFamily: getFontFamily('medium'),
   },
   bottomPadding: {
-    height: 32,
+    height: Spacing.xl,
   },
 });

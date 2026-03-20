@@ -9,7 +9,7 @@ import React from 'react';
 import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { Colors, Typography, Spacing } from '@/constants/theme';
+import { Colors, Typography, Spacing, getFontFamily } from '@/constants/theme';
 
 export default function Index() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -18,11 +18,20 @@ export default function Index() {
   if (isLoading || !isAuthenticated) {
     return (
       <View style={styles.container}>
-        <View style={styles.logoContainer}>
-          <Text style={styles.logoText}>Virtual Library</Text>
-          <Text style={styles.tagline}>Your personal bookshelf</Text>
+        <View style={styles.heroCard}>
+          <View style={styles.logoContainer}>
+            <Text style={styles.eyebrow}>Welcome back</Text>
+            <Text style={styles.logoText}>Virtual Library</Text>
+            <Text style={styles.tagline}>
+              Curate, scan, and revisit every shelf with a calmer, more polished reading home.
+            </Text>
+          </View>
+
+          <View style={styles.statusRow}>
+            <ActivityIndicator size="small" color={Colors.accent} />
+            <Text style={styles.statusText}>Setting up your library</Text>
+          </View>
         </View>
-        <ActivityIndicator size="large" color={Colors.accent} />
       </View>
     );
   }
@@ -38,19 +47,50 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     padding: Spacing.xl,
   },
+  heroCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    borderRadius: 16,
+    padding: Spacing.xl,
+    gap: Spacing.lg,
+  },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: Spacing.xxl,
+    gap: Spacing.sm,
+  },
+  eyebrow: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: getFontFamily('semibold'),
+    color: Colors.accent,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
   },
   logoText: {
     fontSize: Typography.sizes.xxxl,
-    fontWeight: Typography.weights.bold,
-    color: Colors.textInverse,
-    marginBottom: Spacing.sm,
+    fontFamily: getFontFamily('bold'),
+    color: Colors.text,
+    textAlign: 'center',
   },
   tagline: {
     fontSize: Typography.sizes.lg,
-    color: Colors.textInverse,
-    opacity: 0.8,
+    fontFamily: getFontFamily('regular'),
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    paddingVertical: Spacing.md,
+    borderRadius: 12,
+    backgroundColor: Colors.background,
+  },
+  statusText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: getFontFamily('medium'),
+    color: Colors.textSecondary,
   },
 });
