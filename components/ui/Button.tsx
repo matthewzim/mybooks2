@@ -5,8 +5,9 @@
  * Supports theme-aware colors via the colors prop.
  */
 
-import React from 'react';
+import React, { useRef } from 'react';
 import {
+  Animated,
   Pressable,
   Text,
   StyleSheet,
@@ -14,7 +15,15 @@ import {
   ViewStyle,
   TextStyle,
 } from 'react-native';
-import { Colors, Spacing, BorderRadius, Typography, ThemeColors } from '@/constants/theme';
+import {
+  Colors,
+  Spacing,
+  BorderRadius,
+  Typography,
+  ThemeColors,
+  Animations,
+  getFontFamily,
+} from '@/constants/theme';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 type ButtonSize = 'sm' | 'md' | 'lg';
@@ -48,6 +57,15 @@ export function Button({
 }: ButtonProps) {
   const isDisabled = disabled || loading;
   const themeColors = colors || Colors;
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const animateScale = (toValue: number) => {
+    Animated.timing(scale, {
+      toValue,
+      duration: Animations.fast,
+      useNativeDriver: true,
+    }).start();
+  };
 
   const getVariantStyle = (): ViewStyle => {
     switch (variant) {
@@ -76,47 +94,52 @@ export function Button({
     }
   };
 
-  const getLoaderColor = (): string => {
-    return variant === 'outline' || variant === 'ghost'
+  const getLoaderColor = (): string => (
+    variant === 'outline' || variant === 'ghost'
       ? themeColors.primary
-      : themeColors.textInverse;
-  };
+      : themeColors.textInverse
+  );
 
   return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.base,
-        getVariantStyle(),
-        styles[`size_${size}`],
+    <Animated.View
+      style={[
         fullWidth && styles.fullWidth,
-        isDisabled && styles.disabled,
-        pressed && !isDisabled && styles.pressed,
-        style,
+        { transform: [{ scale }] },
       ]}
-      onPress={onPress}
-      disabled={isDisabled}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel || title}
-      accessibilityState={{ disabled: isDisabled }}
     >
-      {loading ? (
-        <ActivityIndicator
-          size="small"
-          color={getLoaderColor()}
-        />
-      ) : (
-        <Text
-          style={[
-            styles.text,
-            { color: getTextColor() },
-            styles[`text_${size}`],
-            textStyle,
-          ]}
-        >
-          {title}
-        </Text>
-      )}
-    </Pressable>
+      <Pressable
+        style={({ pressed }) => [
+          styles.base,
+          getVariantStyle(),
+          styles[`size_${size}`],
+          isDisabled && styles.disabled,
+          pressed && !isDisabled && styles.pressed,
+          style,
+        ]}
+        onPress={onPress}
+        onPressIn={() => !isDisabled && animateScale(0.98)}
+        onPressOut={() => animateScale(1)}
+        disabled={isDisabled}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel || title}
+        accessibilityState={{ disabled: isDisabled }}
+      >
+        {loading ? (
+          <ActivityIndicator size="small" color={getLoaderColor()} />
+        ) : (
+          <Text
+            style={[
+              styles.text,
+              { color: getTextColor() },
+              styles[`text_${size}`],
+              textStyle,
+            ]}
+          >
+            {title}
+          </Text>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -125,7 +148,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
+    minWidth: 120,
   },
   fullWidth: {
     width: '100%',
@@ -134,27 +158,25 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   pressed: {
-    opacity: 0.8,
+    opacity: 0.94,
   },
-  // Sizes
   size_sm: {
     paddingVertical: Spacing.xs,
     paddingHorizontal: Spacing.md,
-    minHeight: 32,
+    minHeight: 40,
   },
   size_md: {
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.lg,
-    minHeight: 44,
+    minHeight: 48,
   },
   size_lg: {
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.xl,
-    minHeight: 52,
+    minHeight: 56,
   },
-  // Text styles
   text: {
-    fontWeight: Typography.weights.semibold,
+    fontFamily: getFontFamily('semibold'),
   },
   text_sm: {
     fontSize: Typography.sizes.sm,

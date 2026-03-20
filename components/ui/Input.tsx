@@ -16,7 +16,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, BorderRadius, Typography, ThemeColors } from '@/constants/theme';
+import { Colors, Spacing, BorderRadius, Typography, ThemeColors, getFontFamily } from '@/constants/theme';
 
 interface InputProps extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -55,8 +55,14 @@ export function Input({
       <View
         style={[
           styles.inputContainer,
-          { backgroundColor: themeColors.backgroundDark, borderColor: themeColors.border },
-          isFocused && { borderColor: themeColors.primary },
+          { backgroundColor: themeColors.inputBackground, borderColor: themeColors.border },
+          isFocused && {
+            borderColor: themeColors.primary,
+            shadowColor: themeColors.primary,
+            shadowOpacity: 0.14,
+            shadowRadius: 12,
+            elevation: 0,
+          },
           error && { borderColor: themeColors.error },
         ]}
       >
@@ -125,20 +131,22 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: Typography.sizes.sm,
-    fontWeight: Typography.weights.medium,
+    fontFamily: getFontFamily('medium'),
     marginBottom: Spacing.xs,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
     borderWidth: 1,
+    minHeight: 56,
   },
   input: {
     flex: 1,
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
     fontSize: Typography.sizes.md,
+    fontFamily: getFontFamily('regular'),
   },
   inputWithLeftIcon: {
     paddingLeft: 0,
@@ -154,6 +162,7 @@ const styles = StyleSheet.create({
   },
   helperText: {
     fontSize: Typography.sizes.sm,
+    fontFamily: getFontFamily('regular'),
     marginTop: Spacing.xs,
   },
 });

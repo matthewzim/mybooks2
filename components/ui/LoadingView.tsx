@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { Colors, Spacing, Typography, ThemeColors } from '@/constants/theme';
+import { BorderRadius, Colors, Spacing, Typography, ThemeColors, getFontFamily } from '@/constants/theme';
 
 interface LoadingViewProps {
   message?: string;
@@ -24,8 +24,10 @@ export function LoadingView({
 
   return (
     <View style={[styles.container, fullScreen && [styles.fullScreen, { backgroundColor: themeColors.background }]]}>
-      <ActivityIndicator size="large" color={themeColors.primary} />
-      {message && <Text style={[styles.message, { color: themeColors.textSecondary }]}>{message}</Text>}
+      <View style={[styles.card, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+        <ActivityIndicator size="large" color={themeColors.primary} />
+        {message && <Text style={[styles.message, { color: themeColors.textSecondary }]}>{message}</Text>}
+      </View>
     </View>
   );
 }
@@ -39,9 +41,17 @@ const styles = StyleSheet.create({
   fullScreen: {
     flex: 1,
   },
+  card: {
+    alignItems: 'center',
+    paddingVertical: Spacing.xl,
+    paddingHorizontal: Spacing.xl,
+    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
+    gap: Spacing.md,
+  },
   message: {
-    marginTop: Spacing.md,
     fontSize: Typography.sizes.md,
+    fontFamily: getFontFamily('regular'),
     textAlign: 'center',
   },
 });

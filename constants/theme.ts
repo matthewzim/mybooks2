@@ -5,6 +5,8 @@
  * Includes colors, spacing, typography, and other design tokens.
  */
 
+import { Platform, TextStyle } from 'react-native';
+
 /**
  * Theme types
  */
@@ -303,12 +305,14 @@ export const Themes: Record<ThemeType, ThemeColors> = {
 export const Colors = LightTheme;
 
 export const Spacing = {
-  xs: 4,
-  sm: 8,
+  xxs: 4,
+  xs: 8,
+  sm: 12,
   md: 16,
   lg: 24,
   xl: 32,
   xxl: 48,
+  xxxl: 64,
 } as const;
 
 export const BorderRadius = {
@@ -337,6 +341,24 @@ export const Typography = {
     semibold: '600' as const,
     bold: '700' as const,
   },
+  fonts: {
+    regular: Platform.select({
+      web: '"Plus Jakarta Sans", "Inter", sans-serif',
+      default: 'System',
+    }),
+    medium: Platform.select({
+      web: '"Plus Jakarta Sans", "Inter", sans-serif',
+      default: 'System',
+    }),
+    semibold: Platform.select({
+      web: '"Plus Jakarta Sans", "Inter", sans-serif',
+      default: 'System',
+    }),
+    bold: Platform.select({
+      web: '"Plus Jakarta Sans", "Inter", sans-serif',
+      default: 'System',
+    }),
+  },
   // Line heights
   lineHeights: {
     tight: 1.2,
@@ -344,6 +366,10 @@ export const Typography = {
     relaxed: 1.75,
   },
 } as const;
+
+export const getFontFamily = (
+  weight: keyof typeof Typography.weights = 'regular'
+): TextStyle['fontFamily'] => Typography.fonts[weight];
 
 export const Shadows = {
   sm: {
@@ -410,8 +436,8 @@ export const BookshelfDimensions = {
 // Animation durations
 export const Animations = {
   fast: 150,
-  normal: 300,
-  slow: 500,
+  normal: 220,
+  slow: 300,
 } as const;
 
 // Screen breakpoints (for responsive design)

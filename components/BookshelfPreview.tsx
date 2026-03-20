@@ -5,20 +5,27 @@
  * Shows the first row of books with the chosen shelf layout style.
  */
 
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, useWindowDimensions } from 'react-native';
+import React, { useRef } from 'react';
+import { View, Text, StyleSheet, Pressable, Alert, useWindowDimensions, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { Spacing, BorderRadius, Typography, BookshelfDimensions } from '@/constants/theme';
+import {
+  Spacing,
+  BorderRadius,
+  Typography,
+  BookshelfDimensions,
+  Shadows,
+  Animations,
+  getFontFamily,
+} from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import type { Bookshelf, Book } from '@/types';
 
-// Scaled-down dimensions for the preview shelf
 const PREVIEW_BOOK_WIDTH = 26;
 const PREVIEW_BOOK_HEIGHT = 100;
-const PREVIEW_SHELF_THICKNESS = 10;
-const PREVIEW_BORDER_WIDTH = 3;
+const PREVIEW_SHELF_THICKNESS = 12;
+const PREVIEW_BORDER_WIDTH = 4;
 
 interface BookshelfPreviewProps {
   bookshelf: Bookshelf;
@@ -30,15 +37,22 @@ interface BookshelfPreviewProps {
 export function BookshelfPreview({ bookshelf, books, onPress, onDelete }: BookshelfPreviewProps) {
   const { colors } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
+  const scale = useRef(new Animated.Value(1)).current;
   const shelfStyle = bookshelf.shelf_style || 'full';
   const totalBooks = books.length;
 
-  // Calculate how many books fit in one preview row
-  const cardInnerWidth = screenWidth - Spacing.md * 4; // 2x margin + 2x padding
-  const shelfInnerWidth =
-    shelfStyle === 'full' ? cardInnerWidth - PREVIEW_BORDER_WIDTH * 2 : cardInnerWidth;
+  const cardInnerWidth = screenWidth - Spacing.md * 4;
+  const shelfInnerWidth = shelfStyle === 'full' ? cardInnerWidth - PREVIEW_BORDER_WIDTH * 2 : cardInnerWidth;
   const booksPerRow = Math.max(1, Math.floor(shelfInnerWidth / PREVIEW_BOOK_WIDTH));
   const firstRowBooks = books.slice(0, booksPerRow);
+
+  const animateScale = (toValue: number) => {
+    Animated.timing(scale, {
+      toValue,
+      duration: Animations.fast,
+      useNativeDriver: true,
+    }).start();
+  };
 
   const handleDelete = () => {
     Alert.alert(
@@ -52,77 +66,79 @@ export function BookshelfPreview({ bookshelf, books, onPress, onDelete }: Booksh
   };
 
   return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.container,
-        { backgroundColor: colors.card, borderColor: colors.border },
-        pressed && styles.pressed,
-      ]}
-      onPress={() => onPress(bookshelf)}
-      onLongPress={onDelete ? handleDelete : undefined}
-      accessibilityRole="button"
-      accessibilityLabel={`${bookshelf.name} bookshelf with ${totalBooks} books`}
-    >
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={[styles.shelfName, { color: colors.text }]} numberOfLines={1}>
-            {bookshelf.name}
-          </Text>
-          <Text style={[styles.bookCount, { color: colors.textSecondary }]}>
-            {totalBooks} {totalBooks === 1 ? 'book' : 'books'}
-          </Text>
-        </View>
-
-        <View style={styles.headerActions}>
-          {onDelete && (
-            <Pressable
-              style={styles.iconButton}
-              onPress={handleDelete}
-              hitSlop={8}
-              accessibilityLabel="Delete bookshelf"
-            >
-              <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
-            </Pressable>
-          )}
-          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-        </View>
-      </View>
-
-      {/* Shelf row preview with chosen shelf layout */}
-      <View
-        style={[
-          styles.shelfRow,
-          shelfStyle === 'full' && {
-            borderWidth: PREVIEW_BORDER_WIDTH,
-            borderColor: BookshelfDimensions.shelfColor,
-          },
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <Pressable
+        style={({ pressed }) => [
+          styles.container,
+          { backgroundColor: colors.card, borderColor: colors.border },
+          pressed && styles.pressed,
         ]}
+        onPress={() => onPress(bookshelf)}
+        onPressIn={() => animateScale(0.985)}
+        onPressOut={() => animateScale(1)}
+        onLongPress={onDelete ? handleDelete : undefined}
+        accessibilityRole="button"
+        accessibilityLabel={`${bookshelf.name} bookshelf with ${totalBooks} books`}
       >
-        {shelfStyle === 'full' && <View style={styles.shelfBack} />}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Text style={[styles.shelfName, { color: colors.text }]} numberOfLines={1}>
+              {bookshelf.name}
+            </Text>
+            <Text style={[styles.bookCount, { color: colors.textSecondary }]}>
+              {totalBooks} {totalBooks === 1 ? 'book' : 'books'}
+            </Text>
+          </View>
 
-        <View style={[styles.booksRow, { minHeight: PREVIEW_BOOK_HEIGHT }]}>
-          {firstRowBooks.length > 0 ? (
-            firstRowBooks.map((book) => <BookPreviewSpine key={book.id} book={book} />)
-          ) : (
-            <View style={styles.emptyShelf}>
-              <Text
-                style={[
-                  styles.emptyText,
-                  {
-                    color:
-                      shelfStyle === 'full' ? colors.textOnDarkMuted : colors.textSecondary,
-                  },
-                ]}
+          <View style={styles.headerActions}>
+            {onDelete && (
+              <Pressable
+                style={styles.iconButton}
+                onPress={handleDelete}
+                hitSlop={8}
+                accessibilityLabel="Delete bookshelf"
               >
-                No books yet
-              </Text>
-            </View>
-          )}
+                <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
+              </Pressable>
+            )}
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </View>
         </View>
 
-        {shelfStyle === 'bottom' && <View style={styles.shelfSurface} />}
-      </View>
-    </Pressable>
+        <View
+          style={[
+            styles.shelfRow,
+            shelfStyle === 'full' && {
+              borderWidth: PREVIEW_BORDER_WIDTH,
+              borderColor: BookshelfDimensions.shelfColor,
+            },
+          ]}
+        >
+          {shelfStyle === 'full' && <View style={styles.shelfBack} />}
+
+          <View style={[styles.booksRow, { minHeight: PREVIEW_BOOK_HEIGHT }]}>
+            {firstRowBooks.length > 0 ? (
+              firstRowBooks.map((book) => <BookPreviewSpine key={book.id} book={book} />)
+            ) : (
+              <View style={styles.emptyShelf}>
+                <Text
+                  style={[
+                    styles.emptyText,
+                    {
+                      color: shelfStyle === 'full' ? colors.textOnDarkMuted : colors.textSecondary,
+                    },
+                  ]}
+                >
+                  No books yet
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {shelfStyle === 'bottom' && <View style={styles.shelfSurface} />}
+        </View>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -137,7 +153,7 @@ function BookPreviewSpine({ book }: BookPreviewSpineProps) {
   const getBookColor = (title: string): string => {
     const palette = ['#6b7280', '#64748b', '#7c3aed', '#0f766e', '#92400e', '#1f2937'];
     let hash = 0;
-    for (let i = 0; i < title.length; i++) {
+    for (let i = 0; i < title.length; i += 1) {
       hash = title.charCodeAt(i) + ((hash << 5) - hash);
     }
     return palette[Math.abs(hash) % palette.length];
@@ -146,7 +162,7 @@ function BookPreviewSpine({ book }: BookPreviewSpineProps) {
   return (
     <View style={[styles.bookSpine, { backgroundColor: hasImage ? undefined : getBookColor(book.title) }]}>
       {hasImage ? (
-        <Image source={{ uri: spineImageUrl }} style={styles.bookImage} contentFit="cover" />
+        <Image source={{ uri: spineImageUrl }} style={styles.bookImage} contentFit="cover" transition={220} />
       ) : (
         <View style={styles.bookPlaceholder} />
       )}
@@ -159,17 +175,18 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     marginHorizontal: Spacing.md,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
     borderWidth: 1,
+    gap: Spacing.sm,
+    ...Shadows.sm,
   },
   pressed: {
-    opacity: 0.9,
+    opacity: 0.96,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
   },
   headerLeft: {
     flex: 1,
@@ -177,11 +194,12 @@ const styles = StyleSheet.create({
   },
   shelfName: {
     fontSize: Typography.sizes.lg,
-    fontWeight: Typography.weights.semibold,
+    fontFamily: getFontFamily('semibold'),
   },
   bookCount: {
     fontSize: Typography.sizes.sm,
-    marginTop: 2,
+    fontFamily: getFontFamily('regular'),
+    marginTop: Spacing.xxs,
   },
   headerActions: {
     flexDirection: 'row',
@@ -191,9 +209,9 @@ const styles = StyleSheet.create({
   iconButton: {
     padding: Spacing.xs,
   },
-  // Shelf row styles
   shelfRow: {
     overflow: 'hidden',
+    borderRadius: BorderRadius.md,
   },
   shelfBack: {
     position: 'absolute',
@@ -213,12 +231,12 @@ const styles = StyleSheet.create({
   shelfSurface: {
     height: PREVIEW_SHELF_THICKNESS,
     backgroundColor: BookshelfDimensions.shelfColor,
-    borderRadius: 2,
+    borderRadius: BorderRadius.sm,
     marginTop: -1,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
     elevation: 4,
   },
   emptyShelf: {
@@ -228,8 +246,8 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: Typography.sizes.sm,
+    fontFamily: getFontFamily('medium'),
   },
-  // Book spine styles
   bookSpine: {
     width: PREVIEW_BOOK_WIDTH,
     height: PREVIEW_BOOK_HEIGHT,
