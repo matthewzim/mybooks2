@@ -1,0 +1,80 @@
+-- Migration: Switch to anonymous authentication
+-- Removes the email requirement from the users table and updates
+-- RLS policies so anonymous Supabase auth users can access their own data.
+
+-- Step 1: Make email nullable (anonymous users have no email)
+ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+
+-- Step 2: Drop the unique constraint on email if it exists
+-- (anonymous users all have NULL email)
+DO $$
+DECLARE
+  constraint_name TEXT;
+BEGIN
+  SELECT conname INTO constraint_name
+  FROM pg_constraint
+  WHERE conrelid = 'users'::regclass
+    AND contype = 'u'
+    AND array_length(conkey, 1) = 1
+    AND conkey[1] = (
+      SELECT attnum FROM pg_attribute
+      WHERE attrelid = 'users'::regclass AND attname = 'email'
+    );
+
+  IF constraint_name IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE users DROP CONSTRAINT %I', constraint_name);
+  END IF;
+END;
+$$;
+
+-- Also drop any unique index on email
+DROP INDEX IF EXISTS users_email_key;
+DROP INDEX IF EXISTS idx_users_email;
+
+-- Step 3: Enable anonymous sign-in in auth config
+-- NOTE: Anonymous sign-in must also be enabled in the Supabase Dashboard:
+-- Authentication > Providers > Anonymous Sign-Ins > Enable
+-- This migration handles the database-side changes only.
+
+-- Step 4: Ensure RLS policies on the users table allow anonymous auth users
+-- to access their own row. Since anonymous users still get a valid auth.uid(),
+-- the existing policies (which check user_id = auth.uid()) remain correct.
+-- We just need to make sure the users table has appropriate policies.
+
+-- Drop existing users policies to recreate cleanly
+DO $$
+DECLARE
+  pol RECORD;
+BEGIN
+  FOR pol IN
+    SELECT policyname
+    FROM pg_policies
+    WHERE tablename = 'users' AND schemaname = 'public'
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON users', pol.policyname);
+  END LOOP;
+END;
+$$;
+
+-- Ensure RLS is enabled
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+
+-- Users can read their own profile
+CREATE POLICY "Users can read own profile"
+  ON users FOR SELECT
+  USING (id = auth.uid());
+
+-- Users can insert their own profile (needed for anonymous sign-up)
+CREATE POLICY "Users can insert own profile"
+  ON users FOR INSERT
+  WITH CHECK (id = auth.uid());
+
+-- Users can update their own profile
+CREATE POLICY "Users can update own profile"
+  ON users FOR UPDATE
+  USING (id = auth.uid());
+
+-- Allow reading other users' names for community features
+CREATE POLICY "Anyone can read user names"
+  ON users FOR SELECT
+  USING (true);

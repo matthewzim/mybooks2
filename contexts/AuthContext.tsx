@@ -2,13 +2,13 @@
  * Authentication Context
  *
  * Provides authentication state and methods throughout the app.
- * Handles session persistence, auth state changes, and user profile management.
+ * Handles anonymous session creation, persistence, and user profile management.
  *
  * Usage:
  * import { useAuth } from '@/contexts/AuthContext';
  *
  * function MyComponent() {
- *   const { user, isAuthenticated, signIn, signOut } = useAuth();
+ *   const { user, isAuthenticated } = useAuth();
  *   // ...
  * }
  */
@@ -26,8 +26,6 @@ import { isSupabaseConfigured } from '@/services/supabase';
 import type {
   User,
   AuthState,
-  LoginCredentials,
-  RegisterCredentials,
   UpdateUserInput,
   ApiResponse,
 } from '@/types';
@@ -38,15 +36,9 @@ import type {
 interface AuthContextType extends AuthState {
   // Configuration status
   isConfigured: boolean;
-  // Auth methods
-  signIn: (credentials: LoginCredentials) => Promise<ApiResponse<{ user: User }>>;
-  signUp: (credentials: RegisterCredentials) => Promise<ApiResponse<{ user: User }>>;
-  signOut: () => Promise<void>;
   // Profile methods
   updateProfile: (updates: UpdateUserInput) => Promise<ApiResponse<User>>;
   refreshUser: () => Promise<void>;
-  // Password methods
-  resetPassword: (email: string) => Promise<ApiResponse<null>>;
 }
 
 // Create context with undefined default
@@ -56,7 +48,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
  * Auth Provider Component
  *
  * Wraps the app to provide authentication state and methods.
- * Automatically handles session restoration on app start.
+ * Automatically signs in anonymously on first launch and
+ * restores the session on subsequent launches.
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Auth state
@@ -66,7 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Initialize auth state on mount
-   * Check for existing session and restore user data
+   * Check for existing session or create anonymous one
    */
   useEffect(() => {
     // Skip auth initialization if Supabase is not configured
@@ -98,11 +91,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setSession(newSession as AuthState['session']);
           } else if (event === 'INITIAL_SESSION') {
             // Initial session from storage - handled by initializeAuth
-            // No additional action needed here
           }
         } catch (error) {
           console.error('Error handling auth state change:', error);
-          // Clear auth state on error to prevent stuck loading states
           setUser(null);
           setSession(null);
         }
@@ -117,7 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Initialize authentication state
-   * Checks for existing session on app start
+   * Restores existing session or creates an anonymous one
    */
   const initializeAuth = async () => {
     try {
@@ -131,6 +122,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: profile } = await authService.getCurrentUser();
         setUser(profile);
         setSession(existingSession as AuthState['session']);
+      } else {
+        // No session - sign in anonymously
+        const { data, error } = await authService.signInAnonymously();
+        if (error) {
+          console.error('Anonymous sign-in failed:', error.message);
+        } else if (data) {
+          setUser(data.user);
+          setSession(data.session as AuthState['session']);
+        }
       }
     } catch (error) {
       console.error('Failed to initialize auth:', error);
@@ -138,73 +138,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
     }
   };
-
-  /**
-   * Sign in with email and password
-   */
-  const signIn = useCallback(
-    async (
-      credentials: LoginCredentials
-    ): Promise<ApiResponse<{ user: User }>> => {
-      setIsLoading(true);
-
-      try {
-        const result = await authService.signIn(credentials);
-
-        if (result.data) {
-          setUser(result.data.user);
-          setSession(result.data.session as AuthState['session']);
-          return { data: { user: result.data.user }, error: null };
-        }
-
-        return { data: null, error: result.error };
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    []
-  );
-
-  /**
-   * Sign up with email, password, and name
-   */
-  const signUp = useCallback(
-    async (
-      credentials: RegisterCredentials
-    ): Promise<ApiResponse<{ user: User }>> => {
-      setIsLoading(true);
-
-      try {
-        const result = await authService.signUp(credentials);
-
-        if (result.data) {
-          setUser(result.data.user);
-          setSession(result.data.session as AuthState['session']);
-          return { data: { user: result.data.user }, error: null };
-        }
-
-        return { data: null, error: result.error };
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    []
-  );
-
-  /**
-   * Sign out the current user
-   */
-  const signOut = useCallback(async () => {
-    setIsLoading(true);
-
-    try {
-      await authService.signOut();
-      setUser(null);
-      setSession(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
 
   /**
    * Update user profile
@@ -232,16 +165,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  /**
-   * Send password reset email
-   */
-  const resetPassword = useCallback(
-    async (email: string): Promise<ApiResponse<null>> => {
-      return authService.resetPassword(email);
-    },
-    []
-  );
-
   // Memoize context value to prevent unnecessary re-renders
   const contextValue = useMemo<AuthContextType>(
     () => ({
@@ -250,23 +173,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       isAuthenticated: !!user && !!session,
       isConfigured: isSupabaseConfigured,
-      signIn,
-      signUp,
-      signOut,
       updateProfile,
       refreshUser,
-      resetPassword,
     }),
     [
       user,
       session,
       isLoading,
-      signIn,
-      signUp,
-      signOut,
       updateProfile,
       refreshUser,
-      resetPassword,
     ]
   );
 

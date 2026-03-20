@@ -9,11 +9,10 @@
 
 /**
  * User profile stored in Supabase
- * Extends the auth.users table with additional profile information
+ * Linked to an anonymous Supabase auth user via id
  */
 export interface User {
   id: string;
-  email: string;
   name: string | null;
   avatar_url: string | null;
   is_premium: boolean;
@@ -135,7 +134,6 @@ export interface PublicUserProfile {
 // ============================================
 
 export interface CreateUserInput {
-  email: string;
   name?: string;
 }
 
@@ -211,28 +209,16 @@ export interface Session {
   expires_at: number;
   user: {
     id: string;
-    email: string;
   };
 }
 
-export interface LoginCredentials {
-  email: string;
-  password: string;
-}
-
-export interface RegisterCredentials {
-  email: string;
-  password: string;
-  name: string;
-}
+// Auth navigation types removed — anonymous auth requires no credentials
 
 // ============================================
 // Navigation Types (for Expo Router)
 // ============================================
 
 export type RootStackParamList = {
-  '(auth)/login': undefined;
-  '(auth)/register': undefined;
   '(tabs)': undefined;
   'bookshelf/[id]': { id: string };
   'book/[id]': { id: string; shelfId: string };
