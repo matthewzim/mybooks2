@@ -1,15 +1,11 @@
 /**
  * App Entry Point
  *
- * This is the initial screen that users see when opening the app.
- * It handles routing based on authentication state:
- * - If authenticated: redirect to main app (tabs)
- * - If not authenticated: redirect to login screen
- *
- * Also shows a loading state while checking auth status.
+ * Shows a loading state while the anonymous auth session is being
+ * created or restored, then redirects to the main app.
  */
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,8 +14,8 @@ import { Colors, Typography, Spacing } from '@/constants/theme';
 export default function Index() {
   const { isAuthenticated, isLoading } = useAuth();
 
-  // Show loading state while checking authentication
-  if (isLoading) {
+  // Show loading state while initialising anonymous session
+  if (isLoading || !isAuthenticated) {
     return (
       <View style={styles.container}>
         <View style={styles.logoContainer}>
@@ -31,12 +27,7 @@ export default function Index() {
     );
   }
 
-  // Redirect based on auth state
-  if (isAuthenticated) {
-    return <Redirect href="/(tabs)" />;
-  }
-
-  return <Redirect href="/(auth)/login" />;
+  return <Redirect href="/(tabs)" />;
 }
 
 const styles = StyleSheet.create({

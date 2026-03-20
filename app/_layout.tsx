@@ -56,14 +56,6 @@ function RootLayoutContent() {
           }}
         />
 
-        {/* Auth screens group */}
-        <Stack.Screen
-          name="(auth)"
-          options={{
-            headerShown: false,
-          }}
-        />
-
         {/* Main app tabs */}
         <Stack.Screen
           name="(tabs)"

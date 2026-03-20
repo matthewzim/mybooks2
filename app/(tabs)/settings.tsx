@@ -124,7 +124,7 @@ function parseGoodreadsBooks(csvText: string): GoodreadsCsvBook[] {
 }
 
 export default function SettingsScreen() {
-  const { user, signOut, updateProfile } = useAuth();
+  const { user, updateProfile } = useAuth();
   const { theme, setTheme, colors } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
@@ -306,23 +306,6 @@ export default function SettingsScreen() {
   };
 
   /**
-   * Handle sign out
-   */
-  const handleSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: async () => {
-          await signOut();
-          router.replace('/(auth)/login');
-        },
-      },
-    ]);
-  };
-
-  /**
    * Navigate to premium/payment screen
    */
   const handleUpgrade = () => {
@@ -351,7 +334,7 @@ export default function SettingsScreen() {
             <View style={styles.avatarContainer}>
               <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
                 <Text style={[styles.avatarText, { color: colors.textInverse }]}>
-                  {(user?.name || user?.email || 'U')[0].toUpperCase()}
+                  {(user?.name || 'U')[0].toUpperCase()}
                 </Text>
               </View>
               {user?.is_premium && (
@@ -394,7 +377,6 @@ export default function SettingsScreen() {
             ) : (
               <View style={styles.profileInfo}>
                 <Text style={[styles.userName, { color: colors.text }]}>{user?.name || 'No name set'}</Text>
-                <Text style={[styles.userEmail, { color: colors.textSecondary }]}>{user?.email}</Text>
                 <Pressable
                   style={styles.editButton}
                   onPress={() => setIsEditing(true)}
@@ -585,17 +567,6 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Sign Out */}
-        <View style={styles.section}>
-          <Pressable
-            style={[styles.card, styles.signOutCard, { backgroundColor: colors.card }]}
-            onPress={handleSignOut}
-          >
-            <Ionicons name="log-out-outline" size={20} color={colors.error} />
-            <Text style={[styles.signOutText, { color: colors.error }]}>Sign Out</Text>
-          </Pressable>
-        </View>
-
         <View style={styles.bottomPadding} />
       </ScrollView>
 
@@ -758,10 +729,6 @@ const styles = StyleSheet.create({
     fontWeight: Typography.weights.semibold,
     marginBottom: 4,
   },
-  userEmail: {
-    fontSize: Typography.sizes.md,
-    marginBottom: Spacing.md,
-  },
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -863,17 +830,6 @@ const styles = StyleSheet.create({
   rowSubtitle: {
     fontSize: Typography.sizes.sm,
     marginTop: 2,
-  },
-  signOutCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-    padding: Spacing.md,
-  },
-  signOutText: {
-    fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.semibold,
   },
   bottomPadding: {
     height: 40,

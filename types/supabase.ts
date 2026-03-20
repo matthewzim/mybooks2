@@ -18,7 +18,7 @@ export interface Database {
       users: {
         Row: {
           id: string;
-          email: string;
+          email: string | null;
           name: string | null;
           avatar_url: string | null;
           is_premium: boolean;
@@ -27,7 +27,7 @@ export interface Database {
         };
         Insert: {
           id: string;
-          email: string;
+          email?: string | null;
           name?: string | null;
           avatar_url?: string | null;
           is_premium?: boolean;
@@ -36,7 +36,7 @@ export interface Database {
         };
         Update: {
           id?: string;
-          email?: string;
+          email?: string | null;
           name?: string | null;
           avatar_url?: string | null;
           is_premium?: boolean;
