@@ -2,20 +2,33 @@
  * App Entry Point
  *
  * Shows a loading state while the anonymous auth session is being
- * created or restored, then redirects to the main app.
+ * created or restored, then routes to onboarding (first launch)
+ * or the main app (returning user).
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import { Redirect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors, Typography, Spacing, getFontFamily } from '@/constants/theme';
 
+const ONBOARDING_COMPLETE_KEY = 'onboarding_complete';
+
 export default function Index() {
   const { isAuthenticated, isLoading } = useAuth();
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
-  // Show loading state while initialising anonymous session
-  if (isLoading || !isAuthenticated) {
+  useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY).then((value) => {
+      setHasCompletedOnboarding(value === 'true');
+      setOnboardingChecked(true);
+    });
+  }, []);
+
+  // Show loading state while initialising anonymous session or checking onboarding
+  if (isLoading || !isAuthenticated || !onboardingChecked) {
     return (
       <View style={styles.container}>
         <View style={styles.heroCard}>
@@ -34,6 +47,10 @@ export default function Index() {
         </View>
       </View>
     );
+  }
+
+  if (!hasCompletedOnboarding) {
+    return <Redirect href="/onboarding" />;
   }
 
   return <Redirect href="/(tabs)" />;
