@@ -68,16 +68,9 @@ function RootLayoutContent() {
           }}
         />
 
-        {/* Bookshelf detail screen */}
+        {/* Bookshelf screens */}
         <Stack.Screen
           name="bookshelf"
-          options={{
-            title: 'Bookshelf',
-            presentation: 'card',
-          }}
-        />
-        <Stack.Screen
-          name="bookshelf/[id]"
           options={{
             title: 'Bookshelf',
             presentation: 'card',
