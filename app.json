@@ -20,7 +20,8 @@
       "bundleIdentifier": "com.yourcompany.virtuallibrary",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to scan book spines and add them to your library.",
-        "NSPhotoLibraryUsageDescription": "This app accesses your photo library to upload book spine images."
+        "NSPhotoLibraryUsageDescription": "This app accesses your photo library to upload book spine images.",
+        "UIViewControllerBasedStatusBarAppearance": true
       },
       "config": {
         "usesNonExemptEncryption": false
