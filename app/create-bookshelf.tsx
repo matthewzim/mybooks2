@@ -81,7 +81,7 @@ export default function CreateBookshelfScreen() {
 
       if (result) {
         // Navigate to the new bookshelf
-        router.replace(`/bookshelf/${result.id}`);
+        router.replace({ pathname: '/bookshelf/[id]', params: { id: result.id } });
       } else {
         Alert.alert('Error', 'Failed to create bookshelf. Please try again.');
       }

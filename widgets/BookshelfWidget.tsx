@@ -71,7 +71,7 @@ const BookshelfWidget = (props: WidgetBase<BookshelfWidgetProps>) => {
   const maxBooks = maxBooksForFamily(props.family);
   const spineWidth = spineWidthForFamily(props.family);
   const books = props.books.slice(0, maxBooks);
-  const deepLinkURL = `virtuallibrary://bookshelf?id=${props.shelfId}`;
+  const deepLinkURL = `virtuallibrary:///bookshelf/${props.shelfId}`;
 
   return (
     <VStack
