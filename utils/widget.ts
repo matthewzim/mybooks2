@@ -9,7 +9,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import type { WidgetData, WidgetBookshelf, WidgetBook, Bookshelf, Book } from '@/types';
-import BookshelfWidget from '@/widgets/BookshelfWidget';
+
+function getBookshelfWidget() {
+  // Lazy-load to avoid pulling @expo/ui/swift-ui into the main app bundle
+  // where the ExpoUI native module is not available.
+  return require('@/widgets/BookshelfWidget').default;
+}
 
 const WIDGET_DATA_KEY = '@virtual_library_widget_data';
 const WIDGET_SELECTED_SHELF_KEY = '@virtual_library_widget_shelf';
@@ -62,7 +67,7 @@ class WidgetManager {
       await AsyncStorage.setItem(WIDGET_DATA_KEY, JSON.stringify(widgetData));
 
       if (Platform.OS === 'ios') {
-        BookshelfWidget.updateSnapshot({
+        getBookshelfWidget().updateSnapshot({
           shelfId: bookshelf?.id ?? null,
           shelfName: bookshelf?.name ?? null,
           books: bookshelf?.books ?? [],
@@ -92,7 +97,7 @@ class WidgetManager {
       );
 
       if (Platform.OS === 'ios') {
-        BookshelfWidget.updateSnapshot({
+        getBookshelfWidget().updateSnapshot({
           shelfId: widgetShelf.id,
           shelfName: widgetShelf.name,
           books: widgetShelf.books,
@@ -165,7 +170,7 @@ class WidgetManager {
       await AsyncStorage.removeItem(WIDGET_DATA_KEY);
       await AsyncStorage.removeItem(WIDGET_SELECTED_SHELF_KEY);
       if (Platform.OS === 'ios') {
-        BookshelfWidget.updateSnapshot({
+        getBookshelfWidget().updateSnapshot({
           shelfId: null,
           shelfName: null,
           books: [],
