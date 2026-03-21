@@ -205,7 +205,7 @@ class WidgetManager {
           null;
         if (shelfId) {
           return {
-            route: '/bookshelf/[id]',
+            route: '/bookshelf',
             params: { id: shelfId },
           };
         }
