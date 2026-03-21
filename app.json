@@ -45,7 +45,12 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "sitemap": false
+        }
+      ],
       "expo-secure-store",
       [
         "expo-widgets",
@@ -57,7 +62,11 @@
                 "src": "./widgets/BookshelfWidget.tsx",
                 "displayName": "My Bookshelf",
                 "description": "Show one shelf from your library.",
-                "supportedFamilies": ["systemSmall", "systemMedium", "systemLarge"]
+                "supportedFamilies": [
+                  "systemSmall",
+                  "systemMedium",
+                  "systemLarge"
+                ]
               }
             ]
           }
@@ -87,9 +96,6 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {
-        "origin": false
-      },
       "eas": {
         "projectId": "your-project-id"
       }
