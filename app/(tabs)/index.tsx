@@ -43,7 +43,7 @@ export default function HomeScreen() {
   }, [fetchBookshelves]);
 
   const handleBookshelfPress = (bookshelf: Bookshelf) => {
-    router.push(`/bookshelf/${bookshelf.id}`);
+    router.push({ pathname: '/bookshelf/[id]', params: { id: bookshelf.id } });
   };
 
   const handleDeleteBookshelf = async (bookshelf: Bookshelf) => {

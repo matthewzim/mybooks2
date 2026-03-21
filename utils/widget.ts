@@ -2,8 +2,9 @@
  * Widget Utilities
  *
  * Utilities for managing iOS home screen widget data.
- * Uses expo-widgets (Expo SDK 55) — data is pushed to the widget via
- * BookshelfWidget.updateSnapshot(), replacing the previous native bridge.
+ * The app stores widget snapshots in shared storage and avoids importing the
+ * widget entrypoint directly, because ExpoUI is only available in the widget
+ * extension process.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,17 +16,10 @@ const noopWidget = {
 };
 
 function getBookshelfWidget(): { updateSnapshot(data: unknown): void } {
-  // Lazy-load to avoid pulling @expo/ui/swift-ui into the main app bundle
-  // where the ExpoUI native module is not available.
-  try {
-    const mod = require('@/widgets/BookshelfWidget');
-    return mod?.default ?? noopWidget;
-  } catch {
-    // ExpoUI native module is only available inside the widget extension.
-    // In the main app process we fall back to a no-op; the widget will read
-    // from shared storage (AsyncStorage) when it renders.
-    return noopWidget;
-  }
+  // The app bundle must never import the widget entrypoint directly because
+  // @expo/ui/swift-ui relies on the ExpoUI native module, which only exists
+  // inside the widget extension process.
+  return noopWidget;
 }
 
 const WIDGET_DATA_KEY = '@virtual_library_widget_data';
@@ -67,7 +61,7 @@ class WidgetManager {
   }
 
   /**
-   * Save widget data and push to the home screen widget via updateSnapshot.
+   * Save widget data for the home screen widget.
    */
   async saveWidgetData(bookshelf: WidgetBookshelf | null): Promise<void> {
     try {
@@ -121,8 +115,7 @@ class WidgetManager {
   }
 
   /**
-   * No-op: expo-widgets reloads the timeline automatically after updateSnapshot.
-   * Retained for call-site compatibility.
+   * No-op retained for call-site compatibility.
    */
   reloadWidgetTimelines(): void {}
 
@@ -203,8 +196,13 @@ class WidgetManager {
     try {
       const urlObj = new URL(url);
 
-      if (urlObj.pathname.includes('bookshelf')) {
-        const shelfId = urlObj.searchParams.get('id');
+      const bookshelfPath = `${urlObj.hostname}${urlObj.pathname}`;
+
+      if (bookshelfPath.includes('bookshelf')) {
+        const shelfId =
+          urlObj.searchParams.get('id') ??
+          bookshelfPath.split('/').filter(Boolean).at(-1) ??
+          null;
         if (shelfId) {
           return {
             route: '/bookshelf/[id]',
@@ -213,8 +211,11 @@ class WidgetManager {
         }
       }
 
-      if (urlObj.pathname.includes('book')) {
-        const bookId = urlObj.searchParams.get('id');
+      if (bookshelfPath.includes('book')) {
+        const bookId =
+          urlObj.searchParams.get('id') ??
+          bookshelfPath.split('/').filter(Boolean).at(-1) ??
+          null;
         const shelfId = urlObj.searchParams.get('shelfId');
         if (bookId) {
           return {
