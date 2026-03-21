@@ -2,14 +2,34 @@
  * Widget Utilities
  *
  * Utilities for managing iOS home screen widget data.
- * Uses expo-widgets (Expo SDK 55) — data is pushed to the widget via
- * BookshelfWidget.updateSnapshot(), replacing the previous native bridge.
+ * Widget rendering (BookshelfWidget) requires @expo/ui which is only available
+ * with expo-widgets (Expo SDK 55+). Until the project upgrades, snapshot
+ * pushes are a no-op so the app can bundle without @expo/ui installed.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import type { WidgetData, WidgetBookshelf, WidgetBook, Bookshelf, Book } from '@/types';
-import BookshelfWidget from '@/widgets/BookshelfWidget';
+type WidgetSnapshotProps = {
+  shelfId: string | null;
+  shelfName: string | null;
+  books: Array<{
+    id: string;
+    title: string;
+    author: string;
+    image_url: string | null;
+  }>;
+};
+
+/**
+ * Push a snapshot to the home screen widget.
+ * Currently a no-op because @expo/ui (required by BookshelfWidget) is not
+ * available until the project upgrades to Expo SDK 55+ with expo-widgets.
+ */
+function pushWidgetSnapshot(_props: WidgetSnapshotProps): void {
+  // TODO: re-enable when @expo/ui and expo-widgets are installed
+  // BookshelfWidget.updateSnapshot(props);
+}
 
 const WIDGET_DATA_KEY = '@virtual_library_widget_data';
 const WIDGET_SELECTED_SHELF_KEY = '@virtual_library_widget_shelf';
@@ -62,7 +82,7 @@ class WidgetManager {
       await AsyncStorage.setItem(WIDGET_DATA_KEY, JSON.stringify(widgetData));
 
       if (Platform.OS === 'ios') {
-        BookshelfWidget.updateSnapshot({
+        pushWidgetSnapshot({
           shelfId: bookshelf?.id ?? null,
           shelfName: bookshelf?.name ?? null,
           books: bookshelf?.books ?? [],
@@ -92,7 +112,7 @@ class WidgetManager {
       );
 
       if (Platform.OS === 'ios') {
-        BookshelfWidget.updateSnapshot({
+        pushWidgetSnapshot({
           shelfId: widgetShelf.id,
           shelfName: widgetShelf.name,
           books: widgetShelf.books,
@@ -165,7 +185,7 @@ class WidgetManager {
       await AsyncStorage.removeItem(WIDGET_DATA_KEY);
       await AsyncStorage.removeItem(WIDGET_SELECTED_SHELF_KEY);
       if (Platform.OS === 'ios') {
-        BookshelfWidget.updateSnapshot({
+        pushWidgetSnapshot({
           shelfId: null,
           shelfName: null,
           books: [],
