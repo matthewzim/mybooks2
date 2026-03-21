@@ -220,6 +220,7 @@ export interface Session {
 
 export type RootStackParamList = {
   '(tabs)': undefined;
+  'bookshelf': { id: string };
   'bookshelf/[id]': { id: string };
   'book/[id]': { id: string; shelfId: string };
   'user/[id]': { id: string };
