@@ -87,7 +87,7 @@ export default function UserProfileScreen() {
    */
   const handleBookshelfPress = (bookshelf: Bookshelf) => {
     router.push({
-      pathname: '/bookshelf',
+      pathname: '/bookshelf/[id]',
       params: { id: bookshelf.id },
     });
   };
