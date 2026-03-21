@@ -64,6 +64,16 @@
           "merchantIdentifier": "merchant.com.yourcompany.virtuallibrary",
           "enableGooglePay": false
         }
+      ],
+      [
+        "expo-widgets",
+        {
+          "ios": {
+            "src": "./widgets/BookshelfWidget.tsx",
+            "distName": "BookshelfWidget",
+            "widgetName": "BookshelfWidget"
+          }
+        }
       ]
     ],
     "experiments": {
