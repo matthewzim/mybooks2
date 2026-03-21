@@ -10,10 +10,24 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import type { WidgetData, WidgetBookshelf, WidgetBook, Bookshelf, Book } from '@/types';
 
-function getBookshelfWidget() {
-  // Lazy-load to avoid pulling @expo/ui/swift-ui into the main app bundle
-  // where the ExpoUI native module is not available.
-  return require('@/widgets/BookshelfWidget').default;
+/**
+ * Try to push a snapshot to the widget.
+ * This only works inside the widget extension where @expo/ui/swift-ui
+ * (and the ExpoUI native module) is available. In the main app the
+ * require will fail — that's fine because data is already persisted to
+ * AsyncStorage for the widget to read on its next timeline reload.
+ */
+function tryUpdateWidgetSnapshot(props: {
+  shelfId: string | null;
+  shelfName: string | null;
+  books: Array<{ id: string; title: string; author: string; image_url: string | null }>;
+}): void {
+  try {
+    const widget = require('@/widgets/BookshelfWidget').default;
+    widget.updateSnapshot(props);
+  } catch {
+    // ExpoUI native module unavailable — expected in main app context.
+  }
 }
 
 const WIDGET_DATA_KEY = '@virtual_library_widget_data';
@@ -67,7 +81,7 @@ class WidgetManager {
       await AsyncStorage.setItem(WIDGET_DATA_KEY, JSON.stringify(widgetData));
 
       if (Platform.OS === 'ios') {
-        getBookshelfWidget().updateSnapshot({
+        tryUpdateWidgetSnapshot({
           shelfId: bookshelf?.id ?? null,
           shelfName: bookshelf?.name ?? null,
           books: bookshelf?.books ?? [],
@@ -97,7 +111,7 @@ class WidgetManager {
       );
 
       if (Platform.OS === 'ios') {
-        getBookshelfWidget().updateSnapshot({
+        tryUpdateWidgetSnapshot({
           shelfId: widgetShelf.id,
           shelfName: widgetShelf.name,
           books: widgetShelf.books,
@@ -170,7 +184,7 @@ class WidgetManager {
       await AsyncStorage.removeItem(WIDGET_DATA_KEY);
       await AsyncStorage.removeItem(WIDGET_SELECTED_SHELF_KEY);
       if (Platform.OS === 'ios') {
-        getBookshelfWidget().updateSnapshot({
+        tryUpdateWidgetSnapshot({
           shelfId: null,
           shelfName: null,
           books: [],
