@@ -10,10 +10,22 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import type { WidgetData, WidgetBookshelf, WidgetBook, Bookshelf, Book } from '@/types';
 
-function getBookshelfWidget() {
+const noopWidget = {
+  updateSnapshot(_data: unknown) {},
+};
+
+function getBookshelfWidget(): { updateSnapshot(data: unknown): void } {
   // Lazy-load to avoid pulling @expo/ui/swift-ui into the main app bundle
   // where the ExpoUI native module is not available.
-  return require('@/widgets/BookshelfWidget').default;
+  try {
+    const mod = require('@/widgets/BookshelfWidget');
+    return mod?.default ?? noopWidget;
+  } catch {
+    // ExpoUI native module is only available inside the widget extension.
+    // In the main app process we fall back to a no-op; the widget will read
+    // from shared storage (AsyncStorage) when it renders.
+    return noopWidget;
+  }
 }
 
 const WIDGET_DATA_KEY = '@virtual_library_widget_data';
