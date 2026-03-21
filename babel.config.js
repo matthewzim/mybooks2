@@ -6,7 +6,7 @@ module.exports = function (api) {
       // Required for expo-router
       'expo-router/babel',
       // Required for react-native-reanimated
-      'react-native-reanimated/plugin',
+      'react-native-worklets/plugin',
     ],
   };
 };
