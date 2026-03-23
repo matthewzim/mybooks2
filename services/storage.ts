@@ -226,12 +226,55 @@ class StorageService {
   async deleteBookSpine(imageUrl: string): Promise<ApiResponse<null>> {
     try {
       // Extract the path from the URL
-      const path = this.extractPathFromUrl(imageUrl, STORAGE_BUCKETS.BOOK_SPINES);
+      const path = extractStoragePathFromUrl(imageUrl, STORAGE_BUCKETS.BOOK_SPINES)
+        ?? this.extractPathFromUrl(imageUrl, STORAGE_BUCKETS.BOOK_SPINES);
       if (!path) {
         throw new Error('Invalid image URL');
       }
 
       return this.deleteFile(STORAGE_BUCKETS.BOOK_SPINES, path);
+    } catch (error) {
+      return {
+        data: null,
+        error: { message: handleSupabaseError(error) },
+      };
+    }
+  }
+
+  /**
+   * Delete a book cover image from storage.
+   */
+  async deleteBookCover(imageUrl: string): Promise<ApiResponse<null>> {
+    try {
+      const path = extractStoragePathFromUrl(imageUrl, STORAGE_BUCKETS.BOOK_COVERS)
+        ?? this.extractPathFromUrl(imageUrl, STORAGE_BUCKETS.BOOK_COVERS);
+
+      if (!path) {
+        throw new Error('Invalid cover image URL');
+      }
+
+      return this.deleteFile(STORAGE_BUCKETS.BOOK_COVERS, path);
+    } catch (error) {
+      return {
+        data: null,
+        error: { message: handleSupabaseError(error) },
+      };
+    }
+  }
+
+  /**
+   * Delete a user avatar image from storage.
+   */
+  async deleteAvatar(imageUrl: string): Promise<ApiResponse<null>> {
+    try {
+      const path = extractStoragePathFromUrl(imageUrl, STORAGE_BUCKETS.AVATARS)
+        ?? this.extractPathFromUrl(imageUrl, STORAGE_BUCKETS.AVATARS);
+
+      if (!path) {
+        throw new Error('Invalid avatar URL');
+      }
+
+      return this.deleteFile(STORAGE_BUCKETS.AVATARS, path);
     } catch (error) {
       return {
         data: null,

@@ -9,6 +9,7 @@
 
 export { supabase, STORAGE_BUCKETS, TABLES, handleSupabaseError } from './supabase';
 export { authService } from './auth';
+export { accountService } from './account';
 export { bookshelvesService } from './bookshelves';
 export { booksService } from './books';
 export { storageService } from './storage';

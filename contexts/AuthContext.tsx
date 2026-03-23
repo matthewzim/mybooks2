@@ -39,6 +39,7 @@ interface AuthContextType extends AuthState {
   // Profile methods
   updateProfile: (updates: UpdateUserInput) => Promise<ApiResponse<User>>;
   refreshUser: () => Promise<void>;
+  restartAnonymousSession: () => Promise<ApiResponse<User>>;
 }
 
 // Create context with undefined default
@@ -165,6 +166,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  /**
+   * Discard the current session and create a fresh anonymous user/session.
+   * Used after destructive account actions such as reset data or account deletion.
+   */
+  const restartAnonymousSession = useCallback(async (): Promise<ApiResponse<User>> => {
+    setIsLoading(true);
+
+    try {
+      setUser(null);
+      setSession(null);
+
+      const signOutResult = await authService.signOut();
+      if (signOutResult.error) {
+        console.warn('Failed to sign out before restarting anonymous session:', signOutResult.error.message);
+      }
+
+      const result = await authService.signInAnonymously();
+
+      if (result.error || !result.data) {
+        return {
+          data: null,
+          error: result.error ?? { message: 'Failed to create a new anonymous session.' },
+        };
+      }
+
+      setUser(result.data.user);
+      setSession(result.data.session as AuthState['session']);
+
+      return { data: result.data.user, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: {
+          message: error instanceof Error ? error.message : 'Failed to restart anonymous session.',
+        },
+      };
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   // Memoize context value to prevent unnecessary re-renders
   const contextValue = useMemo<AuthContextType>(
     () => ({
@@ -175,6 +217,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isConfigured: isSupabaseConfigured,
       updateProfile,
       refreshUser,
+      restartAnonymousSession,
     }),
     [
       user,
@@ -182,6 +225,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       updateProfile,
       refreshUser,
+      restartAnonymousSession,
     ]
   );
 
