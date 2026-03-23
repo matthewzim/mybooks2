@@ -369,6 +369,7 @@ export default function BookshelfDetailScreen() {
           isLoading={booksLoading}
           isEditing={isEditMode}
           shelfStyle={bookshelf.shelf_style}
+          shelfColor={bookshelf.cover_color}
           onReorderBooks={handleReorderBooks}
           onToggleBookStack={handleToggleBookStack}
           onStackBooks={handleStackBooks}

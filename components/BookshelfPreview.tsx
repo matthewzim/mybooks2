@@ -6,7 +6,7 @@
  */
 
 import React, { useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, useWindowDimensions, Animated } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert, useWindowDimensions, Animated, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import {
@@ -20,6 +20,7 @@ import {
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
+import { getShelfColors } from '@/utils/shelfColors';
 import type { Bookshelf, Book } from '@/types';
 
 const PREVIEW_BOOK_WIDTH = 20;
@@ -32,14 +33,16 @@ interface BookshelfPreviewProps {
   books: Book[];
   onPress: (bookshelf: Bookshelf) => void;
   onDelete?: (bookshelf: Bookshelf) => void;
+  containerStyle?: ViewStyle;
 }
 
-export function BookshelfPreview({ bookshelf, books, onPress, onDelete }: BookshelfPreviewProps) {
+export function BookshelfPreview({ bookshelf, books, onPress, onDelete, containerStyle }: BookshelfPreviewProps) {
   const { colors } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const scale = useRef(new Animated.Value(1)).current;
   const shelfStyle = bookshelf.shelf_style || 'full';
   const totalBooks = books.length;
+  const { shelfColor, shelfBackColor } = getShelfColors(bookshelf.cover_color);
 
   const cardInnerWidth = screenWidth - Spacing.md * 4;
   const shelfInnerWidth = shelfStyle === 'full' ? cardInnerWidth - PREVIEW_BORDER_WIDTH * 2 : cardInnerWidth;
@@ -70,6 +73,7 @@ export function BookshelfPreview({ bookshelf, books, onPress, onDelete }: Booksh
       <Pressable
         style={({ pressed }) => [
           styles.container,
+          containerStyle,
           { backgroundColor: colors.card, borderColor: colors.border },
           pressed && styles.pressed,
         ]}
@@ -110,11 +114,11 @@ export function BookshelfPreview({ bookshelf, books, onPress, onDelete }: Booksh
             styles.shelfRow,
             shelfStyle === 'full' && {
               borderWidth: PREVIEW_BORDER_WIDTH,
-              borderColor: BookshelfDimensions.shelfColor,
+              borderColor: shelfColor,
             },
           ]}
         >
-          {shelfStyle === 'full' && <View style={styles.shelfBack} />}
+          {shelfStyle === 'full' && <View style={[styles.shelfBack, { backgroundColor: shelfBackColor }]} />}
 
           <View style={[styles.booksRow, { minHeight: PREVIEW_BOOK_HEIGHT }]}>
             {firstRowBooks.length > 0 ? (
@@ -135,7 +139,7 @@ export function BookshelfPreview({ bookshelf, books, onPress, onDelete }: Booksh
             )}
           </View>
 
-          {shelfStyle === 'bottom' && <View style={styles.shelfSurface} />}
+          {shelfStyle === 'bottom' && <View style={[styles.shelfSurface, { backgroundColor: shelfColor }]} />}
         </View>
       </Pressable>
     </Animated.View>

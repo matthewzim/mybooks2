@@ -38,6 +38,7 @@ import {
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { getSpineImageUrl } from '@/services/storage';
+import { getShelfColors } from '@/utils/shelfColors';
 import type { Book, ShelfStyle } from '@/types';
 
 interface EditableBookshelfGridProps {
@@ -47,6 +48,7 @@ interface EditableBookshelfGridProps {
   isLoading?: boolean;
   isEditing: boolean;
   shelfStyle?: ShelfStyle;
+  shelfColor?: string;
   onReorderBooks: (orderedIds: string[]) => Promise<boolean>;
   onToggleBookStack: (book: Book) => Promise<void>;
   onStackBooks?: (bookId: string, targetBookId: string) => Promise<boolean>;
@@ -83,6 +85,7 @@ export function EditableBookshelfGrid({
   isLoading = false,
   isEditing,
   shelfStyle = 'full',
+  shelfColor,
   onReorderBooks,
   onToggleBookStack,
   onStackBooks,
@@ -92,6 +95,7 @@ export function EditableBookshelfGrid({
   const fullShelfBorderWidth = BookshelfDimensions.shelfThickness / 2;
   const fullShelfMargin = Spacing.xs;
   const { width: screenWidth } = useWindowDimensions();
+  const shelfColors = useMemo(() => getShelfColors(shelfColor), [shelfColor]);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [localBooks, setLocalBooks] = useState<Book[]>(books);
 
@@ -474,7 +478,7 @@ export function EditableBookshelfGrid({
               styles.shelfContainer,
               shelfStyle === 'full' && {
                 borderWidth: fullShelfBorderWidth,
-                borderColor: BookshelfDimensions.shelfColor,
+                borderColor: shelfColors.shelfColor,
                 borderRadius: 0,
                 marginBottom: 0,
                 paddingHorizontal: 0,
@@ -486,7 +490,7 @@ export function EditableBookshelfGrid({
             {/* Shelf back - only shown in 'full' style */}
             {shelfStyle === 'full' && (
               <View
-                style={styles.shelfBack}
+                style={[styles.shelfBack, { backgroundColor: shelfColors.shelfBackColor }]}
               />
             )}
 
@@ -582,7 +586,9 @@ export function EditableBookshelfGrid({
             </View>
 
             {/* Shelf surface - only shown in 'bottom' style (full style uses border instead) */}
-            {shelfStyle === 'bottom' && <View style={styles.shelfSurface} />}
+            {shelfStyle === 'bottom' && (
+              <View style={[styles.shelfSurface, { backgroundColor: shelfColors.shelfColor }]} />
+            )}
           </View>
         );
       })}
