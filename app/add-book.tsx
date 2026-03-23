@@ -201,6 +201,7 @@ export default function AddBookScreen() {
                 placeholder="Enter book title"
                 value={title}
                 onChangeText={setTitle}
+                autoFocus
                 error={errors.title}
                 leftIcon="book-outline"
               />
