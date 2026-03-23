@@ -17,7 +17,7 @@
  * const { data, error } = await storageService.uploadBookSpine(uri, userId);
  */
 
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { supabase, STORAGE_BUCKETS, handleSupabaseError } from './supabase';
 import type { ApiResponse } from '@/types';
 import { decode } from 'base64-arraybuffer';
