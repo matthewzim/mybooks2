@@ -116,7 +116,7 @@ export function BookshelfPreview({ bookshelf, books, onPress, onDelete }: Booksh
         >
           {shelfStyle === 'full' && <View style={styles.shelfBack} />}
 
-          <View style={[styles.booksRow, { minHeight: PREVIEW_BOOK_HEIGHT }]}>
+          <View style={[styles.booksRow, { minHeight: PREVIEW_BOOK_HEIGHT + BorderRadius.md }]}>
             {firstRowBooks.length > 0 ? (
               firstRowBooks.map((book) => <BookPreviewSpine key={book.id} book={book} />)
             ) : (

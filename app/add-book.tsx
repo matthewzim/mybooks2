@@ -55,7 +55,7 @@ export default function AddBookScreen() {
   const handlePickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         quality: 0.8,
         allowsEditing: true,
         aspect: [1, 3], // Book spine aspect ratio
