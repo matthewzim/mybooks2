@@ -22,8 +22,8 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import type { Bookshelf, Book } from '@/types';
 
-const PREVIEW_BOOK_WIDTH = 26;
-const PREVIEW_BOOK_HEIGHT = 135;
+const PREVIEW_BOOK_WIDTH = 20;
+const PREVIEW_BOOK_HEIGHT = 105;
 const PREVIEW_SHELF_THICKNESS = 12;
 const PREVIEW_BORDER_WIDTH = 4;
 
