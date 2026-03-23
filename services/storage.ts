@@ -52,7 +52,7 @@ class StorageService {
 
       // Read the file as base64
       const base64 = await FileSystem.readAsStringAsync(localUri, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: 'base64',
       });
 
       // Determine content type based on extension
@@ -102,7 +102,7 @@ class StorageService {
 
       // Read the file as base64
       const base64 = await FileSystem.readAsStringAsync(localUri, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: 'base64',
       });
 
       const contentType = this.getContentType(fileExtension);
@@ -158,7 +158,7 @@ class StorageService {
 
       // Read the downloaded file as base64
       const base64 = await FileSystem.readAsStringAsync(tmpPath, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: 'base64',
       });
 
       const fileName = `${bookId}/cover.jpg`;
