@@ -142,6 +142,7 @@ export default function CreateBookshelfScreen() {
                 error={error || undefined}
                 leftIcon="library-outline"
                 maxLength={50}
+                autoFocus
               />
 
               <Input
