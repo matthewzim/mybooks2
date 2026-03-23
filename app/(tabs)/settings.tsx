@@ -21,6 +21,8 @@ import {
   Switch,
   Modal,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -304,6 +306,10 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.backgroundDark }]} edges={['left', 'right']}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardView}
+      >
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -512,6 +518,7 @@ export default function SettingsScreen() {
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+      </KeyboardAvoidingView>
 
       <Modal
         visible={showGoodreadsImportModal}
@@ -615,6 +622,9 @@ function SettingsRow({
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  keyboardView: {
     flex: 1,
   },
   scrollView: {
