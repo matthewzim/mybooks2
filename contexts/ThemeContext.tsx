@@ -55,7 +55,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
  * Automatically restores theme preference on app start.
  */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeType>('light');
+  const [theme, setThemeState] = useState<ThemeType>('standard');
   const [isLoading, setIsLoading] = useState(true);
 
   /**
