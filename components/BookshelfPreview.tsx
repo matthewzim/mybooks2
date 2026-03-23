@@ -23,7 +23,7 @@ import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import type { Bookshelf, Book } from '@/types';
 
 const PREVIEW_BOOK_WIDTH = 20;
-const PREVIEW_BOOK_HEIGHT = 105;
+const PREVIEW_BOOK_HEIGHT = 132;
 const PREVIEW_SHELF_THICKNESS = 12;
 const PREVIEW_BORDER_WIDTH = 4;
 
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     zIndex: 1,
     flexWrap: 'nowrap',
-    paddingTop: BorderRadius.md,
+    paddingTop: Spacing.md,
   },
   shelfSurface: {
     height: PREVIEW_SHELF_THICKNESS,

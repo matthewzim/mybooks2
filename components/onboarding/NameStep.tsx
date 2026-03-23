@@ -59,6 +59,7 @@ export function NameStep({ onNext, onSkip }: { onNext: () => void; onSkip: () =>
   const { colors } = useTheme();
   const { shelfName, setShelfName } = useOnboarding();
   const [customName, setCustomName] = useState('');
+  const inputRef = useRef<TextInput>(null);
 
   const handleChipPress = (name: string) => {
     setShelfName(name);
@@ -107,9 +108,13 @@ export function NameStep({ onNext, onSkip }: { onNext: () => void; onSkip: () =>
       </View>
 
       {/* Custom name input */}
-      <View style={[styles.inputRow, { backgroundColor: colors.inputBackground, borderColor: colors.inputBorder }]}>
+      <Pressable
+        style={[styles.inputRow, { backgroundColor: colors.inputBackground, borderColor: colors.inputBorder }]}
+        onPress={() => inputRef.current?.focus()}
+      >
         <Ionicons name="pencil" size={18} color={colors.textLight} />
         <TextInput
+          ref={inputRef}
           style={[styles.input, { color: colors.text }]}
           placeholder="Or type a custom name..."
           placeholderTextColor={colors.textLight}
@@ -117,8 +122,9 @@ export function NameStep({ onNext, onSkip }: { onNext: () => void; onSkip: () =>
           onChangeText={handleCustomChange}
           maxLength={40}
           returnKeyType="done"
+          showSoftInputOnFocus
         />
-      </View>
+      </Pressable>
 
       <View style={styles.actions}>
         <Pressable

@@ -93,6 +93,7 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const inputRef = useRef<TextInput>(null);
 
   const handleSearch = useCallback(async () => {
     if (!query.trim()) return;
@@ -137,9 +138,13 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
         </Pressable>
       </View>
 
-      <View style={[styles.searchInputRow, { backgroundColor: colors.inputBackground, borderColor: colors.inputBorder }]}>
+      <Pressable
+        style={[styles.searchInputRow, { backgroundColor: colors.inputBackground, borderColor: colors.inputBorder }]}
+        onPress={() => inputRef.current?.focus()}
+      >
         <Ionicons name="search" size={18} color={colors.textLight} />
         <TextInput
+          ref={inputRef}
           style={[styles.searchInput, { color: colors.text }]}
           placeholder="Search by title or author..."
           placeholderTextColor={colors.textLight}
@@ -148,8 +153,9 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
           onSubmitEditing={handleSearch}
           returnKeyType="search"
           autoFocus
+          showSoftInputOnFocus
         />
-      </View>
+      </Pressable>
 
       {isSearching && <ActivityIndicator style={styles.loader} color={colors.accent} />}
 
