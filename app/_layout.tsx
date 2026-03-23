@@ -49,6 +49,7 @@ function RootLayoutContent() {
           contentStyle: {
             backgroundColor: colors.background,
           },
+          keyboardHandlingEnabled: false,
         }}
       >
         {/* Main entry point - handles auth routing */}
