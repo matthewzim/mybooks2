@@ -116,7 +116,7 @@ export function BookshelfPreview({ bookshelf, books, onPress, onDelete }: Booksh
         >
           {shelfStyle === 'full' && <View style={styles.shelfBack} />}
 
-          <View style={[styles.booksRow, { minHeight: PREVIEW_BOOK_HEIGHT + BorderRadius.md }]}>
+          <View style={[styles.booksRow, { minHeight: PREVIEW_BOOK_HEIGHT }]}>
             {firstRowBooks.length > 0 ? (
               firstRowBooks.map((book) => <BookPreviewSpine key={book.id} book={book} />)
             ) : (
@@ -162,7 +162,7 @@ function BookPreviewSpine({ book }: BookPreviewSpineProps) {
   return (
     <View style={[styles.bookSpine, { backgroundColor: hasImage ? undefined : getBookColor(book.title) }]}>
       {hasImage ? (
-        <Image source={{ uri: spineImageUrl }} style={styles.bookImage} contentFit="cover" transition={220} />
+        <Image source={{ uri: spineImageUrl }} style={styles.bookImage} contentFit="contain" transition={220} />
       ) : (
         <View style={styles.bookPlaceholder} />
       )}
@@ -227,7 +227,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     zIndex: 1,
     flexWrap: 'nowrap',
-    paddingTop: Spacing.md,
   },
   shelfSurface: {
     height: PREVIEW_SHELF_THICKNESS,
