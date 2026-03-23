@@ -44,13 +44,13 @@ export default function TabsLayout() {
         headerTitleStyle: {
           fontFamily: getFontFamily('semibold'),
         },
+        keyboardHandlingEnabled: false,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: '',
-          headerShown: false,
           tabBarLabel: 'Home',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="library-outline" size={size} color={color} />

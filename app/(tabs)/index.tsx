@@ -95,14 +95,6 @@ export default function HomeScreen() {
                 : `${bookshelves.length} ${bookshelves.length === 1 ? 'bookshelf' : 'bookshelves'} organized and ready to explore.`}
             </Text>
           </View>
-
-          <Pressable
-            style={[styles.headerBadge, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={handleAddBookshelf}
-          >
-            <Ionicons name="add" size={16} color={colors.primary} />
-            <Text style={[styles.headerBadgeText, { color: colors.primary }]}>New</Text>
-          </Pressable>
         </View>
 
         {bookshelves.length > 0 ? (
@@ -160,16 +152,11 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xl,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.sm,
     paddingBottom: Spacing.md,
-    gap: Spacing.md,
   },
   headerText: {
-    flex: 1,
     gap: Spacing.xs,
   },
   eyebrow: {
@@ -189,19 +176,6 @@ const styles = StyleSheet.create({
   },
   bookshelvesContainer: {
     paddingTop: Spacing.xs,
-  },
-  headerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-  },
-  headerBadgeText: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: getFontFamily('semibold'),
   },
   addButton: {
     flexDirection: 'row',

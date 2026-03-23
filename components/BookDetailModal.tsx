@@ -276,9 +276,9 @@ export function BookDetailModal({
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
       <Animated.View style={[styles.overlay, { opacity: overlayOpacity, backgroundColor: colors.overlay }]}>
-        <Pressable style={styles.backdropPress} onPress={handleClose} />
+        <Pressable style={styles.backdropPress} onPress={handleClose} accessible={false} />
 
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} pointerEvents="box-none" style={styles.keyboardView}>
           <Animated.View
             style={[
               styles.card,
