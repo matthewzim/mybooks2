@@ -5,7 +5,7 @@
  * Supports theme-aware colors via the colors prop.
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   TextInput,
@@ -46,6 +46,7 @@ export function Input({
   const [isFocused, setIsFocused] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const themeColors = colors || Colors;
+  const inputRef = useRef<TextInput>(null);
 
   const showPasswordToggle = secureTextEntry && !rightIcon;
   const actualSecureTextEntry = secureTextEntry && !isPasswordVisible;
@@ -54,7 +55,7 @@ export function Input({
     <View style={[styles.container, containerStyle]}>
       {label && <Text style={[styles.label, { color: themeColors.text }]}>{label}</Text>}
 
-      <View
+      <Pressable
         style={[
           styles.inputContainer,
           { backgroundColor: themeColors.inputBackground, borderColor: themeColors.border },
@@ -67,6 +68,7 @@ export function Input({
           },
           error && { borderColor: themeColors.error },
         ]}
+        onPress={() => inputRef.current?.focus()}
       >
         {leftIcon && (
           <Ionicons
@@ -78,6 +80,7 @@ export function Input({
         )}
 
         <TextInput
+          ref={inputRef}
           style={[
             styles.input,
             { color: themeColors.text },
@@ -88,6 +91,7 @@ export function Input({
           onFocus={(e) => { setIsFocused(true); onFocusProp?.(e); }}
           onBlur={(e) => { setIsFocused(false); onBlurProp?.(e); }}
           secureTextEntry={actualSecureTextEntry}
+          showSoftInputOnFocus={props.showSoftInputOnFocus ?? true}
           {...props}
         />
 
@@ -119,7 +123,7 @@ export function Input({
             />
           </Pressable>
         )}
-      </View>
+      </Pressable>
 
       {error && <Text style={[styles.helperText, { color: themeColors.error }]}>{error}</Text>}
       {hint && !error && <Text style={[styles.helperText, { color: themeColors.textSecondary }]}>{hint}</Text>}
