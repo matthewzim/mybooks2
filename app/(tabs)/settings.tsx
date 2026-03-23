@@ -35,7 +35,6 @@ import {
   BorderRadius,
   Typography,
   Shadows,
-  ThemeType,
   ThemeColors,
 } from '@/constants/theme';
 import { FREE_TIER_LIMITS } from '@/services/stripe';
@@ -43,15 +42,6 @@ import { bookshelvesService } from '@/services/bookshelves';
 import { booksService } from '@/services/books';
 import { supabase } from '@/services/supabase';
 import type { Bookshelf } from '@/types';
-
-/**
- * Theme option configuration
- */
-const THEME_OPTIONS: { value: ThemeType; label: string; icon: keyof typeof Ionicons.glyphMap; description: string }[] = [
-  { value: 'light', label: 'Light Mode', icon: 'sunny-outline', description: 'Clean white background' },
-  { value: 'dark', label: 'Dark Mode', icon: 'moon-outline', description: 'Easy on the eyes' },
-  { value: 'standard', label: 'Standard', icon: 'leaf-outline', description: 'Warm brown tones' },
-];
 
 interface GoodreadsCsvBook {
   title: string;
@@ -125,7 +115,7 @@ function parseGoodreadsBooks(csvText: string): GoodreadsCsvBook[] {
 
 export default function SettingsScreen() {
   const { user, updateProfile } = useAuth();
-  const { theme, setTheme, colors } = useTheme();
+  const { colors } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
   const [isLoading, setIsLoading] = useState(false);
@@ -312,19 +302,13 @@ export default function SettingsScreen() {
     router.push('/payment');
   };
 
-  /**
-   * Handle theme change
-   */
-  const handleThemeChange = async (newTheme: ThemeType) => {
-    await setTheme(newTheme);
-  };
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.backgroundDark }]} edges={['left', 'right']}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Profile Section */}
         <View style={styles.section}>
@@ -389,106 +373,6 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Premium Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Subscription</Text>
-          <Pressable
-            style={[styles.card, styles.premiumCard, { backgroundColor: colors.card }]}
-            onPress={handleUpgrade}
-          >
-            <View style={styles.premiumContent}>
-              <View style={styles.premiumHeader}>
-                <Ionicons
-                  name={user?.is_premium ? 'star' : 'star-outline'}
-                  size={28}
-                  color={user?.is_premium ? colors.starFilled : colors.primary}
-                />
-                <View style={styles.premiumText}>
-                  <Text style={[styles.premiumTitle, { color: colors.text }]}>
-                    {user?.is_premium ? 'Premium Member' : 'Go Premium'}
-                  </Text>
-                  <Text style={[styles.premiumDescription, { color: colors.textSecondary }]}>
-                    {user?.is_premium
-                      ? 'Thank you for your support!'
-                      : 'Unlock unlimited bookshelves and home screen widget'}
-                  </Text>
-                </View>
-              </View>
-              {!user?.is_premium && (
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={colors.textSecondary}
-                />
-              )}
-            </View>
-          </Pressable>
-        </View>
-
-        {/* Appearance Section - Theme Selection */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Appearance</Text>
-          <View style={[styles.card, { backgroundColor: colors.card }]}>
-            {THEME_OPTIONS.map((option, index) => (
-              <Pressable
-                key={option.value}
-                style={({ pressed }) => [
-                  styles.themeOption,
-                  { borderBottomColor: colors.border },
-                  index === THEME_OPTIONS.length - 1 && styles.lastThemeOption,
-                  pressed && { backgroundColor: colors.backgroundDark },
-                ]}
-                onPress={() => handleThemeChange(option.value)}
-              >
-                <View style={styles.themeOptionLeft}>
-                  <View style={[
-                    styles.themeIconContainer,
-                    { backgroundColor: theme === option.value ? colors.primary : colors.backgroundDark }
-                  ]}>
-                    <Ionicons
-                      name={option.icon}
-                      size={20}
-                      color={theme === option.value ? colors.textInverse : colors.primary}
-                    />
-                  </View>
-                  <View style={styles.themeOptionText}>
-                    <Text style={[styles.themeOptionTitle, { color: colors.text }]}>{option.label}</Text>
-                    <Text style={[styles.themeOptionDescription, { color: colors.textSecondary }]}>
-                      {option.description}
-                    </Text>
-                  </View>
-                </View>
-                {theme === option.value && (
-                  <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
-                )}
-              </Pressable>
-            ))}
-          </View>
-        </View>
-
-        {/* Preferences Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Preferences</Text>
-          <View style={[styles.card, { backgroundColor: colors.card }]}>
-            <SettingsRow
-              icon="notifications-outline"
-              title="Push Notifications"
-              subtitle="Receive updates about your library"
-              colors={colors}
-              trailing={
-                <Switch
-                  value={notifications}
-                  onValueChange={setNotifications}
-                  trackColor={{
-                    false: colors.border,
-                    true: colors.primary,
-                  }}
-                />
-              }
-            />
-          </View>
-        </View>
-
         {/* Widget Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>iOS Widget</Text>
@@ -540,6 +424,65 @@ export default function SettingsScreen() {
               onPress={() => setShowGoodreadsImportModal(true)}
             />
           </View>
+        </View>
+
+        {/* Preferences Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Preferences</Text>
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
+            <SettingsRow
+              icon="notifications-outline"
+              title="Push Notifications"
+              subtitle="Receive updates about your library"
+              colors={colors}
+              trailing={
+                <Switch
+                  value={notifications}
+                  onValueChange={setNotifications}
+                  trackColor={{
+                    false: colors.border,
+                    true: colors.primary,
+                  }}
+                />
+              }
+            />
+          </View>
+        </View>
+
+        {/* Subscription Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Subscription</Text>
+          <Pressable
+            style={[styles.card, styles.premiumCard, { backgroundColor: colors.card }]}
+            onPress={handleUpgrade}
+          >
+            <View style={styles.premiumContent}>
+              <View style={styles.premiumHeader}>
+                <Ionicons
+                  name={user?.is_premium ? 'star' : 'star-outline'}
+                  size={28}
+                  color={user?.is_premium ? colors.starFilled : colors.primary}
+                />
+                <View style={styles.premiumText}>
+                  <Text style={[styles.premiumTitle, { color: colors.text }]}>
+                    {user?.is_premium ? 'Premium Member' : 'Go Premium'}
+                  </Text>
+                  <Text style={[styles.premiumDescription, { color: colors.textSecondary }]}>
+                    {user?.is_premium
+                      ? 'Thank you for your support!'
+                      : 'Unlock unlimited bookshelves and home screen widget'}
+                  </Text>
+                </View>
+              </View>
+              {!user?.is_premium && (
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+              )}
+            </View>
+          </Pressable>
         </View>
 
         {/* About Section */}

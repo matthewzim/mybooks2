@@ -138,6 +138,7 @@ export default function CommunityScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={[styles.heroSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.heroEyebrow, { color: colors.primary }]}>Community</Text>

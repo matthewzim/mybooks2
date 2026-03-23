@@ -27,6 +27,7 @@ export default function TabsLayout() {
           height: 64,
           paddingTop: Spacing.xs,
           paddingBottom: Spacing.xs,
+          marginBottom: Spacing.sm,
         },
         tabBarItemStyle: {
           borderRadius: BorderRadius.lg,
@@ -48,7 +49,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'My Library',
+          title: '',
+          headerShown: false,
           tabBarLabel: 'Home',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="library-outline" size={size} color={color} />
