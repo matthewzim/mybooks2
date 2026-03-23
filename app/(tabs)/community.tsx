@@ -195,12 +195,18 @@ export default function CommunityScreen() {
           </View>
 
           {isLoadingPublicBookshelves ? (
-            <View style={styles.loadingContainer}>
+            <View style={[styles.loadingContainer, styles.previewsContentInset]}>
               <ActivityIndicator size="small" color={colors.primary} />
               <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading bookshelf previews...</Text>
             </View>
           ) : publicBookshelfPreviews.length === 0 ? (
-            <View style={[styles.noResultsContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View
+              style={[
+                styles.noResultsContainer,
+                styles.previewsContentInset,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
               <Text style={[styles.noResultsText, { color: colors.textSecondary }]}>No public bookshelves available yet.</Text>
             </View>
           ) : (
@@ -210,6 +216,7 @@ export default function CommunityScreen() {
                 bookshelf={bookshelf}
                 books={bookshelf.books.slice(0, 4)}
                 onPress={() => handlePublicBookshelfPress(bookshelf)}
+                containerStyle={styles.previewCard}
               />
             ))
           )}
@@ -259,6 +266,7 @@ const styles = StyleSheet.create({
   },
   previewsSection: {
     gap: Spacing.md,
+    paddingHorizontal: Spacing.md,
   },
   userSearchHeader: {
     flexDirection: 'row',
@@ -306,6 +314,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: Spacing.md,
     gap: Spacing.sm,
+  },
+  previewsContentInset: {
+    marginHorizontal: 0,
+  },
+  previewCard: {
+    marginHorizontal: 0,
   },
   loadingText: {
     fontSize: Typography.sizes.sm,
