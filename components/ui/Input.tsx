@@ -39,6 +39,8 @@ export function Input({
   containerStyle,
   secureTextEntry,
   colors,
+  onFocus: onFocusProp,
+  onBlur: onBlurProp,
   ...props
 }: InputProps) {
   const [isFocused, setIsFocused] = useState(false);
@@ -83,8 +85,8 @@ export function Input({
             (rightIcon || showPasswordToggle) && styles.inputWithRightIcon,
           ]}
           placeholderTextColor={themeColors.textLight}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
+          onFocus={(e) => { setIsFocused(true); onFocusProp?.(e); }}
+          onBlur={(e) => { setIsFocused(false); onBlurProp?.(e); }}
           secureTextEntry={actualSecureTextEntry}
           {...props}
         />

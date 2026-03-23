@@ -184,7 +184,7 @@ export function BrowseBooksModal({
       <Animated.View style={[styles.overlay, { opacity: overlayOpacity, backgroundColor: colors.overlay }]}>
         <Pressable style={styles.backdropPress} onPress={handleClose} accessible={false} />
 
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} pointerEvents="box-none" style={styles.keyboardView}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} pointerEvents="box-none" style={styles.keyboardView}>
           <Animated.View
             style={[
               styles.card,
@@ -297,6 +297,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   keyboardView: {
+    flex: 1,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
