@@ -408,8 +408,7 @@ class BooksService {
         `,
           { count: 'exact' }
         )
-        .eq('is_community', true)
-        .not('image_url', 'is', null);
+        .eq('is_community', true);
 
       if (searchQuery) {
         query = query.or(
@@ -473,7 +472,7 @@ class BooksService {
       return this.createBook({
         title: communityBook.title,
         author: communityBook.author,
-        image_url: communityBook.image_url,
+        image_url: communityBook.image_url || undefined,
         shelf_id: shelfId,
         is_community: false,
         book_id: communityBook.id, // reuse the same global book record
@@ -499,6 +498,74 @@ class BooksService {
     rating: number | null
   ): Promise<ApiResponse<Book>> {
     return this.updateBook(id, { review, rating });
+  }
+
+  /**
+   * Find alternate spine images for the same book.
+   * Matches on ISBN when available, otherwise exact title/author pairs.
+   *
+   * @param book - Current book
+   * @returns Other global book rows that can provide a spine image
+   */
+  async getAlternativeSpines(
+    book: Pick<Book, 'book_id' | 'title' | 'author' | 'isbn' | 'image_url'>
+  ): Promise<ApiResponse<CommunityBookSpine[]>> {
+    try {
+      let query = supabase
+        .from(TABLES.BOOKS)
+        .select(`
+          id,
+          title,
+          author,
+          image_url,
+          uploaded_by_user_id,
+          created_at,
+          users!uploaded_by_user_id(name)
+        `)
+        .not('image_url', 'is', null)
+        .order('created_at', { ascending: false });
+
+      if (book.isbn) {
+        query = query.eq('isbn', book.isbn);
+      } else {
+        query = query.eq('title', book.title).eq('author', book.author);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      const seenUrls = new Set<string>();
+      const alternatives: CommunityBookSpine[] = [];
+
+      for (const row of data || []) {
+        if (!row.image_url || seenUrls.has(row.image_url)) {
+          continue;
+        }
+
+        seenUrls.add(row.image_url);
+        alternatives.push({
+          id: row.id,
+          title: row.title,
+          author: row.author,
+          image_url: row.image_url,
+          uploaded_by_user_id: row.uploaded_by_user_id,
+          uploader_name: row.users?.name || null,
+          times_added: 0,
+          created_at: row.created_at,
+        });
+      }
+
+      return {
+        data: alternatives.filter((item) => item.image_url !== book.image_url),
+        error: null,
+      };
+    } catch (error) {
+      return {
+        data: null,
+        error: { message: handleSupabaseError(error) },
+      };
+    }
   }
 
   /**

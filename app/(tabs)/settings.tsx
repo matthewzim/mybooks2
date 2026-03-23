@@ -226,12 +226,12 @@ export default function SettingsScreen() {
       );
 
       let importedCount = 0;
-      let missingCount = 0;
+      let placeholderCount = 0;
 
       for (const csvBook of uniquePairs) {
         const { data: matchedBook, error: matchError } = await supabase
           .from('books')
-          .select('id,title,author')
+          .select('id,title,author,image_url')
           .eq('title', csvBook.title)
           .eq('author', csvBook.author)
           .limit(1)
@@ -242,27 +242,32 @@ export default function SettingsScreen() {
           continue;
         }
 
-        if (!matchedBook) {
-          missingCount += 1;
-          continue;
-        }
-
-        const createResult = await booksService.createBook({
-          title: matchedBook.title,
-          author: matchedBook.author,
-          shelf_id: destinationShelf.id,
-          book_id: matchedBook.id,
-        });
+        const createResult = matchedBook
+          ? await booksService.createBook({
+              title: matchedBook.title,
+              author: matchedBook.author,
+              shelf_id: destinationShelf.id,
+              book_id: matchedBook.id,
+            })
+          : await booksService.createBook({
+              title: csvBook.title,
+              author: csvBook.author,
+              shelf_id: destinationShelf.id,
+              is_community: false,
+            });
 
         if (!createResult.error) {
           importedCount += 1;
+          if (!matchedBook?.image_url) {
+            placeholderCount += 1;
+          }
         }
       }
 
       setShowGoodreadsImportModal(false);
       Alert.alert(
         'Goodreads Import Complete',
-        `Added ${importedCount} book${importedCount === 1 ? '' : 's'} to "${destinationShelf.name}".${missingCount > 0 ? `\n${missingCount} book${missingCount === 1 ? '' : 's'} did not match books in our catalog.` : ''}`
+        `Added ${importedCount} book${importedCount === 1 ? '' : 's'} to "${destinationShelf.name}".${placeholderCount > 0 ? `\n${placeholderCount} book${placeholderCount === 1 ? ' uses' : ' use'} a placeholder spine until a scanned spine is added.` : ''}`
       );
     } catch (error) {
       console.error('Goodreads import failed:', error);

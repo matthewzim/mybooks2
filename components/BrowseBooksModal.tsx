@@ -248,7 +248,12 @@ export function BrowseBooksModal({
                       <Image source={{ uri: book.image_url }} style={styles.bookThumbnail} contentFit="cover" />
                     ) : (
                       <View style={[styles.bookThumbnail, styles.bookPlaceholder, { backgroundColor: colors.primary }]}>
-                        <Ionicons name="book-outline" size={16} color={colors.textInverse} />
+                        <Text style={[styles.bookPlaceholderTitle, { color: colors.textInverse }]} numberOfLines={3}>
+                          {book.title}
+                        </Text>
+                        <Text style={[styles.bookPlaceholderAuthor, { color: colors.textOnDarkMuted }]} numberOfLines={2}>
+                          {book.author}
+                        </Text>
                       </View>
                     )}
                     <View style={styles.bookInfo}>
@@ -361,6 +366,17 @@ const styles = StyleSheet.create({
   bookPlaceholder: {
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  bookPlaceholderTitle: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: Typography.weights.semibold,
+    textAlign: 'center',
+  },
+  bookPlaceholderAuthor: {
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 4,
   },
   bookInfo: {
     flex: 1,

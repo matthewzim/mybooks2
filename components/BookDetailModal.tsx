@@ -6,6 +6,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   Dimensions,
@@ -21,10 +22,13 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
+import { useAuth } from '@/contexts/AuthContext';
+import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { booksService } from '@/services/books';
 import { googleBooksService } from '@/services/googleBooks';
-import { getCoverImageUrl } from '@/services/storage';
+import { getCoverImageUrl, storageService } from '@/services/storage';
 import { Button, Rating } from '@/components/ui';
 import {
   BorderRadius,
@@ -33,7 +37,7 @@ import {
   BookSpine as BookSpineConstants,
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
-import type { Book } from '@/types';
+import type { Book, CommunityBookSpine } from '@/types';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_WIDTH = Math.min(SCREEN_WIDTH * 0.9, 420);
@@ -56,6 +60,50 @@ function getBookColor(title: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
+function AlternateSpineOption({
+  option,
+  isUpdating,
+  onSelect,
+}: {
+  option: CommunityBookSpine;
+  isUpdating: boolean;
+  onSelect: (option: CommunityBookSpine) => void;
+}) {
+  const { colors } = useTheme();
+  const resolvedImageUrl = useSpineImageUrl(option.image_url);
+  const backgroundColor = getBookColor(option.title);
+
+  return (
+    <Pressable
+      style={[
+        styles.spineOptionButton,
+        {
+          borderColor: colors.inputBorder,
+          backgroundColor: colors.card,
+        },
+      ]}
+      onPress={() => onSelect(option)}
+      disabled={isUpdating}
+    >
+      {resolvedImageUrl ? (
+        <Image source={{ uri: resolvedImageUrl }} style={styles.spineOptionImage} contentFit="cover" />
+      ) : (
+        <View style={[styles.spineOptionImage, styles.spineOptionPlaceholder, { backgroundColor }]}>
+          <Text style={[styles.spineOptionTitle, { color: colors.textOnDark }]} numberOfLines={3}>
+            {option.title}
+          </Text>
+          <Text style={[styles.spineOptionAuthor, { color: colors.textOnDarkMuted }]} numberOfLines={2}>
+            {option.author}
+          </Text>
+        </View>
+      )}
+      <Text style={[styles.spineOptionLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+        {option.uploader_name ? `By ${option.uploader_name}` : 'Use this spine'}
+      </Text>
+    </Pressable>
+  );
+}
+
 export function BookDetailModal({
   visible,
   book,
@@ -64,10 +112,12 @@ export function BookDetailModal({
   onBookDeleted,
 }: BookDetailModalProps) {
   const { colors } = useTheme();
+  const { user } = useAuth();
 
   const [isSaving, setIsSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [isUpdatingSpine, setIsUpdatingSpine] = useState(false);
 
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
@@ -76,11 +126,14 @@ export function BookDetailModal({
 
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [isCoverLoading, setIsCoverLoading] = useState(false);
+  const [alternativeSpines, setAlternativeSpines] = useState<CommunityBookSpine[]>([]);
+  const [isLoadingAlternativeSpines, setIsLoadingAlternativeSpines] = useState(false);
 
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const cardTranslateY = useRef(new Animated.Value(24)).current;
   const cardScale = useRef(new Animated.Value(0.98)).current;
+  const resolvedSpineImageUrl = useSpineImageUrl(book?.image_url);
 
   useEffect(() => {
     if (book) {
@@ -167,6 +220,31 @@ export function BookDetailModal({
       ]).start();
     }
   }, [visible, book, overlayOpacity, cardOpacity, cardTranslateY, cardScale]);
+
+  useEffect(() => {
+    if (!visible || !book || !isEditing) {
+      setAlternativeSpines([]);
+      setIsLoadingAlternativeSpines(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    setIsLoadingAlternativeSpines(true);
+    booksService
+      .getAlternativeSpines(book)
+      .then((result) => {
+        if (cancelled) return;
+        setAlternativeSpines(result.data || []);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingAlternativeSpines(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, book, isEditing]);
 
   const handleClose = () => {
     if (isClosing) return;
@@ -267,6 +345,77 @@ export function BookDetailModal({
         },
       },
     ]);
+  };
+
+  const handleSelectExistingSpine = async (option: CommunityBookSpine) => {
+    if (!book || !option.image_url || isUpdatingSpine) return;
+
+    setIsUpdatingSpine(true);
+    try {
+      const result = await booksService.updateBook(book.id, {
+        image_url: option.image_url,
+      });
+
+      if (result.data) {
+        onBookUpdated?.(result.data);
+        Alert.alert('Spine Updated', 'This book now uses the selected spine image.');
+      } else if (result.error) {
+        Alert.alert('Error', result.error.message);
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to update the book spine.');
+    } finally {
+      setIsUpdatingSpine(false);
+    }
+  };
+
+  const handleScanNewSpine = async () => {
+    if (!book || !user?.id || isUpdatingSpine) {
+      Alert.alert('Error', 'Unable to scan a new spine right now.');
+      return;
+    }
+
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Camera Required', 'Please enable camera access to scan a new book spine.');
+        return;
+      }
+
+      const captureResult = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        allowsEditing: true,
+        aspect: [1, 3],
+      });
+
+      if (captureResult.canceled || !captureResult.assets?.[0]?.uri) {
+        return;
+      }
+
+      setIsUpdatingSpine(true);
+
+      const uploadResult = await storageService.uploadBookSpine(captureResult.assets[0].uri, user.id);
+      if (uploadResult.error || !uploadResult.data) {
+        Alert.alert('Upload Failed', uploadResult.error?.message || 'Failed to upload spine image.');
+        return;
+      }
+
+      const updateResult = await booksService.updateBook(book.id, {
+        image_url: uploadResult.data,
+      });
+
+      if (updateResult.data) {
+        onBookUpdated?.(updateResult.data);
+        Alert.alert('Spine Updated', 'Your new scanned spine has been saved for this book.');
+      } else {
+        Alert.alert('Error', updateResult.error?.message || 'Failed to update the book spine.');
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to scan a new spine.');
+    } finally {
+      setIsUpdatingSpine(false);
+    }
   };
 
   if (!book) return null;
@@ -375,6 +524,66 @@ export function BookDetailModal({
                     />
                   </View>
 
+                  <View style={styles.field}>
+                    <Text style={[styles.fieldLabel, { color: colors.text }]}>Book Spine</Text>
+                    <View style={[styles.spineManagerCard, { backgroundColor: colors.bookBase, borderColor: colors.inputBorder }]}>
+                      <View style={styles.spineManagerHeader}>
+                        <View style={[styles.currentSpinePreview, { backgroundColor: bookColor }]}>
+                          {resolvedSpineImageUrl ? (
+                            <Image source={{ uri: resolvedSpineImageUrl }} style={styles.currentSpineImage} contentFit="cover" />
+                          ) : (
+                            <View style={[styles.currentSpineImage, styles.spineOptionPlaceholder, { backgroundColor: bookColor }]}>
+                              <Text style={[styles.spineOptionTitle, { color: colors.textOnDark }]} numberOfLines={3}>
+                                {book.title}
+                              </Text>
+                              <Text style={[styles.spineOptionAuthor, { color: colors.textOnDarkMuted }]} numberOfLines={2}>
+                                {book.author}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        <View style={styles.spineManagerActions}>
+                          <Button
+                            title="Scan New Spine"
+                            onPress={handleScanNewSpine}
+                            loading={isUpdatingSpine}
+                            style={styles.spineManagerActionButton}
+                          />
+                        </View>
+                      </View>
+
+                      <Text style={[styles.spineManagerHelpText, { color: colors.textSecondary }]}>
+                        Pick another saved spine for this book, or scan a new one with your camera.
+                      </Text>
+
+                      {isLoadingAlternativeSpines ? (
+                        <View style={styles.spineStatusRow}>
+                          <ActivityIndicator size="small" color={colors.primary} />
+                          <Text style={[styles.spineStatusText, { color: colors.textSecondary }]}>Loading saved spine options…</Text>
+                        </View>
+                      ) : alternativeSpines.length > 0 ? (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.spineOptionsRow}
+                        >
+                          {alternativeSpines.map((option: CommunityBookSpine) => (
+                            <AlternateSpineOption
+                              key={option.id}
+                              option={option}
+                              isUpdating={isUpdatingSpine}
+                              onSelect={handleSelectExistingSpine}
+                            />
+                          ))}
+                        </ScrollView>
+                      ) : (
+                        <Text style={[styles.spineEmptyText, { color: colors.textSecondary }]}>
+                          No other saved spine images were found for this book yet.
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+
                   <View style={styles.editButtons}>
                     <Button title="Cancel" variant="outline" onPress={handleCancel} style={styles.editButton} />
                     <Button title="Save" onPress={handleSave} loading={isSaving} style={styles.editButton} />
@@ -396,8 +605,8 @@ export function BookDetailModal({
                         <View style={[styles.coverImage, styles.thumbnailPlaceholder, { backgroundColor: bookColor }]}>
                           <Text style={[styles.coverLoadingText, { color: colors.textOnDark }]}>Loading cover…</Text>
                         </View>
-                      ) : book.image_url ? (
-                        <Image source={{ uri: book.image_url }} style={styles.coverImage} contentFit="cover" />
+                      ) : resolvedSpineImageUrl ? (
+                        <Image source={{ uri: resolvedSpineImageUrl }} style={styles.coverImage} contentFit="cover" />
                       ) : (
                         <View style={[styles.coverImage, styles.thumbnailPlaceholder, { backgroundColor: bookColor }]}>
                           <Text style={[styles.placeholderInitial, { color: colors.textOnDark }]}>
@@ -576,6 +785,87 @@ const styles = StyleSheet.create({
   },
   textArea: {
     minHeight: 80,
+  },
+  spineManagerCard: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+  },
+  spineManagerHeader: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    alignItems: 'center',
+  },
+  currentSpinePreview: {
+    width: 54,
+    height: 140,
+    borderRadius: BorderRadius.sm,
+    overflow: 'hidden',
+  },
+  currentSpineImage: {
+    width: '100%',
+    height: '100%',
+  },
+  spineManagerActions: {
+    flex: 1,
+  },
+  spineManagerActionButton: {
+    width: '100%',
+  },
+  spineManagerHelpText: {
+    fontSize: Typography.sizes.xs,
+    lineHeight: 18,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  spineStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  spineStatusText: {
+    fontSize: Typography.sizes.sm,
+  },
+  spineOptionsRow: {
+    gap: Spacing.sm,
+    paddingVertical: Spacing.xs,
+  },
+  spineOptionButton: {
+    width: 88,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.xs,
+    gap: Spacing.xs,
+  },
+  spineOptionImage: {
+    width: '100%',
+    height: 144,
+    borderRadius: BorderRadius.sm,
+  },
+  spineOptionPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+  },
+  spineOptionTitle: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: Typography.weights.semibold,
+    textAlign: 'center',
+  },
+  spineOptionAuthor: {
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 6,
+  },
+  spineOptionLabel: {
+    fontSize: Typography.sizes.xs,
+    textAlign: 'center',
+  },
+  spineEmptyText: {
+    fontSize: Typography.sizes.sm,
+    lineHeight: 20,
   },
   editButtons: {
     flexDirection: 'row',
