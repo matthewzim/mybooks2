@@ -88,7 +88,7 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View style={styles.headerText}>
             <Text style={[styles.eyebrow, { color: colors.primary }]}>Your shelves</Text>
-            <Text style={[styles.heading, { color: colors.text }]}>Mi Library</Text>
+            <Text style={[styles.heading, { color: colors.text }]}>My Library</Text>
             <Text style={[styles.subheading, { color: colors.textSecondary }]}>
               {bookshelves.length === 0
                 ? 'Build a reading space that feels intentional from the first shelf onward.'
