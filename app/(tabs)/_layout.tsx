@@ -44,7 +44,6 @@ export default function TabsLayout() {
         headerTitleStyle: {
           fontFamily: getFontFamily('semibold'),
         },
-        keyboardHandlingEnabled: false,
       }}
     >
       <Tabs.Screen
