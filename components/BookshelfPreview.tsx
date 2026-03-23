@@ -227,6 +227,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     zIndex: 1,
     flexWrap: 'nowrap',
+    paddingTop: BorderRadius.md,
   },
   shelfSurface: {
     height: PREVIEW_SHELF_THICKNESS,

@@ -51,7 +51,6 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: '',
-          headerShown: false,
           tabBarLabel: 'Home',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="library-outline" size={size} color={color} />
