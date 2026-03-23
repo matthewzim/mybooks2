@@ -24,6 +24,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -42,7 +43,9 @@ import {
 import { FREE_TIER_LIMITS } from '@/services/stripe';
 import { bookshelvesService } from '@/services/bookshelves';
 import { booksService } from '@/services/books';
+import { accountService } from '@/services/account';
 import { supabase } from '@/services/supabase';
+import { widgetManager } from '@/utils/widget';
 import type { Bookshelf } from '@/types';
 
 interface GoodreadsCsvBook {
@@ -52,6 +55,7 @@ interface GoodreadsCsvBook {
 
 const GOODREADS_TITLE_COLUMN_INDEX = 1;
 const GOODREADS_AUTHOR_COLUMN_INDEX = 2;
+const ONBOARDING_COMPLETE_KEY = 'onboarding_complete';
 
 function parseCsvRows(csvText: string): string[][] {
   const rows: string[][] = [];
@@ -116,7 +120,7 @@ function parseGoodreadsBooks(csvText: string): GoodreadsCsvBook[] {
 }
 
 export default function SettingsScreen() {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, restartAnonymousSession } = useAuth();
   const { colors } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
@@ -124,6 +128,8 @@ export default function SettingsScreen() {
   const [notifications, setNotifications] = useState(true);
   const [showGoodreadsImportModal, setShowGoodreadsImportModal] = useState(false);
   const [isImportingGoodreads, setIsImportingGoodreads] = useState(false);
+  const [isResettingData, setIsResettingData] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   const promptShelfSelection = async (): Promise<Bookshelf | 'create' | null> => {
     const result = await bookshelvesService.getUserBookshelves();
@@ -307,6 +313,140 @@ export default function SettingsScreen() {
    */
   const handleUpgrade = () => {
     router.push('/payment');
+  };
+
+  const resetLocalAppState = async () => {
+    await Promise.all([
+      AsyncStorage.removeItem(ONBOARDING_COMPLETE_KEY),
+      widgetManager.clearWidgetData(),
+    ]);
+  };
+
+  const navigateToFreshOnboarding = (successTitle: string, successMessage: string) => {
+    setName('');
+    setIsEditing(false);
+
+    Alert.alert(successTitle, successMessage, [
+      {
+        text: 'Continue',
+        onPress: () => router.replace('/onboarding'),
+      },
+    ]);
+  };
+
+  const completeAccountDeletion = async () => {
+    await resetLocalAppState();
+
+    const sessionResult = await restartAnonymousSession();
+    if (sessionResult.error) {
+      Alert.alert('Session Error', sessionResult.error.message);
+      return;
+    }
+
+    navigateToFreshOnboarding(
+      'Account Deleted',
+      'Your previous account has been deleted. A fresh anonymous account is ready if you want to keep using the app.'
+    );
+  };
+
+  const handleResetData = () => {
+    if (!user || isResettingData || isDeletingAccount) {
+      return;
+    }
+
+    Alert.alert(
+      'Reset Data',
+      'This will erase your bookshelves, books, uploaded images, widget data, and onboarding progress. Your account will remain active.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset Data',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Confirm Reset',
+              'This action cannot be undone. Do you want to reset all of your data and start over?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Yes, Reset',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setIsResettingData(true);
+
+                    try {
+                      const result = await accountService.resetMyData(user);
+                      if (result.error) {
+                        Alert.alert('Reset Failed', result.error.message);
+                        return;
+                      }
+
+                      await resetLocalAppState();
+                      navigateToFreshOnboarding(
+                        'Data Reset Complete',
+                        'Your library has been reset and a new onboarding flow is ready.'
+                      );
+                    } catch (error) {
+                      Alert.alert('Reset Failed', 'We could not reset your data. Please try again.');
+                    } finally {
+                      setIsResettingData(false);
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    if (!user || isDeletingAccount || isResettingData) {
+      return;
+    }
+
+    Alert.alert(
+      'Delete Account',
+      'This permanently deletes your account, bookshelves, uploaded books, images, widget data, and onboarding progress.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Final Confirmation',
+              'This action is permanent and cannot be undone. Are you sure you want to delete your account?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete Forever',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setIsDeletingAccount(true);
+
+                    try {
+                      const result = await accountService.deleteMyAccount(user);
+                      if (result.error) {
+                        Alert.alert('Deletion Failed', result.error.message);
+                        return;
+                      }
+
+                      await completeAccountDeletion();
+                    } catch (error) {
+                      Alert.alert('Deletion Failed', 'We could not delete your account. Please try again.');
+                    } finally {
+                      setIsDeletingAccount(false);
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -517,6 +657,30 @@ export default function SettingsScreen() {
               title="Privacy Policy"
               colors={colors}
               onPress={() => {}}
+            />
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Danger Zone</Text>
+          <View style={styles.dangerActions}>
+            <Button
+              title={isDeletingAccount ? 'Deleting Account...' : 'Account Deletion'}
+              variant="outline"
+              onPress={handleDeleteAccount}
+              disabled={isDeletingAccount || isResettingData}
+              loading={isDeletingAccount}
+              colors={colors}
+              style={styles.dangerButton}
+            />
+            <Button
+              title={isResettingData ? 'Resetting Data...' : 'Reset Data'}
+              variant="outline"
+              onPress={handleResetData}
+              disabled={isResettingData || isDeletingAccount}
+              loading={isResettingData}
+              colors={colors}
+              style={styles.dangerButton}
             />
           </View>
         </View>
@@ -791,6 +955,12 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 40,
+  },
+  dangerActions: {
+    gap: Spacing.md,
+  },
+  dangerButton: {
+    width: '100%',
   },
   modalOverlay: {
     flex: 1,
