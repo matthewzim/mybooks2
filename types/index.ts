@@ -113,7 +113,7 @@ export interface CommunityBookSpine {
   id: string;
   title: string;
   author: string;
-  image_url: string;
+  image_url: string | null;
   uploaded_by_user_id: string;
   uploader_name: string | null;
   times_added: number;

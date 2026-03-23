@@ -58,12 +58,23 @@ export function CommunityBookItem({ book, onAddToShelf }: CommunityBookItemProps
     <Animated.View style={{ transform: [{ scale }] }}>
       <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: book.image_url }}
-            style={styles.image}
-            contentFit="cover"
-            transition={220}
-          />
+          {book.image_url ? (
+            <Image
+              source={{ uri: book.image_url }}
+              style={styles.image}
+              contentFit="cover"
+              transition={220}
+            />
+          ) : (
+            <View style={[styles.image, styles.placeholder, { backgroundColor: colors.primary }]}>
+              <Text style={[styles.placeholderTitle, { color: colors.textInverse }]} numberOfLines={3}>
+                {book.title}
+              </Text>
+              <Text style={[styles.placeholderAuthor, { color: colors.textOnDarkMuted }]} numberOfLines={2}>
+                {book.author}
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.detailsContainer}>
@@ -160,6 +171,22 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+  },
+  placeholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  placeholderTitle: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: getFontFamily('semibold'),
+    textAlign: 'center',
+  },
+  placeholderAuthor: {
+    fontSize: 10,
+    fontFamily: getFontFamily('regular'),
+    textAlign: 'center',
+    marginTop: 4,
   },
   detailsContainer: {
     flex: 1,
