@@ -86,16 +86,7 @@ export function BookshelfPreview({ bookshelf, books, onPress, onDelete, containe
     };
   }, [firstRowBooks, imageDimensions]);
 
-  const maxImageHeight = useMemo(() => {
-    let maxHeight = 0;
-    firstRowBooks.forEach((book) => {
-      const dims = imageDimensions[book.id];
-      if (dims && dims.height > maxHeight) {
-        maxHeight = dims.height;
-      }
-    });
-    return maxHeight;
-  }, [firstRowBooks, imageDimensions]);
+  const PREVIEW_MIN_DISPLAY_HEIGHT = Math.round(PREVIEW_BOOK_HEIGHT * 0.6);
 
   const animateScale = (toValue: number) => {
     Animated.timing(scale, {
@@ -175,7 +166,7 @@ export function BookshelfPreview({ bookshelf, books, onPress, onDelete, containe
                   key={book.id}
                   book={book}
                   dimensions={imageDimensions[book.id]}
-                  maxImageHeight={maxImageHeight}
+                  minDisplayHeight={PREVIEW_MIN_DISPLAY_HEIGHT}
                 />
               ))
             ) : (
@@ -207,10 +198,10 @@ interface BookPreviewSpineProps {
     width: number;
     height: number;
   };
-  maxImageHeight: number;
+  minDisplayHeight: number;
 }
 
-function BookPreviewSpine({ book, dimensions, maxImageHeight }: BookPreviewSpineProps) {
+function BookPreviewSpine({ book, dimensions, minDisplayHeight }: BookPreviewSpineProps) {
   const spineImageUrl = useSpineImageUrl(book.image_url);
   const hasImage = !!spineImageUrl;
 
@@ -229,9 +220,17 @@ function BookPreviewSpine({ book, dimensions, maxImageHeight }: BookPreviewSpine
     { min: PREVIEW_MIN_BOOK_HEIGHT, max: PREVIEW_BOOK_HEIGHT }
   );
 
-  const computedHeight = dimensions && maxImageHeight > 0
-    ? Math.max(PREVIEW_MIN_BOOK_HEIGHT, Math.min(PREVIEW_BOOK_HEIGHT, Math.round(PREVIEW_BOOK_HEIGHT * (dimensions.height / maxImageHeight))))
-    : undefined;
+  // Absolute clamping: cap at PREVIEW_BOOK_HEIGHT, floor at minDisplayHeight
+  let computedHeight: number | undefined;
+  if (dimensions) {
+    if (dimensions.height >= PREVIEW_BOOK_HEIGHT) {
+      computedHeight = PREVIEW_BOOK_HEIGHT;
+    } else if (dimensions.height < minDisplayHeight) {
+      computedHeight = minDisplayHeight;
+    } else {
+      computedHeight = dimensions.height;
+    }
+  }
 
   const computedWidth = dimensions && computedHeight
     ? Math.max(PREVIEW_MIN_BOOK_WIDTH, Math.min(PREVIEW_MAX_BOOK_WIDTH, Math.round((dimensions.width / dimensions.height) * computedHeight)))
