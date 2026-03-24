@@ -418,6 +418,55 @@ export function BookDetailModal({
     }
   };
 
+  const handleUploadNewSpine = async () => {
+    if (!book || !user?.id || isUpdatingSpine) {
+      Alert.alert('Error', 'Unable to upload a new spine right now.');
+      return;
+    }
+
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Photos Access Required', 'Please enable photo library access to upload a book spine.');
+        return;
+      }
+
+      const pickerResult = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        allowsEditing: true,
+        aspect: [1, 3],
+      });
+
+      if (pickerResult.canceled || !pickerResult.assets?.[0]?.uri) {
+        return;
+      }
+
+      setIsUpdatingSpine(true);
+
+      const uploadResult = await storageService.uploadBookSpine(pickerResult.assets[0].uri, user.id);
+      if (uploadResult.error || !uploadResult.data) {
+        Alert.alert('Upload Failed', uploadResult.error?.message || 'Failed to upload spine image.');
+        return;
+      }
+
+      const updateResult = await booksService.updateBook(book.id, {
+        image_url: uploadResult.data,
+      });
+
+      if (updateResult.data) {
+        onBookUpdated?.(updateResult.data);
+        Alert.alert('Spine Updated', 'Your uploaded spine has been saved for this book.');
+      } else {
+        Alert.alert('Error', updateResult.error?.message || 'Failed to update the book spine.');
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to upload a new spine.');
+    } finally {
+      setIsUpdatingSpine(false);
+    }
+  };
+
   if (!book) return null;
 
   const bookColor = getBookColor(book.title);
@@ -549,11 +598,17 @@ export function BookDetailModal({
                             loading={isUpdatingSpine}
                             style={styles.spineManagerActionButton}
                           />
+                          <Button
+                            title="Upload New Spine"
+                            onPress={handleUploadNewSpine}
+                            loading={isUpdatingSpine}
+                            style={styles.spineManagerActionButton}
+                          />
                         </View>
                       </View>
 
                       <Text style={[styles.spineManagerHelpText, { color: colors.textSecondary }]}>
-                        Pick another saved spine for this book, or scan a new one with your camera.
+                        Pick another saved spine for this book, scan a new one with your camera, or upload one from your photos.
                       </Text>
 
                       {isLoadingAlternativeSpines ? (
