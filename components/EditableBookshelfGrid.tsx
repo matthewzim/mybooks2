@@ -39,6 +39,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { getSpineImageUrl } from '@/services/storage';
 import { getShelfColors } from '@/utils/shelfColors';
+import { getPlaceholderSpineSize } from '@/utils/placeholderSpine';
 import type { Book, ShelfStyle } from '@/types';
 
 interface EditableBookshelfGridProps {
@@ -160,6 +161,15 @@ export function EditableBookshelfGrid({
     return maxH;
   }, [imageDimensions]);
 
+
+  const placeholderHeightRange = useMemo(() => {
+    const minHeight = Math.max(BookSpineConstants.minHeight, Math.round(shelfHeight * 0.68));
+    return {
+      min: Math.min(minHeight, shelfHeight),
+      max: shelfHeight,
+    };
+  }, [shelfHeight]);
+
   // Compute display height for a single book proportional to its actual image height
   const getBookDisplayHeight = useCallback(
     (book: Book): number => {
@@ -173,9 +183,13 @@ export function EditableBookshelfGrid({
           Math.min(BookSpineConstants.maxHeight, proportionalHeight)
         );
       }
-      return shelfHeight; // default for books without image dimensions
+      return getPlaceholderSpineSize(
+        book,
+        { min: BookSpineConstants.minWidth, max: BookSpineConstants.maxWidth },
+        placeholderHeightRange
+      ).height;
     },
-    [imageDimensions, shelfHeight, maxImageHeight]
+    [imageDimensions, shelfHeight, maxImageHeight, placeholderHeightRange]
   );
 
   // Compute display width for a single book based on its natural image dimensions
@@ -191,9 +205,13 @@ export function EditableBookshelfGrid({
           Math.min(BookSpineConstants.maxWidth, naturalWidth)
         );
       }
-      return BookSpineConstants.width; // default 50px while loading or for placeholders
+      return getPlaceholderSpineSize(
+        book,
+        { min: BookSpineConstants.minWidth, max: BookSpineConstants.maxWidth },
+        placeholderHeightRange
+      ).width;
     },
-    [imageDimensions, getBookDisplayHeight]
+    [imageDimensions, getBookDisplayHeight, placeholderHeightRange]
   );
 
   // Group books by stack_id and organize into layout items with proper widths

@@ -5,7 +5,7 @@
  * Shows the first row of books with the chosen shelf layout style.
  */
 
-import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert, useWindowDimensions, Animated, ViewStyle, Image as RNImage } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -21,6 +21,7 @@ import {
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { getShelfColors } from '@/utils/shelfColors';
+import { getPlaceholderSpineSize } from '@/utils/placeholderSpine';
 import { getSpineImageUrl } from '@/services/storage';
 import type { Bookshelf, Book } from '@/types';
 
@@ -50,9 +51,8 @@ export function BookshelfPreview({ bookshelf, books, onPress, onDelete, containe
 
   const cardInnerWidth = screenWidth - Spacing.md * 4;
   const shelfInnerWidth = shelfStyle === 'full' ? cardInnerWidth - PREVIEW_BORDER_WIDTH * 2 : cardInnerWidth;
-const booksPerRow = Math.max(1, Math.floor(shelfInnerWidth / PREVIEW_DEFAULT_BOOK_WIDTH));
+  const booksPerRow = Math.max(1, Math.floor(shelfInnerWidth / PREVIEW_DEFAULT_BOOK_WIDTH));
   const firstRowBooks = books.slice(0, booksPerRow);
-
 
   const [imageDimensions, setImageDimensions] = useState<Record<string, { width: number; height: number }>>({});
 
@@ -223,22 +223,10 @@ function BookPreviewSpine({ book, dimensions, maxImageHeight }: BookPreviewSpine
     return palette[Math.abs(hash) % palette.length];
   };
 
-
-
-  const seededRandom = useCallback((salt: string): number => {
-    const source = `${book.id}-${book.title}-${salt}`;
-    let hash = 0;
-    for (let i = 0; i < source.length; i += 1) {
-      hash = source.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return Math.abs(hash % 1000) / 1000;
-  }, [book.id, book.title]);
-
-  const placeholderHeight = Math.round(
-    PREVIEW_MIN_BOOK_HEIGHT + seededRandom('height') * (PREVIEW_BOOK_HEIGHT - PREVIEW_MIN_BOOK_HEIGHT)
-  );
-  const placeholderWidth = Math.round(
-    PREVIEW_MIN_BOOK_WIDTH + seededRandom('width') * (PREVIEW_MAX_BOOK_WIDTH - PREVIEW_MIN_BOOK_WIDTH)
+  const placeholderSize = getPlaceholderSpineSize(
+    book,
+    { min: PREVIEW_MIN_BOOK_WIDTH, max: PREVIEW_MAX_BOOK_WIDTH },
+    { min: PREVIEW_MIN_BOOK_HEIGHT, max: PREVIEW_BOOK_HEIGHT }
   );
 
   const computedHeight = dimensions && maxImageHeight > 0
@@ -249,8 +237,8 @@ function BookPreviewSpine({ book, dimensions, maxImageHeight }: BookPreviewSpine
     ? Math.max(PREVIEW_MIN_BOOK_WIDTH, Math.min(PREVIEW_MAX_BOOK_WIDTH, Math.round((dimensions.width / dimensions.height) * computedHeight)))
     : undefined;
 
-  const spineHeight = hasImage ? (computedHeight || PREVIEW_BOOK_HEIGHT) : placeholderHeight;
-  const spineWidth = hasImage ? (computedWidth || PREVIEW_DEFAULT_BOOK_WIDTH) : placeholderWidth;
+  const spineHeight = hasImage ? (computedHeight || PREVIEW_BOOK_HEIGHT) : placeholderSize.height;
+  const spineWidth = hasImage ? (computedWidth || PREVIEW_DEFAULT_BOOK_WIDTH) : placeholderSize.width;
 
   return (
     <View
