@@ -33,6 +33,42 @@ interface GoogleBooksResponse {
 }
 
 class GoogleBooksService {
+  private buildSearchQueries(title: string, author: string): string[] {
+    const cleanTitle = title.trim();
+    const cleanAuthor = author.trim();
+    const normalizedTitle = cleanTitle.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+
+    const queries = [
+      `intitle:${cleanTitle} inauthor:${cleanAuthor}`,
+      `intitle:${normalizedTitle} inauthor:${cleanAuthor}`,
+      `${cleanTitle} ${cleanAuthor}`.trim(),
+      cleanTitle,
+    ];
+
+    return [...new Set(queries.filter((query) => query.length > 0))];
+  }
+
+  private async searchQuery(query: string): Promise<string | null> {
+    const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=5&fields=totalItems,items(id,volumeInfo/title,volumeInfo/authors,volumeInfo/imageLinks)`;
+    const response = await fetch(url);
+    if (!response.ok) return null;
+
+    const data: GoogleBooksResponse = await response.json();
+    if (!data.items || data.items.length === 0) return null;
+
+    for (const item of data.items) {
+      const imageLinks = item.volumeInfo.imageLinks;
+      if (imageLinks?.thumbnail || imageLinks?.smallThumbnail) {
+        let imageUrl = imageLinks.thumbnail || imageLinks.smallThumbnail || '';
+        imageUrl = imageUrl.replace('http://', 'https://');
+        imageUrl = imageUrl.replace('zoom=1', 'zoom=2');
+        return imageUrl;
+      }
+    }
+
+    return null;
+  }
+
   /**
    * Search Google Books API by title and author.
    * Returns the best-matching cover image URL or null.
@@ -42,28 +78,10 @@ class GoogleBooksService {
     author: string
   ): Promise<string | null> {
     try {
-      const query = `intitle:${title} inauthor:${author}`;
-      const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=5&fields=totalItems,items(id,volumeInfo/title,volumeInfo/authors,volumeInfo/imageLinks)`;
-
-      const response = await fetch(url);
-      if (!response.ok) return null;
-
-      const data: GoogleBooksResponse = await response.json();
-
-      if (!data.items || data.items.length === 0) return null;
-
-      // Find the first result that has a cover image
-      for (const item of data.items) {
-        const imageLinks = item.volumeInfo.imageLinks;
-        if (imageLinks?.thumbnail || imageLinks?.smallThumbnail) {
-          // Prefer the thumbnail (larger) over smallThumbnail
-          let imageUrl = imageLinks.thumbnail || imageLinks.smallThumbnail || '';
-          // Google Books returns http URLs; upgrade to https
-          imageUrl = imageUrl.replace('http://', 'https://');
-          // Request a larger zoom level for better quality
-          imageUrl = imageUrl.replace('zoom=1', 'zoom=2');
-          return imageUrl;
-        }
+      const queries = this.buildSearchQueries(title, author);
+      for (const query of queries) {
+        const imageUrl = await this.searchQuery(query);
+        if (imageUrl) return imageUrl;
       }
 
       return null;
@@ -102,10 +120,8 @@ class GoogleBooksService {
       );
 
       if (uploadResult.error || !uploadResult.data) {
-        return {
-          data: null,
-          error: uploadResult.error || { message: 'Upload failed' },
-        };
+        // If caching fails, still use the direct Google image URL for display.
+        return { data: googleCoverUrl, error: null };
       }
 
       const supabaseCoverUrl = uploadResult.data;
