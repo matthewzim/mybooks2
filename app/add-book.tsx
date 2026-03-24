@@ -37,6 +37,9 @@ import {
   Shadows,
 } from '@/constants/theme';
 
+
+const GOOGLE_VISION_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_CLOUD_VISION_API_KEY || '';
+
 export default function AddBookScreen() {
   const { shelfId } = useLocalSearchParams<{ shelfId: string }>();
   const { user } = useAuth();
@@ -49,6 +52,67 @@ export default function AddBookScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ title?: string; author?: string }>({});
 
+  const tryAutoFillBookMetadata = async (asset: ImagePicker.ImagePickerAsset) => {
+    // Don't overwrite user-entered values
+    if (title.trim() && author.trim()) return;
+
+    // Fast fallback: parse common filename patterns like "Title - Author.jpg"
+    if (asset.fileName && (!title.trim() || !author.trim())) {
+      const baseName = asset.fileName.replace(/\.[^.]+$/, '');
+      const parts = baseName.split(/\s+-\s+/);
+      if (parts.length >= 2) {
+        if (!title.trim()) setTitle(parts[0].trim());
+        if (!author.trim()) setAuthor(parts.slice(1).join(' - ').trim());
+      }
+    }
+
+    if (!GOOGLE_VISION_API_KEY || !asset.uri) return;
+
+    try {
+      const response = await fetch(
+        `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            requests: [
+              {
+                image: { source: { imageUri: asset.uri } },
+                features: [{ type: 'TEXT_DETECTION', maxResults: 1 }],
+              },
+            ],
+          }),
+        }
+      );
+
+      if (!response.ok) return;
+
+      const payload = await response.json();
+      const text: string = payload?.responses?.[0]?.fullTextAnnotation?.text || '';
+      if (!text) return;
+
+      const lines = text
+        .split(/\r?\n/)
+        .map((line: string) => line.trim())
+        .filter((line: string) => line.length > 1 && !/^by$/i.test(line));
+
+      if (!title.trim() && lines.length > 0) {
+        setTitle(lines[0]);
+      }
+
+      if (!author.trim() && lines.length > 1) {
+        const byLine = lines.find((line: string) => /^by\s+/i.test(line));
+        if (byLine) {
+          setAuthor(byLine.replace(/^by\s+/i, '').trim());
+        } else {
+          setAuthor(lines[1]);
+        }
+      }
+    } catch (error) {
+      console.warn('Unable to auto-fill metadata from image:', error);
+    }
+  };
+
   /**
    * Pick image from gallery
    */
@@ -57,12 +121,13 @@ export default function AddBookScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         quality: 0.8,
-        allowsEditing: true,
-        aspect: [1, 3], // Book spine aspect ratio
+        allowsEditing: false,
       });
 
       if (!result.canceled && result.assets[0]) {
-        setImageUri(result.assets[0].uri);
+        const selectedAsset = result.assets[0];
+        setImageUri(selectedAsset.uri);
+        await tryAutoFillBookMetadata(selectedAsset);
       }
     } catch (error) {
       console.error('Failed to pick image:', error);
@@ -190,6 +255,7 @@ export default function AddBookScreen() {
                   <Ionicons name="image-outline" size={40} color={Colors.textSecondary} />
                   <Text style={styles.imagePickerText}>Add Book Spine Image</Text>
                   <Text style={styles.imagePickerHint}>(Optional)</Text>
+                  <Text style={styles.imagePickerHint}>Can auto-fill title/author when detectable</Text>
                 </Pressable>
               )}
             </View>
