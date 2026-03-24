@@ -605,8 +605,6 @@ export function BookDetailModal({
                         <View style={[styles.coverImage, styles.thumbnailPlaceholder, { backgroundColor: bookColor }]}>
                           <Text style={[styles.coverLoadingText, { color: colors.textOnDark }]}>Loading cover…</Text>
                         </View>
-                      ) : resolvedSpineImageUrl ? (
-                        <Image source={{ uri: resolvedSpineImageUrl }} style={styles.coverImage} contentFit="cover" />
                       ) : (
                         <View style={[styles.coverImage, styles.thumbnailPlaceholder, { backgroundColor: bookColor }]}>
                           <Text style={[styles.placeholderInitial, { color: colors.textOnDark }]}>
