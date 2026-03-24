@@ -72,7 +72,7 @@ function RootLayoutContent() {
         <Stack.Screen
           name="bookshelf"
           options={{
-            title: 'Bookshelf',
+            headerShown: false,
             presentation: 'card',
           }}
         />
