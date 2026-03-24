@@ -360,6 +360,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
     marginTop: Spacing.xs,
+    textAlign: 'center',
+    width: '100%',
   },
   bottomPadding: {
     height: 100,
