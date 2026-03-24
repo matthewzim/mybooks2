@@ -152,16 +152,6 @@ export function EditableBookshelfGrid({
     Math.floor(((availableWidth / 5) * 3.6))
   );
 
-  // Find the maximum actual image height across all books (for proportional scaling)
-  const maxImageHeight = useMemo(() => {
-    let maxH = 0;
-    Object.values(imageDimensions).forEach((dims) => {
-      if (dims.height > maxH) maxH = dims.height;
-    });
-    return maxH;
-  }, [imageDimensions]);
-
-
   const placeholderHeightRange = useMemo(() => {
     const minHeight = Math.max(BookSpineConstants.minHeight, Math.round(shelfHeight * 0.68));
     return {
@@ -170,18 +160,22 @@ export function EditableBookshelfGrid({
     };
   }, [shelfHeight]);
 
-  // Compute display height for a single book proportional to its actual image height
+  // Compute display height for a single book using absolute clamping.
+  // Images taller than shelfHeight are scaled down; images shorter than 60% of
+  // shelfHeight are scaled up; everything in between is left unchanged.
+  const minDisplayHeight = Math.round(shelfHeight * 0.6);
+
   const getBookDisplayHeight = useCallback(
     (book: Book): number => {
       const dims = imageDimensions[book.id];
-      if (dims && maxImageHeight > 0) {
-        const proportionalHeight = Math.round(
-          shelfHeight * (dims.height / maxImageHeight)
-        );
-        return Math.max(
-          BookSpineConstants.minHeight,
-          Math.min(BookSpineConstants.maxHeight, proportionalHeight)
-        );
+      if (dims) {
+        if (dims.height >= shelfHeight) {
+          return shelfHeight;
+        }
+        if (dims.height < minDisplayHeight) {
+          return minDisplayHeight;
+        }
+        return dims.height;
       }
       return getPlaceholderSpineSize(
         book,
@@ -189,7 +183,7 @@ export function EditableBookshelfGrid({
         placeholderHeightRange
       ).height;
     },
-    [imageDimensions, shelfHeight, maxImageHeight, placeholderHeightRange]
+    [imageDimensions, shelfHeight, minDisplayHeight, placeholderHeightRange]
   );
 
   // Compute display width for a single book based on its natural image dimensions
