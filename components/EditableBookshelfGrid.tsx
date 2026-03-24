@@ -93,7 +93,7 @@ export function EditableBookshelfGrid({
   onUnstackBook,
 }: EditableBookshelfGridProps) {
   const { colors } = useTheme();
-  const fullShelfBorderWidth = BookshelfDimensions.shelfThickness / 2;
+  const fullShelfBorderWidth = BookshelfDimensions.shelfThickness;
   const fullShelfMargin = Spacing.xs;
   const { width: screenWidth } = useWindowDimensions();
   const shelfColors = useMemo(() => getShelfColors(shelfColor), [shelfColor]);
