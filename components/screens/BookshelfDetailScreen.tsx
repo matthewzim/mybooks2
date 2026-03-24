@@ -249,8 +249,6 @@ export default function BookshelfDetailScreen() {
               onPress={() => router.back()}
               style={({ pressed }) => [
                 styles.headerButton,
-                styles.headerIconButton,
-                { backgroundColor: colors.overlayLight },
                 pressed && { opacity: 0.8 },
               ]}
               hitSlop={8}
@@ -266,9 +264,7 @@ export default function BookshelfDetailScreen() {
                 onPress={toggleEditMode}
                 style={({ pressed }) => [
                   styles.headerButton,
-                  styles.headerIconButton,
-                  { backgroundColor: colors.overlayLight },
-                  isEditMode && { backgroundColor: colors.primary },
+                  isEditMode && { opacity: 0.7 },
                   pressed && { opacity: 0.8 },
                 ]}
                 hitSlop={8}
@@ -285,8 +281,6 @@ export default function BookshelfDetailScreen() {
                 onPress={handleEditBookshelf}
                 style={({ pressed }) => [
                   styles.headerButton,
-                  styles.headerIconButton,
-                  { backgroundColor: colors.overlayLight },
                   pressed && { opacity: 0.8 },
                 ]}
                 hitSlop={8}
@@ -305,9 +299,6 @@ export default function BookshelfDetailScreen() {
         <View style={[styles.statsContainer, { borderBottomColor: colors.border }]}>
           <View style={styles.stat}>
             <Text style={[styles.statValue, { color: colors.primary }]}>{books.length}</Text>
-            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-              {books.length === 1 ? 'Book' : 'Books'}
-            </Text>
           </View>
           {isEditMode ? (
             <View style={styles.editModeControls}>
@@ -367,22 +358,6 @@ export default function BookshelfDetailScreen() {
             </View>
           ) : (
             <>
-              <View style={[styles.privacyBadge, { backgroundColor: colors.backgroundDark }]}>
-                <Ionicons
-                  name={bookshelf.is_public ? 'globe-outline' : 'lock-closed-outline'}
-                  size={14}
-                  color={bookshelf.is_public ? colors.success : colors.textSecondary}
-                />
-                <Text
-                  style={[
-                    styles.privacyBadgeText,
-                    { color: colors.textSecondary },
-                    bookshelf.is_public && { color: colors.success },
-                  ]}
-                >
-                  {bookshelf.is_public ? 'Public' : 'Private'}
-                </Text>
-              </View>
               {bookshelf.description && (
                 <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
                   {bookshelf.description}
@@ -448,9 +423,6 @@ const styles = StyleSheet.create({
   headerButton: {
     padding: Spacing.xs,
   },
-  headerIconButton: {
-    borderRadius: BorderRadius.full,
-  },
   statsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -466,25 +438,10 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.xxl,
     fontWeight: Typography.weights.bold,
   },
-  statLabel: {
-    fontSize: Typography.sizes.sm,
-  },
   description: {
     flex: 1,
     fontSize: Typography.sizes.md,
     fontStyle: 'italic',
-  },
-  privacyBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.sm,
-    marginRight: Spacing.sm,
-  },
-  privacyBadgeText: {
-    fontSize: Typography.sizes.sm,
-    marginLeft: 4,
   },
   editModeControls: {
     flex: 1,
