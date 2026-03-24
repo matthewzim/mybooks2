@@ -244,25 +244,56 @@ export default function BookshelfDetailScreen() {
       <Stack.Screen
         options={{
           title: bookshelf.name,
+          headerLeft: () => (
+            <Pressable
+              onPress={() => router.back()}
+              style={({ pressed }) => [
+                styles.headerButton,
+                styles.headerIconButton,
+                { backgroundColor: colors.overlayLight },
+                pressed && { opacity: 0.8 },
+              ]}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <Ionicons name="chevron-back" size={18} color={colors.text} />
+            </Pressable>
+          ),
           headerRight: () => (
             <View style={styles.headerButtons}>
               <Pressable
                 onPress={toggleEditMode}
-                style={[styles.headerButton, isEditMode && { backgroundColor: colors.overlayWhiteLight, borderRadius: 4 }]}
+                style={({ pressed }) => [
+                  styles.headerButton,
+                  styles.headerIconButton,
+                  { backgroundColor: colors.overlayLight },
+                  isEditMode && { backgroundColor: colors.primary },
+                  pressed && { opacity: 0.8 },
+                ]}
                 hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={isEditMode ? 'Finish reordering books' : 'Reorder books'}
               >
                 <Ionicons
                   name={isEditMode ? 'checkmark' : 'swap-horizontal'}
                   size={20}
-                  color={colors.textInverse}
+                  color={isEditMode ? colors.textInverse : colors.text}
                 />
               </Pressable>
               <Pressable
                 onPress={handleEditBookshelf}
-                style={styles.headerButton}
+                style={({ pressed }) => [
+                  styles.headerButton,
+                  styles.headerIconButton,
+                  { backgroundColor: colors.overlayLight },
+                  pressed && { opacity: 0.8 },
+                ]}
                 hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Edit bookshelf"
               >
-                <Ionicons name="pencil" size={20} color={colors.textInverse} />
+                <Ionicons name="pencil" size={18} color={colors.text} />
               </Pressable>
             </View>
           ),
@@ -416,6 +447,9 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     padding: Spacing.xs,
+  },
+  headerIconButton: {
+    borderRadius: BorderRadius.full,
   },
   statsContainer: {
     flexDirection: 'row',

@@ -1,5 +1,7 @@
 import type { Book } from '@/types';
 
+const PLACEHOLDER_VARIATION_SCALE = 0.4;
+
 function seededNormalized(book: Book, salt: string): number {
   const source = `${book.id}-${book.title}-${salt}`;
   let hash = 0;
@@ -12,9 +14,15 @@ function seededNormalized(book: Book, salt: string): number {
 }
 
 export function getPlaceholderSpineFactors(book: Book): { widthFactor: number; heightFactor: number } {
+  const normalizedWidth = seededNormalized(book, 'placeholder-width');
+  const normalizedHeight = seededNormalized(book, 'placeholder-height');
+
+  // Keep per-book randomness deterministic while reducing extreme size differences.
+  const compressVariation = (value: number) => 0.5 + (value - 0.5) * PLACEHOLDER_VARIATION_SCALE;
+
   return {
-    widthFactor: seededNormalized(book, 'placeholder-width'),
-    heightFactor: seededNormalized(book, 'placeholder-height'),
+    widthFactor: compressVariation(normalizedWidth),
+    heightFactor: compressVariation(normalizedHeight),
   };
 }
 
