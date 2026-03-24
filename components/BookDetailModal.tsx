@@ -4,13 +4,14 @@
  * A minimal modal for viewing and editing book details.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Animated,
   Dimensions,
   Easing,
+  FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -104,6 +105,174 @@ function AlternateSpineOption({
   );
 }
 
+const GRID_COLUMNS = 3;
+const GRID_SPACING = Spacing.sm;
+const GRID_ITEM_WIDTH = (SCREEN_WIDTH - Spacing.md * 2 - GRID_SPACING * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
+
+function CommunitySpineBrowserModal({
+  visible,
+  book,
+  isUpdatingSpine,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  book: Book | null;
+  isUpdatingSpine: boolean;
+  onSelect: (option: CommunityBookSpine) => void;
+  onClose: () => void;
+}) {
+  const { colors } = useTheme();
+  const [spines, setSpines] = useState<CommunityBookSpine[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!visible || !book) {
+      setSpines([]);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoading(true);
+
+    booksService
+      .getAlternativeSpines(book)
+      .then((result) => {
+        if (!cancelled) setSpines(result.data || []);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, book]);
+
+  const handleSelect = useCallback(
+    (option: CommunityBookSpine) => {
+      Alert.alert(
+        'Use This Spine?',
+        `Replace your current spine with this one${option.uploader_name ? ` uploaded by ${option.uploader_name}` : ''}?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Use This Spine',
+            onPress: () => onSelect(option),
+          },
+        ]
+      );
+    },
+    [onSelect]
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: CommunityBookSpine }) => (
+      <CommunitySpineGridItem
+        option={item}
+        isUpdating={isUpdatingSpine}
+        onSelect={handleSelect}
+      />
+    ),
+    [isUpdatingSpine, handleSelect]
+  );
+
+  const keyExtractor = useCallback((item: CommunityBookSpine) => item.id, []);
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={[communityStyles.container, { backgroundColor: colors.background }]}>
+        <View style={[communityStyles.header, { borderBottomColor: colors.inputBorder }]}>
+          <Text style={[communityStyles.headerTitle, { color: colors.text }]}>Community Spines</Text>
+          <Pressable onPress={onClose} style={communityStyles.closeButton} hitSlop={8}>
+            <Ionicons name="close" size={24} color={colors.text} />
+          </Pressable>
+        </View>
+
+        <Text style={[communityStyles.subtitle, { color: colors.textSecondary }]}>
+          {book ? `Spine images uploaded by the community for "${book.title}"` : ''}
+        </Text>
+
+        {isLoading ? (
+          <View style={communityStyles.centerContent}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[communityStyles.loadingText, { color: colors.textSecondary }]}>
+              Loading community spines...
+            </Text>
+          </View>
+        ) : spines.length === 0 ? (
+          <View style={communityStyles.centerContent}>
+            <Ionicons name="images-outline" size={48} color={colors.textLight} />
+            <Text style={[communityStyles.emptyTitle, { color: colors.text }]}>No Community Spines</Text>
+            <Text style={[communityStyles.emptyText, { color: colors.textSecondary }]}>
+              No one has uploaded an alternative spine image for this book yet. Be the first by scanning or uploading one!
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={spines}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            numColumns={GRID_COLUMNS}
+            columnWrapperStyle={communityStyles.gridRow}
+            contentContainerStyle={communityStyles.gridContent}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+      </View>
+    </Modal>
+  );
+}
+
+function CommunitySpineGridItem({
+  option,
+  isUpdating,
+  onSelect,
+}: {
+  option: CommunityBookSpine;
+  isUpdating: boolean;
+  onSelect: (option: CommunityBookSpine) => void;
+}) {
+  const { colors } = useTheme();
+  const resolvedImageUrl = useSpineImageUrl(option.image_url);
+  const backgroundColor = getBookColor(option.title);
+
+  return (
+    <Pressable
+      style={[
+        communityStyles.gridItem,
+        {
+          width: GRID_ITEM_WIDTH,
+          borderColor: colors.inputBorder,
+          backgroundColor: colors.card,
+        },
+      ]}
+      onPress={() => onSelect(option)}
+      disabled={isUpdating}
+    >
+      {resolvedImageUrl ? (
+        <Image
+          source={{ uri: resolvedImageUrl }}
+          style={communityStyles.gridItemImage}
+          contentFit="cover"
+        />
+      ) : (
+        <View style={[communityStyles.gridItemImage, communityStyles.gridItemPlaceholder, { backgroundColor }]}>
+          <Text style={[styles.spineOptionTitle, { color: colors.textOnDark }]} numberOfLines={3}>
+            {option.title}
+          </Text>
+          <Text style={[styles.spineOptionAuthor, { color: colors.textOnDarkMuted }]} numberOfLines={2}>
+            {option.author}
+          </Text>
+        </View>
+      )}
+      <Text style={[communityStyles.gridItemLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+        {option.uploader_name ? `By ${option.uploader_name}` : 'Community'}
+      </Text>
+    </Pressable>
+  );
+}
+
 export function BookDetailModal({
   visible,
   book,
@@ -118,6 +287,7 @@ export function BookDetailModal({
   const [isEditing, setIsEditing] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [isUpdatingSpine, setIsUpdatingSpine] = useState(false);
+  const [showCommunityBrowser, setShowCommunityBrowser] = useState(false);
 
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
@@ -369,6 +539,11 @@ export function BookDetailModal({
     }
   };
 
+  const handleCommunitySpineSelect = async (option: CommunityBookSpine) => {
+    await handleSelectExistingSpine(option);
+    setShowCommunityBrowser(false);
+  };
+
   const handleScanNewSpine = async () => {
     if (!book || !user?.id || isUpdatingSpine) {
       Alert.alert('Error', 'Unable to scan a new spine right now.');
@@ -604,6 +779,13 @@ export function BookDetailModal({
                             loading={isUpdatingSpine}
                             style={styles.spineManagerActionButton}
                           />
+                          <Button
+                            title="Browse Community"
+                            variant="outline"
+                            onPress={() => setShowCommunityBrowser(true)}
+                            disabled={isUpdatingSpine}
+                            style={styles.spineManagerActionButton}
+                          />
                         </View>
                       </View>
 
@@ -704,6 +886,14 @@ export function BookDetailModal({
           </Animated.View>
         </KeyboardAvoidingView>
       </Animated.View>
+
+      <CommunitySpineBrowserModal
+        visible={showCommunityBrowser}
+        book={book}
+        isUpdatingSpine={isUpdatingSpine}
+        onSelect={handleCommunitySpineSelect}
+        onClose={() => setShowCommunityBrowser(false)}
+      />
     </Modal>
   );
 }
@@ -927,6 +1117,81 @@ const styles = StyleSheet.create({
   },
   editButton: {
     flex: 1,
+  },
+});
+
+const communityStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+  },
+  headerTitle: {
+    fontSize: Typography.sizes.lg,
+    fontWeight: Typography.weights.semibold,
+  },
+  closeButton: {
+    padding: Spacing.xs,
+  },
+  subtitle: {
+    fontSize: Typography.sizes.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    lineHeight: 20,
+  },
+  centerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.xl,
+    gap: Spacing.md,
+  },
+  loadingText: {
+    fontSize: Typography.sizes.sm,
+    marginTop: Spacing.sm,
+  },
+  emptyTitle: {
+    fontSize: Typography.sizes.lg,
+    fontWeight: Typography.weights.semibold,
+  },
+  emptyText: {
+    fontSize: Typography.sizes.sm,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  gridContent: {
+    padding: Spacing.md,
+  },
+  gridRow: {
+    gap: GRID_SPACING,
+    marginBottom: GRID_SPACING,
+  },
+  gridItem: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.xs,
+    gap: Spacing.xs,
+  },
+  gridItemImage: {
+    width: '100%',
+    aspectRatio: 1 / 2.5,
+    borderRadius: BorderRadius.sm,
+  },
+  gridItemPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+  },
+  gridItemLabel: {
+    fontSize: Typography.sizes.xs,
+    textAlign: 'center',
   },
 });
 
