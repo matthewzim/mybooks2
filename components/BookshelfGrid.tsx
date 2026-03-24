@@ -66,7 +66,7 @@ export function BookshelfGrid({
 
   // Calculate shelf layout
   const fullShelfMargin = Spacing.xs;
-  const fullShelfBorderWidth = BookshelfDimensions.shelfThickness / 2;
+  const fullShelfBorderWidth = BookshelfDimensions.shelfThickness;
   const availableWidth = shelfStyle === 'full'
     ? screenWidth - (fullShelfMargin * 2) - (fullShelfBorderWidth * 2)
     : screenWidth - Spacing.md * 2;
