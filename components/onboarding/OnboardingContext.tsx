@@ -21,6 +21,7 @@ export interface PreviewBook {
   color: string;
   genre?: string;
   rating?: number;
+  image_url?: string | null;
 }
 
 interface OnboardingState {

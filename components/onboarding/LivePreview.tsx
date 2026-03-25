@@ -6,8 +6,8 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, useWindowDimensions } from 'react-native';
-import { Spacing, BorderRadius, BookshelfDimensions, Typography, getFontFamily } from '@/constants/theme';
+import { View, Text, StyleSheet, Animated, useWindowDimensions, Image } from 'react-native';
+import { Spacing, BorderRadius, Typography, getFontFamily } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useOnboarding, type PreviewBook } from './OnboardingContext';
 
@@ -42,18 +42,34 @@ function MiniSpine({ book, index }: { book: PreviewBook; index: number }) {
       style={[
         styles.spine,
         {
-          backgroundColor: book.color,
+          backgroundColor: book.image_url ? 'transparent' : book.color,
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }],
         },
       ]}
-    />
+    >
+      {book.image_url && (
+        <Image
+          source={{ uri: book.image_url }}
+          style={styles.spineImage}
+          resizeMode="cover"
+        />
+      )}
+    </Animated.View>
   );
+}
+
+function darkenColor(hex: string, factor: number = 0.7): string {
+  const c = hex.replace('#', '');
+  const r = Math.round(parseInt(c.substring(0, 2), 16) * factor);
+  const g = Math.round(parseInt(c.substring(2, 4), 16) * factor);
+  const b = Math.round(parseInt(c.substring(4, 6), 16) * factor);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 }
 
 export function LivePreview() {
   const { colors } = useTheme();
-  const { books, shelfStyle, shelfName } = useOnboarding();
+  const { books, shelfStyle, shelfName, shelfColor } = useOnboarding();
   const { width: screenWidth } = useWindowDimensions();
 
   const previewWidth = screenWidth - Spacing.xl * 2;
@@ -76,12 +92,12 @@ export function LivePreview() {
           styles.shelf,
           shelfStyle === 'full' && {
             borderWidth: SHELF_BORDER,
-            borderColor: BookshelfDimensions.shelfColor,
+            borderColor: shelfColor,
           },
         ]}
       >
         {shelfStyle === 'full' && (
-          <View style={[styles.shelfBack, { backgroundColor: BookshelfDimensions.backColor }]} />
+          <View style={[styles.shelfBack, { backgroundColor: darkenColor(shelfColor) }]} />
         )}
 
         <View style={[styles.booksRow, { minHeight: SPINE_HEIGHT }]}>
@@ -101,7 +117,7 @@ export function LivePreview() {
         </View>
 
         {shelfStyle === 'bottom' && (
-          <View style={styles.shelfSurface} />
+          <View style={[styles.shelfSurface, { backgroundColor: shelfColor }]} />
         )}
       </View>
     </View>
@@ -140,6 +156,11 @@ const styles = StyleSheet.create({
     width: SPINE_WIDTH,
     height: SPINE_HEIGHT,
     borderRadius: 1,
+    overflow: 'hidden',
+  },
+  spineImage: {
+    width: '100%',
+    height: '100%',
   },
   emptyRow: {
     flex: 1,
@@ -152,7 +173,6 @@ const styles = StyleSheet.create({
   },
   shelfSurface: {
     height: 10,
-    backgroundColor: BookshelfDimensions.shelfColor,
     borderRadius: 2,
     marginTop: -1,
   },

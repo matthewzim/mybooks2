@@ -15,9 +15,9 @@ import { LivePreview } from './LivePreview';
 import type { ShelfStyle } from '@/types';
 import { BOOKSHELF_COLORS } from '@/types';
 
-const STYLE_OPTIONS: { id: ShelfStyle; label: string; description: string }[] = [
-  { id: 'full', label: 'Classic Cabinet', description: 'Full enclosed shelf with wood back' },
-  { id: 'bottom', label: 'Open Shelf', description: 'Minimalist with bottom support' },
+const STYLE_OPTIONS: { id: ShelfStyle; label: string }[] = [
+  { id: 'full', label: 'Classic Cabinet' },
+  { id: 'bottom', label: 'Open Shelf' },
 ];
 
 const COLOR_OPTIONS = BOOKSHELF_COLORS.slice(0, 8);
@@ -81,7 +81,6 @@ function StyleCard({
         </View>
 
         <Text style={[styles.styleLabel, { color: colors.text }]}>{option.label}</Text>
-        <Text style={[styles.styleDesc, { color: colors.textSecondary }]}>{option.description}</Text>
 
         {isSelected && (
           <View style={[styles.checkBadge, { backgroundColor: colors.accent }]}>
@@ -148,7 +147,6 @@ export function StyleStep({ onNext, onSkip }: { onNext: () => void; onSkip: () =
           onPress={onNext}
         >
           <Text style={styles.nextButtonText}>Next</Text>
-          <Ionicons name="arrow-forward" size={18} color="#fff" />
         </Pressable>
         <Pressable style={styles.skipBtn} onPress={onSkip}>
           <Text style={[styles.skipText, { color: colors.textLight }]}>Skip</Text>
@@ -225,11 +223,6 @@ const styles = StyleSheet.create({
   styleLabel: {
     fontSize: Typography.sizes.md,
     fontFamily: getFontFamily('semibold'),
-  },
-  styleDesc: {
-    fontSize: Typography.sizes.xs,
-    fontFamily: getFontFamily('regular'),
-    textAlign: 'center',
   },
   checkBadge: {
     position: 'absolute',

@@ -126,7 +126,6 @@ export function LayoutStep({ onNext, onSkip }: { onNext: () => void; onSkip: () 
           onPress={onNext}
         >
           <Text style={styles.nextButtonText}>Next</Text>
-          <Ionicons name="arrow-forward" size={18} color="#fff" />
         </Pressable>
         <Pressable style={styles.skipBtn} onPress={onSkip}>
           <Text style={[styles.skipText, { color: colors.textLight }]}>Skip</Text>
