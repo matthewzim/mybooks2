@@ -36,7 +36,11 @@ interface BookshelfWithBooks extends Bookshelf {
 }
 
 export default function UserProfileScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, name: routeName, public_username: routePublicUsername } = useLocalSearchParams<{
+    id: string;
+    name?: string;
+    public_username?: string;
+  }>();
   const [user, setUser] = useState<UserData | null>(null);
   const [bookshelves, setBookshelves] = useState<BookshelfWithBooks[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,7 +63,12 @@ export default function UserProfileScreen() {
       }
 
       if (result.data) {
-        setUser(result.data.user);
+        setUser((previousUser) => ({
+          ...result.data.user,
+          name: result.data.user.name ?? previousUser?.name ?? null,
+          public_username:
+            result.data.user.public_username ?? previousUser?.public_username ?? null,
+        }));
         setBookshelves(result.data.bookshelves);
       }
     } catch (err) {
@@ -74,6 +83,19 @@ export default function UserProfileScreen() {
   useEffect(() => {
     loadUserProfile();
   }, [loadUserProfile]);
+
+  useEffect(() => {
+    if (!id) return;
+    if (!routeName && !routePublicUsername) return;
+
+    setUser((previousUser) =>
+      previousUser ?? {
+        id,
+        name: routeName || null,
+        public_username: routePublicUsername || null,
+      }
+    );
+  }, [id, routeName, routePublicUsername]);
 
   /**
    * Handle pull to refresh
@@ -118,7 +140,7 @@ export default function UserProfileScreen() {
     );
   }
 
-  const displayName = user.name || 'Anonymous User';
+  const displayName = user.name || (user.public_username ? `@${user.public_username}` : 'Anonymous User');
 
   return (
     <>

@@ -100,14 +100,22 @@ export default function CommunityScreen() {
     setUserSearchResults([]);
     router.push({
       pathname: '/user/[id]',
-      params: { id: selectedUser.id },
+      params: {
+        id: selectedUser.id,
+        name: selectedUser.name ?? '',
+        public_username: selectedUser.public_username ?? '',
+      },
     });
   };
 
   const handlePublicBookshelfPress = (bookshelf: PublicBookshelfPreview) => {
     router.push({
       pathname: '/user/[id]',
-      params: { id: bookshelf.owner.id },
+      params: {
+        id: bookshelf.owner.id,
+        name: bookshelf.owner.name ?? '',
+        public_username: bookshelf.owner.public_username ?? '',
+      },
     });
   };
 
