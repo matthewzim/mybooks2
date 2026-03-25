@@ -303,6 +303,7 @@ export function BookDetailModal({
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const cardTranslateY = useRef(new Animated.Value(24)).current;
   const cardScale = useRef(new Animated.Value(0.98)).current;
+  const coverUrlCacheRef = useRef<Record<string, string>>({});
   const resolvedSpineImageUrl = useSpineImageUrl(book?.image_url);
 
   useEffect(() => {
@@ -316,7 +317,9 @@ export function BookDetailModal({
     }
   }, [book]);
 
-  // Fetch cover image from Google Books when the modal opens
+  // Fetch cover image when the modal opens.
+  // If the caller has stale data, the service re-checks Supabase for an existing cached cover
+  // before calling Google Books again.
   useEffect(() => {
     if (!visible || !book) return;
 
@@ -325,8 +328,17 @@ export function BookDetailModal({
     // Already have a cached cover — resolve its URL (handles signed URLs for private buckets)
     if (book.cover_image_url) {
       getCoverImageUrl(book.cover_image_url).then((resolved) => {
-        if (!cancelled) setCoverImageUrl(resolved);
+        if (!cancelled && resolved) {
+          coverUrlCacheRef.current[book.book_id] = resolved;
+          setCoverImageUrl(resolved);
+        }
       });
+      return;
+    }
+
+    const cachedCoverForBook = coverUrlCacheRef.current[book.book_id];
+    if (cachedCoverForBook) {
+      setCoverImageUrl(cachedCoverForBook);
       return;
     }
 
@@ -342,7 +354,10 @@ export function BookDetailModal({
         if (cancelled) return;
         if (result.data) {
           const resolved = await getCoverImageUrl(result.data);
-          if (!cancelled) setCoverImageUrl(resolved);
+          if (!cancelled && resolved) {
+            coverUrlCacheRef.current[book.book_id] = resolved;
+            setCoverImageUrl(resolved);
+          }
         }
       })
       .finally(() => {
@@ -953,14 +968,14 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   coverShell: {
-    padding: Spacing.xs,
     borderRadius: BorderRadius.md,
     marginBottom: Spacing.md,
+    overflow: 'hidden',
   },
   coverImage: {
     width: 128,
     height: 192,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.md,
   },
   coverLoadingText: {
     fontSize: Typography.sizes.xs,
