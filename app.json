@@ -19,7 +19,20 @@
       },
       "config": {
         "usesNonExemptEncryption": false
-      }
+      },
+      "widgets": [
+        {
+          "name": "BookshelfWidget",
+          "src": "./widgets/BookshelfWidget.tsx",
+          "displayName": "My Bookshelf",
+          "description": "Show one shelf from your library.",
+          "supportedFamilies": [
+            "systemSmall",
+            "systemMedium",
+            "systemLarge"
+          ]
+        }
+      ]
     },
     "android": {
       "package": "com.yourcompany.virtuallibrary",
@@ -42,24 +55,7 @@
         }
       ],
       "expo-secure-store",
-      [
-        "expo-widgets",
-        {
-          "widgets": [
-            {
-              "name": "BookshelfWidget",
-              "src": "./widgets/BookshelfWidget.tsx",
-              "displayName": "My Bookshelf",
-              "description": "Show one shelf from your library.",
-              "supportedFamilies": [
-                "systemSmall",
-                "systemMedium",
-                "systemLarge"
-              ]
-            }
-          ]
-        }
-      ],
+      "expo-widgets",
       [
         "expo-camera",
         {
