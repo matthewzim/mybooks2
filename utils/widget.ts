@@ -8,15 +8,33 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 import type { WidgetData, WidgetBookshelf, WidgetBook, Bookshelf, Book } from '@/types';
 
 const noopWidget = {
   updateSnapshot(_data: unknown) {},
 };
 
-function getBookshelfWidget(): { updateSnapshot(data: unknown): void } {
+let hasLoggedUnavailableRuntime = false;
+
+function canAccessWidgetRuntime(): boolean {
   if (Platform.OS !== 'ios') {
+    return false;
+  }
+
+  // ExpoUI only exists when the runtime has the widget native module linked.
+  // In Expo Go / unsupported dev builds this is undefined.
+  return Boolean(NativeModules?.ExpoUI);
+}
+
+function getBookshelfWidget(): { updateSnapshot(data: unknown): void } {
+  if (!canAccessWidgetRuntime()) {
+    if (!hasLoggedUnavailableRuntime) {
+      console.warn(
+        'Bookshelf widget native runtime unavailable. Widget sync is disabled in this build.'
+      );
+      hasLoggedUnavailableRuntime = true;
+    }
     return noopWidget;
   }
 
@@ -24,7 +42,7 @@ function getBookshelfWidget(): { updateSnapshot(data: unknown): void } {
     // `expo-widgets` exposes an updateSnapshot method on the module returned by
     // createWidget(...). Importing via require keeps Android/web bundles safe.
     const widgetModule = require('@/widgets/BookshelfWidget');
-    return widgetModule.default ?? noopWidget;
+    return widgetModule?.default ?? noopWidget;
   } catch (error) {
     // ExpoUI is only available in the widget extension process.
     // When the main iOS app process resolves this module, fail soft.
