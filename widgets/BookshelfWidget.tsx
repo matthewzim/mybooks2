@@ -2,8 +2,7 @@
  * BookshelfWidget
  *
  * iOS home screen widget that displays book spines from a selected shelf.
- * Built with expo-widgets (Expo SDK 55) using @expo/ui/swift-ui components,
- * replacing the previous native Swift WidgetKit extension.
+ * Built with expo-widgets using @expo/ui/swift-ui components.
  */
 
 import { HStack, Image, Text, VStack } from '@expo/ui/swift-ui';
@@ -15,7 +14,7 @@ import {
   padding,
   widgetURL,
 } from '@expo/ui/swift-ui/modifiers';
-import { createWidget, WidgetBase } from 'expo-widgets';
+import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
 export type BookshelfWidgetProps = {
   shelfId: string | null;
@@ -28,8 +27,8 @@ export type BookshelfWidgetProps = {
   }>;
 };
 
-function maxBooksForFamily(family: string): number {
-  switch (family) {
+function maxBooksForFamily(widgetFamily: string): number {
+  switch (widgetFamily) {
     case 'systemSmall':
       return 4;
     case 'systemMedium':
@@ -39,8 +38,8 @@ function maxBooksForFamily(family: string): number {
   }
 }
 
-function spineWidthForFamily(family: string): number {
-  switch (family) {
+function spineWidthForFamily(widgetFamily: string): number {
+  switch (widgetFamily) {
     case 'systemSmall':
       return 32;
     case 'systemMedium':
@@ -50,7 +49,10 @@ function spineWidthForFamily(family: string): number {
   }
 }
 
-const BookshelfWidget = (props: WidgetBase<BookshelfWidgetProps>) => {
+const BookshelfWidget = (
+  props: BookshelfWidgetProps,
+  environment: WidgetEnvironment
+) => {
   'widget';
 
   if (!props.shelfName) {
@@ -68,10 +70,10 @@ const BookshelfWidget = (props: WidgetBase<BookshelfWidgetProps>) => {
     );
   }
 
-  const maxBooks = maxBooksForFamily(props.family);
-  const spineWidth = spineWidthForFamily(props.family);
+  const maxBooks = maxBooksForFamily(environment.widgetFamily);
+  const spineWidth = spineWidthForFamily(environment.widgetFamily);
   const books = props.books.slice(0, maxBooks);
-  const deepLinkURL = `virtuallibrary:///bookshelf/${props.shelfId}`;
+  const deepLinkURL = `virtuallibrary://bookshelf/${props.shelfId}`;
 
   return (
     <VStack
