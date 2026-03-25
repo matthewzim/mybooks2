@@ -20,10 +20,17 @@ function getBookshelfWidget(): { updateSnapshot(data: unknown): void } {
     return noopWidget;
   }
 
-  // `expo-widgets` exposes an updateSnapshot method on the module returned by
-  // createWidget(...). Importing via require keeps Android/web bundles safe.
-  const widgetModule = require('@/widgets/BookshelfWidget');
-  return widgetModule.default ?? noopWidget;
+  try {
+    // `expo-widgets` exposes an updateSnapshot method on the module returned by
+    // createWidget(...). Importing via require keeps Android/web bundles safe.
+    const widgetModule = require('@/widgets/BookshelfWidget');
+    return widgetModule.default ?? noopWidget;
+  } catch (error) {
+    // ExpoUI is only available in the widget extension process.
+    // When the main iOS app process resolves this module, fail soft.
+    console.warn('Bookshelf widget module unavailable in this runtime:', error);
+    return noopWidget;
+  }
 }
 
 const WIDGET_DATA_KEY = '@virtual_library_widget_data';
