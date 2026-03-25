@@ -103,6 +103,17 @@ class GoogleBooksService {
     book: Pick<Book, 'book_id' | 'title' | 'author'>
   ): Promise<ApiResponse<string>> {
     try {
+      // 0. Re-check Supabase in case the caller has stale in-memory book data.
+      const { data: existingBook, error: existingBookError } = await supabase
+        .from(TABLES.BOOKS)
+        .select('cover_image_url')
+        .eq('id', book.book_id)
+        .maybeSingle();
+
+      if (!existingBookError && existingBook?.cover_image_url) {
+        return { data: existingBook.cover_image_url, error: null };
+      }
+
       // 1. Search Google Books for a cover image URL
       const googleCoverUrl = await this.searchCoverUrl(book.title, book.author);
 
