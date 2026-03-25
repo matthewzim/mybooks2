@@ -16,7 +16,8 @@ import { Colors, Typography, Spacing, getFontFamily } from '@/constants/theme';
 const ONBOARDING_COMPLETE_KEY = 'onboarding_complete';
 
 export default function Index() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, authError, restartAnonymousSession } = useAuth();
+  const [isRetryingAuth, setIsRetryingAuth] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
@@ -27,8 +28,14 @@ export default function Index() {
     });
   }, []);
 
+  const handleRetryAuth = async () => {
+    setIsRetryingAuth(true);
+    await restartAnonymousSession();
+    setIsRetryingAuth(false);
+  };
+
   // Show loading state while initialising anonymous session or checking onboarding
-  if (isLoading || !isAuthenticated || !onboardingChecked) {
+  if (isLoading || !onboardingChecked || (isRetryingAuth && !isAuthenticated)) {
     return (
       <View style={styles.container}>
         <View style={styles.heroCard}>
@@ -44,6 +51,25 @@ export default function Index() {
             <ActivityIndicator size="small" color={Colors.accent} />
             <Text style={styles.statusText}>Setting up your library</Text>
           </View>
+        </View>
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.heroCard}>
+          <View style={styles.logoContainer}>
+            <Text style={styles.logoText}>Couldn't start your session</Text>
+            <Text style={styles.tagline}>
+              {authError || 'Anonymous sign-in failed. Check your Supabase Auth trigger and users table migration.'}
+            </Text>
+          </View>
+
+          <Text onPress={handleRetryAuth} style={styles.retryLink}>
+            {isRetryingAuth ? 'Retrying…' : 'Tap to retry anonymous sign-in'}
+          </Text>
         </View>
       </View>
     );
@@ -109,5 +135,11 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.sm,
     fontFamily: getFontFamily('medium'),
     color: Colors.textSecondary,
+  },
+  retryLink: {
+    textAlign: 'center',
+    fontSize: Typography.sizes.sm,
+    color: Colors.accent,
+    fontFamily: getFontFamily('semibold'),
   },
 });

@@ -203,6 +203,7 @@ export interface AuthState {
   session: Session | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  authError: string | null;
 }
 
 export interface Session {
