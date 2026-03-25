@@ -423,19 +423,42 @@ class BookshelvesService {
     limit: number = 10
   ): Promise<ApiResponse<{ id: string; name: string | null; public_username: string | null }[]>> {
     try {
-      if (!query.trim()) {
+      const trimmedQuery = query.trim();
+      if (!trimmedQuery) {
         return { data: [], error: null };
       }
+
+      const normalizedUsernameQuery = trimmedQuery.replace(/^@+/, '');
+      const escapedQuery = trimmedQuery.replace(/[%_]/g, (char) => `\\${char}`);
 
       // Get the current user to exclude from search results
       const { data: session } = await supabase.auth.getSession();
       const currentUserId = session.session?.user?.id;
 
+      // Limit results to discoverable users (users that have at least one public shelf)
+      const { data: publicShelfOwners, error: publicOwnersError } = await supabase
+        .from(TABLES.BOOKSHELVES)
+        .select('user_id')
+        .eq('is_public', true)
+        .limit(300);
+
+      if (publicOwnersError) throw publicOwnersError;
+
+      const ownerIds = [...new Set((publicShelfOwners || []).map((shelf) => shelf.user_id))];
+      if (ownerIds.length === 0) {
+        return { data: [], error: null };
+      }
+
       // Search users by name or public_username (case-insensitive)
+      const searchFilter = normalizedUsernameQuery
+        ? `name.ilike.%${escapedQuery}%,public_username.ilike.%${escapedQuery}%,public_username.ilike.${normalizedUsernameQuery}`
+        : `name.ilike.%${escapedQuery}%,public_username.ilike.%${escapedQuery}%`;
+
       let queryBuilder = supabase
         .from(TABLES.USERS)
         .select('id, name, public_username')
-        .or(`name.ilike.%${query}%,public_username.ilike.%${query}%`)
+        .in('id', ownerIds)
+        .or(searchFilter)
         .limit(limit);
 
       // Exclude current user from results
