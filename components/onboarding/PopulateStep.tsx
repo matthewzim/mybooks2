@@ -15,13 +15,19 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
+  Alert,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Spacing, BorderRadius, Typography, Shadows, getFontFamily } from '@/constants/theme';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import { Spacing, BorderRadius, Typography, getFontFamily } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useOnboarding, SAMPLE_BOOKS, type PreviewBook } from './OnboardingContext';
 import { LivePreview } from './LivePreview';
 import { BookSpine as BookSpineConstants } from '@/constants/theme';
+import { supabase, TABLES } from '@/services/supabase';
+import { getSpineImageUrl } from '@/services/storage';
 
 function getBookColor(title: string): string {
   const colors = BookSpineConstants.colors;
@@ -36,6 +42,72 @@ interface SearchResult {
   id: string;
   title: string;
   author: string;
+  image_url?: string | null;
+}
+
+const GOODREADS_TITLE_COLUMN_INDEX = 1;
+const GOODREADS_AUTHOR_COLUMN_INDEX = 2;
+
+function parseCsvRows(csvText: string): string[][] {
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentCell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < csvText.length; i += 1) {
+    const char = csvText[i];
+    const nextChar = csvText[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentCell += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === ',' && !inQuotes) {
+      currentRow.push(currentCell);
+      currentCell = '';
+      continue;
+    }
+
+    if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && nextChar === '\n') {
+        i += 1;
+      }
+      currentRow.push(currentCell);
+      const hasAnyCell = currentRow.some((cell) => cell.trim().length > 0);
+      if (hasAnyCell) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+      currentCell = '';
+      continue;
+    }
+
+    currentCell += char;
+  }
+
+  currentRow.push(currentCell);
+  if (currentRow.some((cell) => cell.trim().length > 0)) {
+    rows.push(currentRow);
+  }
+
+  return rows;
+}
+
+function parseGoodreadsBooks(csvText: string): { title: string; author: string }[] {
+  const rows = parseCsvRows(csvText);
+  return rows
+    .slice(1)
+    .map((row) => ({
+      title: row[GOODREADS_TITLE_COLUMN_INDEX]?.trim() || '',
+      author: row[GOODREADS_AUTHOR_COLUMN_INDEX]?.trim() || '',
+    }))
+    .filter((book) => book.title.length > 0 && book.author.length > 0);
 }
 
 function OptionCard({
@@ -104,12 +176,35 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
         `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=8&fields=items(id,volumeInfo/title,volumeInfo/authors)`
       );
       const data = await response.json();
-      const items = (data.items || []).map((item: any) => ({
+      const items: SearchResult[] = (data.items || []).map((item: any) => ({
         id: item.id,
         title: item.volumeInfo?.title || 'Unknown',
         author: item.volumeInfo?.authors?.[0] || 'Unknown',
       }));
-      setResults(items);
+
+      // Check Supabase for spine images for each result
+      const itemsWithImages = await Promise.all(
+        items.map(async (item) => {
+          try {
+            const { data: matchedBook } = await supabase
+              .from(TABLES.BOOKS)
+              .select('image_url')
+              .eq('title', item.title)
+              .eq('author', item.author)
+              .not('image_url', 'is', null)
+              .limit(1)
+              .maybeSingle();
+
+            if (matchedBook?.image_url) {
+              const resolvedUrl = await getSpineImageUrl(matchedBook.image_url);
+              return { ...item, image_url: resolvedUrl };
+            }
+          } catch {}
+          return item;
+        })
+      );
+
+      setResults(itemsWithImages);
     } catch {
       setResults([]);
     } finally {
@@ -125,6 +220,7 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
       color: getBookColor(result.title),
       genre: 'fiction',
       rating: Math.floor(Math.random() * 2) + 4,
+      image_url: result.image_url || null,
     };
     addBooks([book]);
   };
@@ -180,10 +276,118 @@ export function PopulateStep({ onNext, onSkip }: { onNext: () => void; onSkip: (
   const { colors } = useTheme();
   const { addBooks, books } = useOnboarding();
   const [showSearch, setShowSearch] = useState(false);
+  const [showGoodreadsModal, setShowGoodreadsModal] = useState(false);
+  const [isImportingGoodreads, setIsImportingGoodreads] = useState(false);
+  const [isGeneratingSample, setIsGeneratingSample] = useState(false);
 
-  const handleGenerateSample = () => {
-    addBooks(SAMPLE_BOOKS);
-  };
+  const handleGenerateSample = useCallback(async () => {
+    setIsGeneratingSample(true);
+    try {
+      // Query Supabase for books that have spine images
+      const { data: booksWithSpines, error } = await supabase
+        .from(TABLES.BOOKS)
+        .select('id, title, author, image_url')
+        .not('image_url', 'is', null)
+        .limit(8);
+
+      if (error || !booksWithSpines || booksWithSpines.length === 0) {
+        // Fallback to hardcoded sample books if no spine images found
+        addBooks(SAMPLE_BOOKS);
+        return;
+      }
+
+      const sampleBooks: PreviewBook[] = await Promise.all(
+        booksWithSpines.map(async (book) => {
+          const resolvedUrl = await getSpineImageUrl(book.image_url);
+          return {
+            id: `sample-${book.id}`,
+            title: book.title,
+            author: book.author,
+            color: getBookColor(book.title),
+            genre: 'fiction',
+            rating: Math.floor(Math.random() * 2) + 4,
+            image_url: resolvedUrl,
+          };
+        })
+      );
+
+      addBooks(sampleBooks);
+    } catch {
+      // Fallback to hardcoded sample books
+      addBooks(SAMPLE_BOOKS);
+    } finally {
+      setIsGeneratingSample(false);
+    }
+  }, [addBooks]);
+
+  const handleGoodreadsImport = useCallback(async () => {
+    try {
+      setIsImportingGoodreads(true);
+
+      const picked = await DocumentPicker.getDocumentAsync({
+        type: 'text/csv',
+        copyToCacheDirectory: true,
+      });
+
+      if (picked.canceled || !picked.assets?.[0]?.uri) {
+        return;
+      }
+
+      const csvContent = await FileSystem.readAsStringAsync(picked.assets[0].uri);
+      const csvBooks = parseGoodreadsBooks(csvContent);
+
+      if (csvBooks.length === 0) {
+        Alert.alert('Import Error', 'No valid books found in CSV.');
+        return;
+      }
+
+      const uniquePairs = Array.from(
+        new Map(csvBooks.map((book) => [`${book.title.toLowerCase()}::${book.author.toLowerCase()}`, book])).values()
+      );
+
+      const importedBooks: PreviewBook[] = await Promise.all(
+        uniquePairs.map(async (csvBook) => {
+          let imageUrl: string | null = null;
+          try {
+            const { data: matchedBook } = await supabase
+              .from(TABLES.BOOKS)
+              .select('image_url')
+              .eq('title', csvBook.title)
+              .eq('author', csvBook.author)
+              .not('image_url', 'is', null)
+              .limit(1)
+              .maybeSingle();
+
+            if (matchedBook?.image_url) {
+              imageUrl = await getSpineImageUrl(matchedBook.image_url);
+            }
+          } catch {}
+
+          return {
+            id: `goodreads-${csvBook.title}-${csvBook.author}`,
+            title: csvBook.title,
+            author: csvBook.author,
+            color: getBookColor(csvBook.title),
+            genre: 'fiction',
+            rating: Math.floor(Math.random() * 2) + 4,
+            image_url: imageUrl,
+          };
+        })
+      );
+
+      addBooks(importedBooks);
+      setShowGoodreadsModal(false);
+      Alert.alert(
+        'Import Complete',
+        `Added ${importedBooks.length} book${importedBooks.length === 1 ? '' : 's'} to your shelf.`
+      );
+    } catch (error) {
+      console.error('Goodreads import failed:', error);
+      Alert.alert('Import Error', 'Failed to import Goodreads CSV. Please try again.');
+    } finally {
+      setIsImportingGoodreads(false);
+    }
+  }, [addBooks]);
 
   return (
     <ScrollView
@@ -224,13 +428,13 @@ export function PopulateStep({ onNext, onSkip }: { onNext: () => void; onSkip: (
           <OptionCard
             icon="download-outline"
             label="Import from Goodreads"
-            description="Coming soon"
-            onPress={() => {}}
+            description="Upload your Goodreads CSV export"
+            onPress={() => setShowGoodreadsModal(true)}
           />
           <OptionCard
             icon="sparkles"
             label="Generate sample shelf"
-            description="Add 8 popular books instantly"
+            description={isGeneratingSample ? 'Loading...' : 'Add popular books with spine images'}
             onPress={handleGenerateSample}
             accent
           />
@@ -245,12 +449,53 @@ export function PopulateStep({ onNext, onSkip }: { onNext: () => void; onSkip: (
           <Text style={styles.nextButtonText}>
             {books.length > 0 ? 'Next' : 'Skip for now'}
           </Text>
-          <Ionicons name="arrow-forward" size={18} color="#fff" />
         </Pressable>
         <Pressable style={styles.skipBtn} onPress={onSkip}>
           <Text style={[styles.skipText, { color: colors.textLight }]}>Skip all</Text>
         </Pressable>
       </View>
+
+      <Modal
+        visible={showGoodreadsModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowGoodreadsModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowGoodreadsModal(false)}
+        >
+          <Pressable
+            style={[styles.modalCard, { backgroundColor: colors.card }]}
+            onPress={() => {}}
+          >
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Import from Goodreads</Text>
+            <Text style={[styles.modalBody, { color: colors.textSecondary }]}>
+              Import your books from Goodreads CSV export. How to export your library:{'\n\n'}
+              (1) Go to Goodreads.com and log in {'\u2022'}{'\n'}
+              (2) Click 'My Books' and then 'Import and export'{"\n"}
+              (3) Click 'Export Library' to download CSV file{"\n"}
+              (4) Tap the button below to select the file.
+            </Text>
+
+            <Pressable
+              style={[styles.importButton, { backgroundColor: colors.accent }]}
+              onPress={handleGoodreadsImport}
+              disabled={isImportingGoodreads}
+            >
+              <Text style={styles.importButtonText}>
+                {isImportingGoodreads ? 'Importing...' : 'Select CSV file'}
+              </Text>
+            </Pressable>
+            {isImportingGoodreads && (
+              <View style={styles.importingRow}>
+                <ActivityIndicator color={colors.accent} size="small" />
+                <Text style={[styles.importingText, { color: colors.textSecondary }]}>Import in progress...</Text>
+              </View>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
@@ -399,5 +644,47 @@ const styles = StyleSheet.create({
   skipText: {
     fontSize: Typography.sizes.md,
     fontFamily: getFontFamily('medium'),
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    padding: Spacing.lg,
+  },
+  modalCard: {
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+  },
+  modalTitle: {
+    fontSize: Typography.sizes.xl,
+    fontFamily: getFontFamily('bold'),
+  },
+  modalBody: {
+    fontSize: Typography.sizes.md,
+    fontFamily: getFontFamily('regular'),
+    lineHeight: 22,
+  },
+  importButton: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    alignItems: 'center',
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  importButtonText: {
+    color: '#fff',
+    fontSize: Typography.sizes.lg,
+    fontFamily: getFontFamily('semibold'),
+  },
+  importingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  importingText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: getFontFamily('regular'),
   },
 });
