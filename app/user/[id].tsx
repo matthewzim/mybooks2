@@ -28,6 +28,7 @@ import type { Bookshelf, Book } from '@/types';
 interface UserData {
   id: string;
   name: string | null;
+  public_username: string | null;
 }
 
 interface BookshelfWithBooks extends Bookshelf {
@@ -148,6 +149,9 @@ export default function UserProfileScreen() {
               </Text>
             </View>
             <Text style={styles.userName}>{displayName}</Text>
+            {user.public_username && (
+              <Text style={styles.publicUsername}>@{user.public_username}</Text>
+            )}
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <Ionicons name="library-outline" size={18} color={Colors.primary} />
@@ -222,6 +226,11 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.xxl,
     fontWeight: Typography.weights.bold,
     color: Colors.text,
+    marginBottom: Spacing.xs,
+  },
+  publicUsername: {
+    fontSize: Typography.sizes.md,
+    color: Colors.textSecondary,
     marginBottom: Spacing.sm,
   },
   statsRow: {

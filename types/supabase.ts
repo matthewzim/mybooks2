@@ -20,6 +20,7 @@ export interface Database {
           id: string;
           email: string | null;
           name: string | null;
+          public_username: string | null;
           avatar_url: string | null;
           is_premium: boolean;
           created_at: string;
@@ -29,6 +30,7 @@ export interface Database {
           id: string;
           email?: string | null;
           name?: string | null;
+          public_username?: string | null;
           avatar_url?: string | null;
           is_premium?: boolean;
           created_at?: string;
@@ -38,6 +40,7 @@ export interface Database {
           id?: string;
           email?: string | null;
           name?: string | null;
+          public_username?: string | null;
           avatar_url?: string | null;
           is_premium?: boolean;
           created_at?: string;

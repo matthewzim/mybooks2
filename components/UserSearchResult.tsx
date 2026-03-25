@@ -15,8 +15,9 @@ interface UserSearchResultProps {
   user: {
     id: string;
     name: string | null;
+    public_username?: string | null;
   };
-  onPress: (user: { id: string; name: string | null }) => void;
+  onPress: (user: { id: string; name: string | null; public_username?: string | null }) => void;
 }
 
 export function UserSearchResult({ user, onPress }: UserSearchResultProps) {
@@ -41,7 +42,11 @@ export function UserSearchResult({ user, onPress }: UserSearchResultProps) {
         <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
           {displayName}
         </Text>
-        <Text style={[styles.hint, { color: colors.textSecondary }]}>View public bookshelves</Text>
+        {user.public_username ? (
+          <Text style={[styles.hint, { color: colors.textSecondary }]} numberOfLines={1}>@{user.public_username}</Text>
+        ) : (
+          <Text style={[styles.hint, { color: colors.textSecondary }]}>View public bookshelves</Text>
+        )}
       </View>
       <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
     </Pressable>

@@ -89,6 +89,7 @@ class AccountService {
         .from(TABLES.USERS)
         .update({
           name: null,
+          public_username: null,
           avatar_url: null,
           updated_at: new Date().toISOString(),
         })

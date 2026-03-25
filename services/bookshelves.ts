@@ -339,12 +339,12 @@ class BookshelvesService {
    */
   async getPublicBookshelvesForUser(
     userId: string
-  ): Promise<ApiResponse<{ user: { id: string; name: string | null }; bookshelves: (Bookshelf & { books: Book[] })[] }>> {
+  ): Promise<ApiResponse<{ user: { id: string; name: string | null; public_username: string | null }; bookshelves: (Bookshelf & { books: Book[] })[] }>> {
     try {
-      // First, get the user's name
+      // First, get the user's name and public_username
       const { data: userData, error: userError } = await supabase
         .from(TABLES.USERS)
-        .select('id, name')
+        .select('id, name, public_username')
         .eq('id', userId)
         .single();
 
@@ -369,7 +369,7 @@ class BookshelvesService {
 
       return {
         data: {
-          user: userData as { id: string; name: string | null },
+          user: userData as { id: string; name: string | null; public_username: string | null },
           bookshelves: shelves,
         },
         error: null,
@@ -393,7 +393,7 @@ class BookshelvesService {
   async searchUsers(
     query: string,
     limit: number = 10
-  ): Promise<ApiResponse<{ id: string; name: string | null }[]>> {
+  ): Promise<ApiResponse<{ id: string; name: string | null; public_username: string | null }[]>> {
     try {
       if (!query.trim()) {
         return { data: [], error: null };
@@ -403,11 +403,11 @@ class BookshelvesService {
       const { data: session } = await supabase.auth.getSession();
       const currentUserId = session.session?.user?.id;
 
-      // Search users by name (case-insensitive)
+      // Search users by name or public_username (case-insensitive)
       let queryBuilder = supabase
         .from(TABLES.USERS)
-        .select('id, name')
-        .ilike('name', `%${query}%`)
+        .select('id, name, public_username')
+        .or(`name.ilike.%${query}%,public_username.ilike.%${query}%`)
         .limit(limit);
 
       // Exclude current user from results
@@ -419,7 +419,7 @@ class BookshelvesService {
 
       if (error) throw error;
 
-      return { data: data as { id: string; name: string | null }[], error: null };
+      return { data: data as { id: string; name: string | null; public_username: string | null }[], error: null };
     } catch (error) {
       return {
         data: null,
@@ -434,12 +434,10 @@ class BookshelvesService {
    */
   async getRandomPublicBookshelfPreviews(
     limit: number = 6
-  ): Promise<ApiResponse<({ owner: { id: string; name: string | null } } & Bookshelf & { books: Book[] })[]>> {
+  ): Promise<ApiResponse<({ owner: { id: string; name: string | null; public_username: string | null } } & Bookshelf & { books: Book[] })[]>> {
     try {
-      const { data: session } = await supabase.auth.getSession();
-      const currentUserId = session.session?.user?.id;
-
-      let queryBuilder = supabase
+      // Fetch all public bookshelves (including current user's) for a random assortment
+      const { data, error } = await supabase
         .from(TABLES.BOOKSHELVES)
         .select(
           `
@@ -449,12 +447,6 @@ class BookshelvesService {
         )
         .eq('is_public', true)
         .limit(60);
-
-      if (currentUserId) {
-        queryBuilder = queryBuilder.neq('user_id', currentUserId);
-      }
-
-      const { data, error } = await queryBuilder;
 
       if (error) throw error;
 
@@ -468,7 +460,7 @@ class BookshelvesService {
 
       const { data: usersData, error: usersError } = await supabase
         .from(TABLES.USERS)
-        .select('id, name')
+        .select('id, name, public_username')
         .in('id', userIds);
 
       if (usersError) throw usersError;
@@ -480,6 +472,7 @@ class BookshelvesService {
         owner: {
           id: shelf.user_id,
           name: usersById.get(shelf.user_id)?.name || null,
+          public_username: usersById.get(shelf.user_id)?.public_username || null,
         },
       }));
 

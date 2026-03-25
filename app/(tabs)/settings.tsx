@@ -44,6 +44,7 @@ import { FREE_TIER_LIMITS } from '@/services/stripe';
 import { bookshelvesService } from '@/services/bookshelves';
 import { booksService } from '@/services/books';
 import { accountService } from '@/services/account';
+import { authService } from '@/services/auth';
 import { supabase } from '@/services/supabase';
 import { widgetManager } from '@/utils/widget';
 import type { Bookshelf } from '@/types';
@@ -124,7 +125,11 @@ export default function SettingsScreen() {
   const { colors } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
+  const [publicUsername, setPublicUsername] = useState(user?.public_username || '');
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSavingUsername, setIsSavingUsername] = useState(false);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState(true);
   const [showGoodreadsImportModal, setShowGoodreadsImportModal] = useState(false);
   const [isImportingGoodreads, setIsImportingGoodreads] = useState(false);
@@ -305,6 +310,72 @@ export default function SettingsScreen() {
       Alert.alert('Error', 'Failed to update profile');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  /**
+   * Handle public username save
+   */
+  const handleSaveUsername = async () => {
+    const trimmed = publicUsername.trim().toLowerCase();
+
+    if (!trimmed) {
+      // Allow clearing the username
+      setIsSavingUsername(true);
+      try {
+        const result = await updateProfile({ public_username: null });
+        if (result.error) {
+          Alert.alert('Error', result.error.message);
+        } else {
+          setIsEditingUsername(false);
+          setUsernameError(null);
+          Alert.alert('Success', 'Public username removed');
+        }
+      } catch {
+        Alert.alert('Error', 'Failed to update username');
+      } finally {
+        setIsSavingUsername(false);
+      }
+      return;
+    }
+
+    // Validate format: alphanumeric, underscores, periods, 3-30 chars
+    if (!/^[a-z0-9_.]{3,30}$/.test(trimmed)) {
+      setUsernameError('3-30 characters, only letters, numbers, underscores, and periods');
+      return;
+    }
+
+    setIsSavingUsername(true);
+    setUsernameError(null);
+
+    try {
+      // Check availability
+      const availResult = await authService.checkUsernameAvailability(trimmed);
+      if (availResult.error) {
+        Alert.alert('Error', availResult.error.message);
+        return;
+      }
+      if (!availResult.data) {
+        setUsernameError('This username is already taken');
+        return;
+      }
+
+      const result = await updateProfile({ public_username: trimmed });
+      if (result.error) {
+        if (result.error.message.includes('unique') || result.error.message.includes('duplicate')) {
+          setUsernameError('This username is already taken');
+        } else {
+          Alert.alert('Error', result.error.message);
+        }
+      } else {
+        setIsEditingUsername(false);
+        setUsernameError(null);
+        Alert.alert('Success', 'Public username updated');
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to update username');
+    } finally {
+      setIsSavingUsername(false);
     }
   };
 
@@ -521,6 +592,71 @@ export default function SettingsScreen() {
                 </Pressable>
               </View>
             )}
+
+            {/* Public Username */}
+            <View style={[styles.usernameSection, { borderTopColor: colors.border }]}>
+              {isEditingUsername ? (
+                <View style={styles.editForm}>
+                  <Input
+                    label="Public Username"
+                    value={publicUsername}
+                    onChangeText={(text) => {
+                      setPublicUsername(text.toLowerCase().replace(/[^a-z0-9_.]/g, ''));
+                      setUsernameError(null);
+                    }}
+                    placeholder="e.g. bookworm42"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    colors={colors}
+                  />
+                  {usernameError && (
+                    <Text style={[styles.usernameError, { color: colors.error }]}>{usernameError}</Text>
+                  )}
+                  <Text style={[styles.usernameHint, { color: colors.textSecondary }]}>
+                    Others can find you by this unique username
+                  </Text>
+                  <View style={styles.editButtons}>
+                    <Button
+                      title="Cancel"
+                      variant="outline"
+                      onPress={() => {
+                        setPublicUsername(user?.public_username || '');
+                        setIsEditingUsername(false);
+                        setUsernameError(null);
+                      }}
+                      size="sm"
+                      colors={colors}
+                    />
+                    <Button
+                      title="Save"
+                      onPress={handleSaveUsername}
+                      loading={isSavingUsername}
+                      size="sm"
+                      colors={colors}
+                    />
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.usernameDisplay}>
+                  <View style={styles.usernameLabelRow}>
+                    <Ionicons name="at" size={16} color={colors.textSecondary} />
+                    <Text style={[styles.usernameLabel, { color: colors.textSecondary }]}>Public Username</Text>
+                  </View>
+                  <Text style={[styles.usernameValue, { color: colors.text }]}>
+                    {user?.public_username ? `@${user.public_username}` : 'Not set'}
+                  </Text>
+                  <Pressable
+                    style={styles.editButton}
+                    onPress={() => setIsEditingUsername(true)}
+                  >
+                    <Ionicons name="pencil" size={14} color={colors.primary} />
+                    <Text style={[styles.editButtonText, { color: colors.primary }]}>
+                      {user?.public_username ? 'Edit Username' : 'Add Username'}
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
           </View>
         </View>
 
@@ -952,6 +1088,36 @@ const styles = StyleSheet.create({
   rowSubtitle: {
     fontSize: Typography.sizes.sm,
     marginTop: 2,
+  },
+  usernameSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.lg,
+    paddingTop: Spacing.md,
+  },
+  usernameDisplay: {
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  usernameLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  usernameLabel: {
+    fontSize: Typography.sizes.sm,
+  },
+  usernameValue: {
+    fontSize: Typography.sizes.md,
+    fontWeight: Typography.weights.medium,
+  },
+  usernameError: {
+    fontSize: Typography.sizes.sm,
+    marginTop: -Spacing.xs,
+  },
+  usernameHint: {
+    fontSize: Typography.sizes.xs,
+    marginTop: -Spacing.xs,
   },
   bottomPadding: {
     height: 40,
