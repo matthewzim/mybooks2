@@ -18,6 +18,7 @@ import type {
   UpdateUserInput,
 } from '@/types';
 import type { Session, AuthError } from '@supabase/supabase-js';
+import { generateBookishName, generateBookishUsername } from '@/utils/usernameGenerator';
 
 /**
  * Authentication Service Class
@@ -61,13 +62,31 @@ class AuthService {
       if (authError) throw authError;
       if (!authData.user) throw new Error('Anonymous sign-in failed');
 
+      // Generate a bookish profile name and a unique public username
+      const profileName = generateBookishName();
+      let publicUsername = generateBookishUsername();
+
+      // Ensure the public_username is unique (retry up to 5 times on collision)
+      const MAX_USERNAME_RETRIES = 5;
+      for (let i = 0; i < MAX_USERNAME_RETRIES; i++) {
+        const { data: existing } = await supabase
+          .from(TABLES.USERS)
+          .select('id')
+          .eq('public_username', publicUsername)
+          .limit(1);
+
+        if (!existing || existing.length === 0) break;
+        publicUsername = generateBookishUsername();
+      }
+
       // Upsert the user profile in the users table
       const { data: profile, error: profileError } = await supabase
         .from(TABLES.USERS)
         .upsert(
           {
             id: authData.user.id,
-            name: null,
+            name: profileName,
+            public_username: publicUsername,
           },
           { onConflict: 'id' }
         )
