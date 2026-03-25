@@ -341,14 +341,34 @@ class BookshelvesService {
     userId: string
   ): Promise<ApiResponse<{ user: { id: string; name: string | null; public_username: string | null }; bookshelves: (Bookshelf & { books: Book[] })[] }>> {
     try {
-      // First, get the user's name and public_username
-      const { data: userData, error: userError } = await supabase
+      // First, attempt to get the user by id
+      const { data: userById, error: userByIdError } = await supabase
         .from(TABLES.USERS)
         .select('id, name, public_username')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
-      if (userError) throw userError;
+      if (userByIdError) throw userByIdError;
+
+      // Also support route params that contain public usernames instead of UUIDs
+      let resolvedUser =
+        (userById as { id: string; name: string | null; public_username: string | null } | null) ||
+        null;
+
+      if (!resolvedUser) {
+        const { data: userByUsername, error: userByUsernameError } = await supabase
+          .from(TABLES.USERS)
+          .select('id, name, public_username')
+          .eq('public_username', userId)
+          .maybeSingle();
+
+        if (userByUsernameError) throw userByUsernameError;
+        resolvedUser =
+          (userByUsername as { id: string; name: string | null; public_username: string | null } | null) ||
+          null;
+      }
+
+      const targetUserId = resolvedUser?.id || userId;
 
       // Get public bookshelves for this user with their books via bookshelf_items
       const { data, error } = await supabase
@@ -359,7 +379,7 @@ class BookshelvesService {
           bookshelf_items(*, book:books(*))
         `
         )
-        .eq('user_id', userId)
+        .eq('user_id', targetUserId)
         .eq('is_public', true)
         .order('position', { ascending: true });
 
@@ -367,9 +387,17 @@ class BookshelvesService {
 
       const shelves = (data || []).map(shelfWithBooks);
 
+      if (!resolvedUser && shelves.length === 0) {
+        throw new Error('User not found');
+      }
+
       return {
         data: {
-          user: userData as { id: string; name: string | null; public_username: string | null },
+          user: resolvedUser || {
+            id: targetUserId,
+            name: null,
+            public_username: null,
+          },
           bookshelves: shelves,
         },
         error: null,
