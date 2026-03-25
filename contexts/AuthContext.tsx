@@ -57,6 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<AuthState['session']>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   /**
    * Initialize auth state on mount
@@ -83,10 +84,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const { data: profile } = await authService.getCurrentUser();
             setUser(profile);
             setSession(newSession as AuthState['session']);
+            setAuthError(null);
           } else if (event === 'SIGNED_OUT') {
             // User signed out - clear state
             setUser(null);
             setSession(null);
+            setAuthError(null);
           } else if (event === 'TOKEN_REFRESHED' && newSession) {
             // Token refreshed - update session
             setSession(newSession as AuthState['session']);
@@ -97,6 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('Error handling auth state change:', error);
           setUser(null);
           setSession(null);
+          setAuthError('Authentication state sync failed.');
         }
       }
     );
@@ -123,18 +127,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: profile } = await authService.getCurrentUser();
         setUser(profile);
         setSession(existingSession as AuthState['session']);
+        setAuthError(null);
       } else {
         // No session - sign in anonymously
         const { data, error } = await authService.signInAnonymously();
         if (error) {
           console.error('Anonymous sign-in failed:', error.message);
+          setAuthError(error.message);
         } else if (data) {
           setUser(data.user);
           setSession(data.session as AuthState['session']);
+          setAuthError(null);
         }
       }
     } catch (error) {
       console.error('Failed to initialize auth:', error);
+      setAuthError(error instanceof Error ? error.message : 'Failed to initialize auth.');
     } finally {
       setIsLoading(false);
     }
@@ -176,6 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setUser(null);
       setSession(null);
+      setAuthError(null);
 
       const signOutResult = await authService.signOut();
       if (signOutResult.error) {
@@ -193,6 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUser(result.data.user);
       setSession(result.data.session as AuthState['session']);
+      setAuthError(null);
 
       return { data: result.data.user, error: null };
     } catch (error) {
@@ -214,6 +224,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       isLoading,
       isAuthenticated: !!user && !!session,
+      authError,
       isConfigured: isSupabaseConfigured,
       updateProfile,
       refreshUser,
@@ -223,6 +234,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       session,
       isLoading,
+      authError,
       updateProfile,
       refreshUser,
       restartAnonymousSession,
