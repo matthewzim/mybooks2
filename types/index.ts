@@ -14,6 +14,7 @@
 export interface User {
   id: string;
   name: string | null;
+  public_username: string | null;
   avatar_url: string | null;
   is_premium: boolean;
   created_at: string;
@@ -139,6 +140,7 @@ export interface CreateUserInput {
 
 export interface UpdateUserInput {
   name?: string;
+  public_username?: string | null;
   avatar_url?: string;
   is_premium?: boolean;
 }

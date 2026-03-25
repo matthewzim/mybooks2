@@ -30,6 +30,7 @@ interface PublicBookshelfPreview extends Bookshelf {
   owner: {
     id: string;
     name: string | null;
+    public_username: string | null;
   };
 }
 
@@ -40,7 +41,7 @@ export default function CommunityScreen() {
   const { colors } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
-  const [userSearchResults, setUserSearchResults] = useState<{ id: string; name: string | null }[]>([]);
+  const [userSearchResults, setUserSearchResults] = useState<{ id: string; name: string | null; public_username: string | null }[]>([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const [publicBookshelfPreviews, setPublicBookshelfPreviews] = useState<PublicBookshelfPreview[]>([]);
   const [isLoadingPublicBookshelves, setIsLoadingPublicBookshelves] = useState(true);
@@ -94,7 +95,7 @@ export default function CommunityScreen() {
     loadPublicBookshelfPreviews();
   }, [loadPublicBookshelfPreviews]);
 
-  const handleUserPress = (selectedUser: { id: string; name: string | null }) => {
+  const handleUserPress = (selectedUser: { id: string; name: string | null; public_username?: string | null }) => {
     setUserSearchQuery('');
     setUserSearchResults([]);
     router.push({
@@ -154,7 +155,7 @@ export default function CommunityScreen() {
             <Text style={[styles.userSearchLabel, { color: colors.primary }]}>Find Users</Text>
           </View>
           <Input
-            placeholder="Search by user name..."
+            placeholder="Search by name or username..."
             value={userSearchQuery}
             onChangeText={setUserSearchQuery}
             leftIcon="person-outline"

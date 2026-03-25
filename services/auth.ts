@@ -209,6 +209,43 @@ class AuthService {
   }
 
   /**
+   * Check if a public username is available
+   *
+   * @param username - The username to check
+   * @returns true if available, false if taken
+   */
+  async checkUsernameAvailability(username: string): Promise<ApiResponse<boolean>> {
+    const configError = this.checkConfiguration<boolean>();
+    if (configError) return configError;
+
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const currentUserId = session.session?.user?.id;
+
+      let query = supabase
+        .from(TABLES.USERS)
+        .select('id')
+        .eq('public_username', username.toLowerCase())
+        .limit(1);
+
+      if (currentUserId) {
+        query = query.neq('id', currentUserId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      return { data: !data || data.length === 0, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: { message: handleSupabaseError(error) },
+      };
+    }
+  }
+
+  /**
    * Subscribe to auth state changes
    * Useful for keeping UI in sync with auth state
    *
