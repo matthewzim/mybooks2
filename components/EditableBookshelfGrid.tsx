@@ -684,11 +684,12 @@ function StackedBookSpine({
 /**
  * Get a consistent color for a book based on its title
  */
-function getBookColor(title: string): string {
+function getBookColor(title?: string | null): string {
   const bookColors = BookSpineConstants.colors;
+  const safeTitle = title?.trim() || 'Untitled';
   let hash = 0;
-  for (let i = 0; i < title.length; i++) {
-    hash = title.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < safeTitle.length; i++) {
+    hash = safeTitle.charCodeAt(i) + ((hash << 5) - hash);
   }
   return bookColors[Math.abs(hash) % bookColors.length];
 }
