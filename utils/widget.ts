@@ -16,10 +16,14 @@ const noopWidget = {
 };
 
 function getBookshelfWidget(): { updateSnapshot(data: unknown): void } {
-  // The app bundle must never import the widget entrypoint directly because
-  // @expo/ui/swift-ui relies on the ExpoUI native module, which only exists
-  // inside the widget extension process.
-  return noopWidget;
+  if (Platform.OS !== 'ios') {
+    return noopWidget;
+  }
+
+  // `expo-widgets` exposes an updateSnapshot method on the module returned by
+  // createWidget(...). Importing via require keeps Android/web bundles safe.
+  const widgetModule = require('@/widgets/BookshelfWidget');
+  return widgetModule.default ?? noopWidget;
 }
 
 const WIDGET_DATA_KEY = '@virtual_library_widget_data';

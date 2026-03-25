@@ -292,39 +292,48 @@ export default async function handler(req, res) {
 
 Update `services/stripe.ts` with your API URL.
 
-## iOS Widget Setup
+## iOS Widget Setup (expo-widgets)
 
-The widget functionality requires native iOS code. Here's how to set it up:
+This project uses the `expo-widgets` config plugin (SDK 55+) to generate the iOS widget target during prebuild. You should **not** manually create a Widget Extension target in Xcode.
 
-### 1. Create Widget Extension
+### 1. Use a development build (not Expo Go)
 
-In Xcode:
-1. Open the iOS project (`ios/VirtualLibrary.xcworkspace`)
-2. File → New → Target → Widget Extension
-3. Name it "BookshelfWidget"
+`expo-widgets` is not available in Expo Go. Build and run a native development client instead:
 
-### 2. Configure App Groups
-
-1. In both the main app target and widget target, enable "App Groups" capability
-2. Create a group: `group.com.yourcompany.virtuallibrary`
-
-### 3. Share Data
-
-Use `UserDefaults` with the App Group to share bookshelf data:
-
-```swift
-// In your widget code
-let defaults = UserDefaults(suiteName: "group.com.yourcompany.virtuallibrary")
-let widgetData = defaults?.data(forKey: "widgetBookshelf")
+```bash
+npx expo prebuild -p ios --clean
+npm run ios
 ```
 
-### 4. Update Widget from App
+### 2. Verify app config plugin
 
-Call the native module from React Native to update widget data:
+The widget is configured in `app.json` under:
+
+- `plugins -> expo-widgets`
+- `ios.widgets[0].name = "BookshelfWidget"`
+- `ios.widgets[0].displayName = "My Bookshelf"`
+
+### 3. Add and find the widget in simulator
+
+1. Run the iOS build (`npm run ios`) and launch the app once.
+2. Go to the iOS home screen in Simulator.
+3. Long-press home screen → tap **+** (upper-left).
+4. Search for **Virtual Library** (app name) or **My Bookshelf** (widget display name).
+
+### 4. Troubleshooting if widget does not appear
+
+- Make sure you are running a **development build** and not Expo Go.
+- After changing widget config, rebuild native code:
+  - `npx expo prebuild -p ios --clean`
+  - `npm run ios`
+- Ensure the app has finished installing and opened at least once after build.
+- If needed, reset simulator content and rerun the build.
+
+### 5. Update widget snapshot from app data
 
 ```typescript
-// After updating bookshelf
 import { widgetManager } from '@/utils/widget';
+
 await widgetManager.updateWidgetWithBookshelf(bookshelf, books);
 ```
 
