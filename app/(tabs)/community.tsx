@@ -215,7 +215,7 @@ export default function CommunityScreen() {
               <BookshelfPreview
                 key={bookshelf.id}
                 bookshelf={bookshelf}
-                books={bookshelf.books.slice(0, 4)}
+                books={bookshelf.books}
                 onPress={() => handlePublicBookshelfPress(bookshelf)}
                 containerStyle={styles.previewCard}
               />
