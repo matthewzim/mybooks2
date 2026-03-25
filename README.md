@@ -309,7 +309,7 @@ npm run ios
 
 The widget is configured in `app.json` under:
 
-- `plugins -> expo-widgets`
+- `plugins` includes `"expo-widgets"`
 - `ios.widgets[0].name = "BookshelfWidget"`
 - `ios.widgets[0].displayName = "My Bookshelf"`
 
@@ -325,6 +325,11 @@ The widget is configured in `app.json` under:
 - Make sure you are running a **development build** and not Expo Go.
 - After changing widget config, rebuild native code:
   - `npx expo prebuild -p ios --clean`
+  - `npm run ios`
+- If you see `No such module 'ExpoWidgets'` in `ios/ExpoWidgetsTarget/index.swift`, your native iOS project is stale. Regenerate it and reinstall pods:
+  - `rm -rf ios`
+  - `npx expo prebuild -p ios --clean`
+  - `cd ios && pod install && cd ..`
   - `npm run ios`
 - Ensure the app has finished installing and opened at least once after build.
 - If needed, reset simulator content and rerun the build.
