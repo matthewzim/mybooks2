@@ -34,8 +34,8 @@ interface GoogleBooksResponse {
 
 class GoogleBooksService {
   private buildSearchQueries(title: string, author: string): string[] {
-    const cleanTitle = title.trim();
-    const cleanAuthor = author.trim();
+    const cleanTitle = (title || '').trim();
+    const cleanAuthor = (author || '').trim();
     const normalizedTitle = cleanTitle.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
 
     const queries = [

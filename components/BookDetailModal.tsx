@@ -53,11 +53,12 @@ interface BookDetailModalProps {
   readOnly?: boolean;
 }
 
-function getBookColor(title: string): string {
+function getBookColor(title?: string | null): string {
   const colors = BookSpineConstants.colors;
+  const safeTitle = title?.trim() || 'Untitled';
   let hash = 0;
-  for (let i = 0; i < title.length; i++) {
-    hash = title.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < safeTitle.length; i++) {
+    hash = safeTitle.charCodeAt(i) + ((hash << 5) - hash);
   }
   return colors[Math.abs(hash) % colors.length];
 }
@@ -310,8 +311,8 @@ export function BookDetailModal({
 
   useEffect(() => {
     if (book) {
-      setTitle(book.title);
-      setAuthor(book.author);
+      setTitle(book.title || '');
+      setAuthor(book.author || '');
       setReview(book.review || '');
       setRating(book.rating || 0);
       setIsEditing(false);
@@ -661,7 +662,9 @@ export function BookDetailModal({
 
   if (!book) return null;
 
-  const bookColor = getBookColor(book.title);
+  const displayTitle = book.title?.trim() || 'Untitled';
+  const displayAuthor = book.author?.trim() || 'Unknown Author';
+  const bookColor = getBookColor(displayTitle);
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
@@ -775,10 +778,10 @@ export function BookDetailModal({
                           ) : (
                             <View style={[styles.currentSpineImage, styles.spineOptionPlaceholder, { backgroundColor: bookColor }]}>
                               <Text style={[styles.spineOptionTitle, { color: colors.textOnDark }]} numberOfLines={3}>
-                                {book.title}
+                                {displayTitle}
                               </Text>
                               <Text style={[styles.spineOptionAuthor, { color: colors.textOnDarkMuted }]} numberOfLines={2}>
-                                {book.author}
+                                {displayAuthor}
                               </Text>
                             </View>
                           )}
@@ -862,13 +865,13 @@ export function BookDetailModal({
                       ) : (
                         <View style={[styles.coverImage, styles.thumbnailPlaceholder, { backgroundColor: bookColor }]}>
                           <Text style={[styles.placeholderInitial, { color: colors.textOnDark }]}>
-                            {book.title.charAt(0).toUpperCase()}
+                            {displayTitle.charAt(0).toUpperCase()}
                           </Text>
                         </View>
                       )}
                     </View>
-                    <Text style={[styles.bookTitle, { color: colors.text }]}>{book.title}</Text>
-                    <Text style={[styles.bookAuthor, { color: colors.textSecondary }]}>by {book.author}</Text>
+                    <Text style={[styles.bookTitle, { color: colors.text }]}>{displayTitle}</Text>
+                    <Text style={[styles.bookAuthor, { color: colors.textSecondary }]}>by {displayAuthor}</Text>
                   </View>
 
                   <View style={[styles.sectionCard, { backgroundColor: colors.cardDark }]}>

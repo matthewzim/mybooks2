@@ -32,11 +32,12 @@ interface VerticalBookStackProps {
 /**
  * Get a consistent color for a book based on its title
  */
-function getBookColor(title: string): string {
+function getBookColor(title?: string | null): string {
   const colors = BookSpineConstants.colors;
+  const safeTitle = title?.trim() || 'Untitled';
   let hash = 0;
-  for (let i = 0; i < title.length; i++) {
-    hash = title.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < safeTitle.length; i++) {
+    hash = safeTitle.charCodeAt(i) + ((hash << 5) - hash);
   }
   return colors[Math.abs(hash) % colors.length];
 }
@@ -116,7 +117,9 @@ function StackedBookItem({
   const { colors } = useTheme();
   const spineImageUrl = useSpineImageUrl(book.image_url);
   const hasValidUrl = Boolean(spineImageUrl);
-  const backgroundColor = getBookColor(book.title);
+  const displayTitle = book.title?.trim() || 'Untitled';
+  const displayAuthor = book.author?.trim() || 'Unknown Author';
+  const backgroundColor = getBookColor(displayTitle);
 
   return (
     <Pressable
@@ -132,7 +135,7 @@ function StackedBookItem({
       ]}
       onPress={() => onBookPress(book)}
       accessibilityRole="button"
-      accessibilityLabel={`${book.title} by ${book.author} (in stack, position ${index + 1} of ${stackCount})`}
+      accessibilityLabel={`${displayTitle} by ${displayAuthor} (in stack, position ${index + 1} of ${stackCount})`}
     >
       {hasValidUrl ? (
         <View style={styles.stackedImageContainer}>
@@ -146,7 +149,7 @@ function StackedBookItem({
       ) : (
         <View style={[styles.stackedPlaceholder, { backgroundColor }]}>
           <Text style={[styles.stackedTitle, { color: colors.textOnDark }]} numberOfLines={1}>
-            {book.title}
+            {displayTitle}
           </Text>
         </View>
       )}

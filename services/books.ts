@@ -35,8 +35,8 @@ function toBook(row: any): Book {
   return {
     id: row.id,                                   // bookshelf_items.id
     book_id: row.book_id || book.id,              // books.id
-    title: book.title ?? row.title,
-    author: book.author ?? row.author,
+    title: book.title ?? row.title ?? 'Untitled',
+    author: book.author ?? row.author ?? 'Unknown Author',
     image_url: book.image_url ?? row.image_url ?? null,
     cover_image_url: book.cover_image_url ?? row.cover_image_url ?? null,
     isbn: book.isbn ?? row.isbn ?? null,
