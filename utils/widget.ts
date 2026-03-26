@@ -2,41 +2,51 @@
  * Widget Utilities
  *
  * Utilities for managing iOS home screen widget data.
- * Uses @bacons/apple-targets ExtensionStorage to share data with the native
- * Swift widget via App Groups (NSUserDefaults).
+ * Uses expo-widgets to share data with the widget via updateSnapshot.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import type { WidgetData, WidgetBookshelf, WidgetBook, Bookshelf, Book } from '@/types';
 
-const APP_GROUP = 'group.com.yourcompany.virtuallibrary';
 const WIDGET_DATA_KEY = '@virtual_library_widget_data';
 const WIDGET_SELECTED_SHELF_KEY = '@virtual_library_widget_shelf';
 
 /**
- * Lazily load ExtensionStorage so Android/web bundles don't crash.
+ * Lazily import the widget so Android/web bundles don't crash.
+ * The widget module is only usable on iOS.
  */
-function getExtensionStorage(): {
-  set(key: string, value: string | undefined): void;
+function getBookshelfWidget(): {
+  updateSnapshot: (props: Record<string, unknown>) => void;
 } | null {
   if (Platform.OS !== 'ios') return null;
   try {
-    const { ExtensionStorage } = require('@bacons/apple-targets');
-    return new ExtensionStorage(APP_GROUP);
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const widget = require('../widgets/bookshelf').default;
+    return widget;
   } catch {
     return null;
   }
 }
 
-function reloadWidget(): void {
-  if (Platform.OS !== 'ios') return;
-  try {
-    const { ExtensionStorage } = require('@bacons/apple-targets');
-    ExtensionStorage.reloadWidget('BookshelfWidget');
-  } catch {
-    // Widget runtime unavailable in this build
-  }
+/**
+ * Push data to the native widget via expo-widgets updateSnapshot.
+ */
+function pushToWidget(widgetData: WidgetData): void {
+  const widget = getBookshelfWidget();
+  if (!widget) return;
+
+  const bookshelf = widgetData.bookshelf;
+  widget.updateSnapshot({
+    bookshelfName: bookshelf?.name ?? null,
+    bookshelfId: bookshelf?.id ?? null,
+    books: (bookshelf?.books ?? []).map((b) => ({
+      id: b.id,
+      title: b.title,
+      author: b.author,
+      imageUrl: b.image_url,
+    })),
+  });
 }
 
 /**
@@ -76,8 +86,8 @@ class WidgetManager {
 
   /**
    * Save widget data for the home screen widget.
-   * Writes to both AsyncStorage (for the app) and App Group UserDefaults
-   * (for the native Swift widget).
+   * Writes to AsyncStorage (for the app) and pushes to the native widget
+   * via expo-widgets updateSnapshot.
    */
   async saveWidgetData(bookshelf: WidgetBookshelf | null): Promise<void> {
     try {
@@ -87,12 +97,7 @@ class WidgetManager {
       };
 
       await AsyncStorage.setItem(WIDGET_DATA_KEY, JSON.stringify(widgetData));
-
-      const storage = getExtensionStorage();
-      if (storage) {
-        storage.set('widgetData', JSON.stringify(widgetData));
-        reloadWidget();
-      }
+      pushToWidget(widgetData);
     } catch (error) {
       console.error('Failed to save widget data:', error);
     }
@@ -121,11 +126,7 @@ class WidgetManager {
         lastUpdated: new Date().toISOString(),
       };
 
-      const storage = getExtensionStorage();
-      if (storage) {
-        storage.set('widgetData', JSON.stringify(widgetData));
-        reloadWidget();
-      }
+      pushToWidget(widgetData);
     } catch (error) {
       console.error('Failed syncing widget library snapshot:', error);
     }
@@ -133,9 +134,12 @@ class WidgetManager {
 
   /**
    * Reload all widget timelines.
+   * With expo-widgets this is handled automatically via updateSnapshot,
+   * but we keep the method for API compatibility with existing callers.
    */
   reloadWidgetTimelines(): void {
-    reloadWidget();
+    // expo-widgets handles timeline reloads internally via updateSnapshot.
+    // This is now a no-op kept for backward compatibility.
   }
 
   /**
@@ -194,11 +198,8 @@ class WidgetManager {
       await AsyncStorage.removeItem(WIDGET_DATA_KEY);
       await AsyncStorage.removeItem(WIDGET_SELECTED_SHELF_KEY);
 
-      const storage = getExtensionStorage();
-      if (storage) {
-        storage.set('widgetData', undefined);
-        reloadWidget();
-      }
+      // Push empty state to widget
+      pushToWidget({ bookshelf: null, lastUpdated: new Date().toISOString() });
     } catch (error) {
       console.error('Failed to clear widget data:', error);
     }
