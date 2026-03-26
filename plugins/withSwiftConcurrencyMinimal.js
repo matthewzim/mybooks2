@@ -6,10 +6,11 @@ const fs = require("fs");
 const path = require("path");
 
 /**
- * Expo config plugin that sets SWIFT_STRICT_CONCURRENCY to "minimal" for all
- * targets (including CocoaPods dependencies), fixing Swift 6
- * strict-concurrency build errors in dependencies like expo-modules-core
- * that haven't been fully annotated yet.
+ * Expo config plugin that sets SWIFT_STRICT_CONCURRENCY to "minimal" and
+ * SWIFT_VERSION to "6.0" for all targets (including CocoaPods dependencies),
+ * fixing Swift 6 strict-concurrency build errors in dependencies like
+ * expo-modules-core that use Swift 6 syntax (e.g. @MainActor on protocol
+ * conformances) but haven't been fully annotated for strict concurrency yet.
  */
 const withSwiftConcurrencyMinimal = (config) => {
   // 1. Set the build setting on all Xcode project configurations
@@ -21,6 +22,7 @@ const withSwiftConcurrencyMinimal = (config) => {
       const buildSettings = configurations[key].buildSettings;
       if (buildSettings) {
         buildSettings.SWIFT_STRICT_CONCURRENCY = "minimal";
+        buildSettings.SWIFT_VERSION = "6.0";
       }
     }
 
@@ -44,6 +46,7 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |bc|
       bc.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
+      bc.build_settings['SWIFT_VERSION'] = '6.0'
     end
   end
 end
@@ -58,10 +61,11 @@ end
           podfile = podfile.replace(
             /post_install do \|installer\|/,
             `post_install do |installer|
-  # [withSwiftConcurrencyMinimal] Set minimal concurrency for all pod targets
+  # [withSwiftConcurrencyMinimal] Set minimal concurrency and Swift 6 for all pod targets
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |bc|
       bc.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
+      bc.build_settings['SWIFT_VERSION'] = '6.0'
     end
   end`
           );
