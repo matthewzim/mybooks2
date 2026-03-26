@@ -67,6 +67,7 @@
           ]
         }
       ],
+      "./plugins/withDeduplicateWidgetTargets",
       [
         "expo-camera",
         {
