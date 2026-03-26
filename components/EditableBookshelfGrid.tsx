@@ -45,7 +45,7 @@ import type { Book, ShelfStyle } from '@/types';
 interface EditableBookshelfGridProps {
   books: Book[];
   onBookPress: (book: Book) => void;
-  onAddBook: () => void;
+  onAddBook?: () => void;
   isLoading?: boolean;
   isEditing: boolean;
   shelfStyle?: ShelfStyle;
@@ -337,7 +337,7 @@ export function EditableBookshelfGrid({
     });
 
     // Add the "add" button
-    if (!isEditing) {
+    if (!isEditing && onAddBook) {
       const addButtonWidth = BookSpineConstants.width;
       if (
         currentRowWidth + addButtonWidth > availableWidth &&

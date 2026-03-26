@@ -22,6 +22,7 @@ import {
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '@/contexts/AuthContext';
 import { useBookshelves } from '@/hooks/useBookshelves';
 import { useBooks } from '@/hooks/useBooks';
 import { EditableBookshelfGrid } from '@/components/EditableBookshelfGrid';
@@ -36,6 +37,7 @@ import type { Book, Bookshelf, ShelfStyle, UpdateBookshelfInput } from '@/types'
 export default function BookshelfDetailScreen() {
   const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
   const { getBookshelf, updateBookshelf } = useBookshelves();
   const { books, isLoading: booksLoading, fetchBooks, deleteBook, reorderBooks, updateBook, stackBookOnTop, unstackBook } = useBooks(id || '');
   const [bookshelf, setBookshelf] = useState<Bookshelf | null>(null);
@@ -238,6 +240,8 @@ export default function BookshelfDetailScreen() {
     );
   }
 
+  const isOwner = Boolean(user?.id && bookshelf.user_id === user.id);
+
   return (
     <>
       {/* Dynamic header title */}
@@ -258,39 +262,40 @@ export default function BookshelfDetailScreen() {
               <Ionicons name="chevron-back" size={18} color={colors.text} />
             </Pressable>
           ),
-          headerRight: () => (
-            <View style={styles.headerButtons}>
-              <Pressable
-                onPress={toggleEditMode}
-                style={({ pressed }) => [
-                  styles.headerButton,
-                  isEditMode && { opacity: 0.7 },
-                  pressed && { opacity: 0.8 },
-                ]}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel={isEditMode ? 'Finish reordering books' : 'Reorder books'}
-              >
-                <Ionicons
-                  name={isEditMode ? 'checkmark' : 'swap-horizontal'}
-                  size={20}
-                  color={isEditMode ? colors.textInverse : colors.text}
-                />
-              </Pressable>
-              <Pressable
-                onPress={handleEditBookshelf}
-                style={({ pressed }) => [
-                  styles.headerButton,
-                  pressed && { opacity: 0.8 },
-                ]}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Edit bookshelf"
-              >
-                <Ionicons name="pencil" size={18} color={colors.text} />
-              </Pressable>
-            </View>
-          ),
+          headerRight: () =>
+            isOwner ? (
+              <View style={styles.headerButtons}>
+                <Pressable
+                  onPress={toggleEditMode}
+                  style={({ pressed }) => [
+                    styles.headerButton,
+                    isEditMode && { opacity: 0.7 },
+                    pressed && { opacity: 0.8 },
+                  ]}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={isEditMode ? 'Finish reordering books' : 'Reorder books'}
+                >
+                  <Ionicons
+                    name={isEditMode ? 'checkmark' : 'swap-horizontal'}
+                    size={20}
+                    color={isEditMode ? colors.textInverse : colors.text}
+                  />
+                </Pressable>
+                <Pressable
+                  onPress={handleEditBookshelf}
+                  style={({ pressed }) => [
+                    styles.headerButton,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit bookshelf"
+                >
+                  <Ionicons name="pencil" size={18} color={colors.text} />
+                </Pressable>
+              </View>
+            ) : undefined,
         }}
       />
 
@@ -371,9 +376,9 @@ export default function BookshelfDetailScreen() {
         <EditableBookshelfGrid
           books={books}
           onBookPress={handleBookPress}
-          onAddBook={handleAddBook}
+          onAddBook={isOwner ? handleAddBook : undefined}
           isLoading={booksLoading}
-          isEditing={isEditMode}
+          isEditing={isOwner ? isEditMode : false}
           shelfStyle={bookshelf.shelf_style}
           shelfColor={bookshelf.cover_color}
           onReorderBooks={handleReorderBooks}
@@ -389,6 +394,7 @@ export default function BookshelfDetailScreen() {
           onClose={handleCloseBookModal}
           onBookUpdated={handleBookUpdated}
           onBookDeleted={handleBookDeleted}
+          readOnly={!isOwner}
         />
 
         {/* Bookshelf Edit Modal */}
