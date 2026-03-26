@@ -18,7 +18,6 @@ export interface Database {
       users: {
         Row: {
           id: string;
-          email: string | null;
           name: string | null;
           public_username: string | null;
           avatar_url: string | null;
@@ -28,7 +27,6 @@ export interface Database {
         };
         Insert: {
           id: string;
-          email?: string | null;
           name?: string | null;
           public_username?: string | null;
           avatar_url?: string | null;
@@ -38,7 +36,6 @@ export interface Database {
         };
         Update: {
           id?: string;
-          email?: string | null;
           name?: string | null;
           public_username?: string | null;
           avatar_url?: string | null;

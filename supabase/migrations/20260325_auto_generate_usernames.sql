@@ -82,10 +82,9 @@ LANGUAGE plpgsql
 SECURITY DEFINER SET search_path = public
 AS $$
 BEGIN
-  INSERT INTO public.users (id, email, name, public_username)
+  INSERT INTO public.users (id, name, public_username)
   VALUES (
     NEW.id,
-    NEW.email,  -- NULL for anonymous users; column is nullable
     public.generate_bookish_display_name(),
     public.generate_bookish_username()
   )
