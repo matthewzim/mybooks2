@@ -76,6 +76,7 @@ function OnboardingFlow() {
               author: book.author,
               shelf_id: shelfId,
               position: index,
+              image_url: book.source_image_url || undefined,
             })
           )
         );

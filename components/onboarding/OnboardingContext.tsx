@@ -22,6 +22,8 @@ export interface PreviewBook {
   genre?: string;
   rating?: number;
   image_url?: string | null;
+  /** Original storage path for persisting to the database (image_url holds the resolved/signed display URL) */
+  source_image_url?: string | null;
 }
 
 interface OnboardingState {

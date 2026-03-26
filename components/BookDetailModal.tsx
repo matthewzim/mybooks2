@@ -50,6 +50,7 @@ interface BookDetailModalProps {
   onClose: () => void;
   onBookUpdated?: (book: Book) => void;
   onBookDeleted?: (bookId: string) => void;
+  readOnly?: boolean;
 }
 
 function getBookColor(title: string): string {
@@ -279,6 +280,7 @@ export function BookDetailModal({
   onClose,
   onBookUpdated,
   onBookDeleted,
+  readOnly = false,
 }: BookDetailModalProps) {
   const { colors } = useTheme();
   const { user } = useAuth();
@@ -681,7 +683,7 @@ export function BookDetailModal({
             <View style={[styles.headerRow, { borderBottomColor: colors.inputBorder }]}>
               <Text style={[styles.pageTitle, { color: colors.text }]}>{isEditing ? 'Edit Book' : 'Book Details'}</Text>
               <View style={styles.headerButtons}>
-                {!isEditing && (
+                {!isEditing && !readOnly && (
                   <Pressable onPress={handleDelete} style={styles.iconButton} hitSlop={8}>
                     <Ionicons name="trash-outline" size={20} color={colors.error} />
                   </Pressable>
@@ -894,7 +896,9 @@ export function BookDetailModal({
                     </Text>
                   </View>
 
-                  <Button title="Edit Book" variant="outline" onPress={() => setIsEditing(true)} fullWidth />
+                  {!readOnly && (
+                    <Button title="Edit Book" variant="outline" onPress={() => setIsEditing(true)} fullWidth />
+                  )}
                 </>
               )}
             </ScrollView>

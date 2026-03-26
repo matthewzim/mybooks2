@@ -43,6 +43,7 @@ interface SearchResult {
   title: string;
   author: string;
   image_url?: string | null;
+  source_image_url?: string | null;
 }
 
 const GOODREADS_TITLE_COLUMN_INDEX = 1;
@@ -197,7 +198,7 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
 
             if (matchedBook?.image_url) {
               const resolvedUrl = await getSpineImageUrl(matchedBook.image_url);
-              return { ...item, image_url: resolvedUrl };
+              return { ...item, image_url: resolvedUrl, source_image_url: matchedBook.image_url };
             }
           } catch {}
           return item;
@@ -221,6 +222,7 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
       genre: 'fiction',
       rating: Math.floor(Math.random() * 2) + 4,
       image_url: result.image_url || null,
+      source_image_url: result.source_image_url || null,
     };
     addBooks([book]);
   };
@@ -307,6 +309,7 @@ export function PopulateStep({ onNext, onSkip }: { onNext: () => void; onSkip: (
             genre: 'fiction',
             rating: Math.floor(Math.random() * 2) + 4,
             image_url: resolvedUrl,
+            source_image_url: book.image_url,
           };
         })
       );
@@ -348,6 +351,7 @@ export function PopulateStep({ onNext, onSkip }: { onNext: () => void; onSkip: (
       const importedBooks: PreviewBook[] = await Promise.all(
         uniquePairs.map(async (csvBook) => {
           let imageUrl: string | null = null;
+          let sourceImageUrl: string | null = null;
           try {
             const { data: matchedBook } = await supabase
               .from(TABLES.BOOKS)
@@ -359,6 +363,7 @@ export function PopulateStep({ onNext, onSkip }: { onNext: () => void; onSkip: (
               .maybeSingle();
 
             if (matchedBook?.image_url) {
+              sourceImageUrl = matchedBook.image_url;
               imageUrl = await getSpineImageUrl(matchedBook.image_url);
             }
           } catch {}
@@ -371,6 +376,7 @@ export function PopulateStep({ onNext, onSkip }: { onNext: () => void; onSkip: (
             genre: 'fiction',
             rating: Math.floor(Math.random() * 2) + 4,
             image_url: imageUrl,
+            source_image_url: sourceImageUrl,
           };
         })
       );
