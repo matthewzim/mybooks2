@@ -4,7 +4,7 @@ module.exports = {
   name: "BookshelfWidget",
   displayName: "My Bookshelf",
   frameworks: ["SwiftUI", "WidgetKit"],
-  deploymentTarget: "16.0",
+  deploymentTarget: "15.1",
   colors: {
     $widgetBackground: { light: "#FFFFFF", dark: "#1C1C1E" },
     $accent: "#8B4513",
