@@ -194,9 +194,7 @@ struct BookshelfWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: BookshelfTimelineProvider()) { entry in
             BookshelfWidgetView(entry: entry)
-                .containerBackground(for: .widget) {
-                    Color(.systemBackground)
-                }
+                .containerBackground(for: .widget) { Color(.systemBackground) }
         }
         .configurationDisplayName("My Bookshelf")
         .description("Show one shelf from your library.")
