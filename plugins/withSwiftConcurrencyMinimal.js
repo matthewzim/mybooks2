@@ -25,7 +25,6 @@ const withSwiftConcurrencyMinimal = (config) => {
       const buildSettings = configurations[key].buildSettings;
       if (buildSettings) {
         buildSettings.SWIFT_STRICT_CONCURRENCY = "minimal";
-        buildSettings.SWIFT_VERSION = "6.0";
       }
     }
 
