@@ -20,19 +20,11 @@
       "config": {
         "usesNonExemptEncryption": false
       },
-      "widgets": [
-        {
-          "name": "BookshelfWidget",
-          "src": "./widgets/BookshelfWidget.tsx",
-          "displayName": "My Bookshelf",
-          "description": "Show one shelf from your library.",
-          "supportedFamilies": [
-            "systemSmall",
-            "systemMedium",
-            "systemLarge"
-          ]
-        }
-      ]
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.yourcompany.virtuallibrary"
+        ]
+      }
     },
     "android": {
       "package": "com.yourcompany.virtuallibrary",
@@ -55,7 +47,7 @@
         }
       ],
       "expo-secure-store",
-      "expo-widgets",
+      "@bacons/apple-targets",
       [
         "expo-camera",
         {

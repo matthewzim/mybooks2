@@ -2,57 +2,42 @@
  * Widget Utilities
  *
  * Utilities for managing iOS home screen widget data.
- * The app stores widget snapshots in shared storage and avoids importing the
- * widget entrypoint directly, because ExpoUI is only available in the widget
- * extension process.
+ * Uses @bacons/apple-targets ExtensionStorage to share data with the native
+ * Swift widget via App Groups (NSUserDefaults).
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NativeModules, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import type { WidgetData, WidgetBookshelf, WidgetBook, Bookshelf, Book } from '@/types';
 
-const noopWidget = {
-  updateSnapshot(_data: unknown) {},
-};
-
-let hasLoggedUnavailableRuntime = false;
-
-function canAccessWidgetRuntime(): boolean {
-  if (Platform.OS !== 'ios') {
-    return false;
-  }
-
-  // ExpoUI only exists when the runtime has the widget native module linked.
-  // In Expo Go / unsupported dev builds this is undefined.
-  return Boolean(NativeModules?.ExpoUI);
-}
-
-function getBookshelfWidget(): { updateSnapshot(data: unknown): void } {
-  if (!canAccessWidgetRuntime()) {
-    if (!hasLoggedUnavailableRuntime) {
-      console.warn(
-        'Bookshelf widget native runtime unavailable. Widget sync is disabled in this build.'
-      );
-      hasLoggedUnavailableRuntime = true;
-    }
-    return noopWidget;
-  }
-
-  try {
-    // `expo-widgets` exposes an updateSnapshot method on the module returned by
-    // createWidget(...). Importing via require keeps Android/web bundles safe.
-    const widgetModule = require('@/widgets/BookshelfWidget');
-    return widgetModule?.default ?? noopWidget;
-  } catch (error) {
-    // ExpoUI is only available in the widget extension process.
-    // When the main iOS app process resolves this module, fail soft.
-    console.warn('Bookshelf widget module unavailable in this runtime:', error);
-    return noopWidget;
-  }
-}
-
+const APP_GROUP = 'group.com.yourcompany.virtuallibrary';
 const WIDGET_DATA_KEY = '@virtual_library_widget_data';
 const WIDGET_SELECTED_SHELF_KEY = '@virtual_library_widget_shelf';
+
+/**
+ * Lazily load ExtensionStorage so Android/web bundles don't crash.
+ */
+function getExtensionStorage(): {
+  set(key: string, value: string | undefined): void;
+} | null {
+  if (Platform.OS !== 'ios') return null;
+  try {
+    const { ExtensionStorage } = require('@bacons/apple-targets');
+    return new ExtensionStorage(APP_GROUP);
+  } catch {
+    return null;
+  }
+}
+
+function reloadWidget(): void {
+  if (Platform.OS !== 'ios') return;
+  try {
+    const { ExtensionStorage } = require('@bacons/apple-targets');
+    ExtensionStorage.reloadWidget('BookshelfWidget');
+  } catch {
+    // Widget runtime unavailable in this build
+  }
+}
 
 /**
  * Widget Manager Class
@@ -91,6 +76,8 @@ class WidgetManager {
 
   /**
    * Save widget data for the home screen widget.
+   * Writes to both AsyncStorage (for the app) and App Group UserDefaults
+   * (for the native Swift widget).
    */
   async saveWidgetData(bookshelf: WidgetBookshelf | null): Promise<void> {
     try {
@@ -101,12 +88,10 @@ class WidgetManager {
 
       await AsyncStorage.setItem(WIDGET_DATA_KEY, JSON.stringify(widgetData));
 
-      if (Platform.OS === 'ios') {
-        getBookshelfWidget().updateSnapshot({
-          shelfId: bookshelf?.id ?? null,
-          shelfName: bookshelf?.name ?? null,
-          books: bookshelf?.books ?? [],
-        });
+      const storage = getExtensionStorage();
+      if (storage) {
+        storage.set('widgetData', JSON.stringify(widgetData));
+        reloadWidget();
       }
     } catch (error) {
       console.error('Failed to save widget data:', error);
@@ -131,12 +116,15 @@ class WidgetManager {
         activeShelf.books
       );
 
-      if (Platform.OS === 'ios') {
-        getBookshelfWidget().updateSnapshot({
-          shelfId: widgetShelf.id,
-          shelfName: widgetShelf.name,
-          books: widgetShelf.books,
-        });
+      const widgetData: WidgetData = {
+        bookshelf: widgetShelf,
+        lastUpdated: new Date().toISOString(),
+      };
+
+      const storage = getExtensionStorage();
+      if (storage) {
+        storage.set('widgetData', JSON.stringify(widgetData));
+        reloadWidget();
       }
     } catch (error) {
       console.error('Failed syncing widget library snapshot:', error);
@@ -144,9 +132,11 @@ class WidgetManager {
   }
 
   /**
-   * No-op retained for call-site compatibility.
+   * Reload all widget timelines.
    */
-  reloadWidgetTimelines(): void {}
+  reloadWidgetTimelines(): void {
+    reloadWidget();
+  }
 
   /**
    * Get current widget data from local cache
@@ -203,12 +193,11 @@ class WidgetManager {
     try {
       await AsyncStorage.removeItem(WIDGET_DATA_KEY);
       await AsyncStorage.removeItem(WIDGET_SELECTED_SHELF_KEY);
-      if (Platform.OS === 'ios') {
-        getBookshelfWidget().updateSnapshot({
-          shelfId: null,
-          shelfName: null,
-          books: [],
-        });
+
+      const storage = getExtensionStorage();
+      if (storage) {
+        storage.set('widgetData', undefined);
+        reloadWidget();
       }
     } catch (error) {
       console.error('Failed to clear widget data:', error);
