@@ -211,21 +211,3 @@ struct BookshelfWidgetBundle: WidgetBundle {
     }
 }
 
-// MARK: - Previews
-
-#Preview(as: .systemMedium) {
-    BookshelfWidget()
-} timeline: {
-    BookshelfEntry(
-        date: Date(),
-        bookshelf: WidgetBookshelf(
-            id: "preview",
-            name: "Favorites",
-            books: [
-                WidgetBook(id: "1", title: "Dune", author: "Frank Herbert", image_url: nil),
-                WidgetBook(id: "2", title: "1984", author: "George Orwell", image_url: nil),
-                WidgetBook(id: "3", title: "Neuromancer", author: "William Gibson", image_url: nil),
-            ]
-        )
-    )
-}
