@@ -47,7 +47,25 @@
         }
       ],
       "expo-secure-store",
-      "@bacons/apple-targets",
+      [
+        "expo-widgets",
+        {
+          "bundleIdentifier": "com.yourcompany.virtuallibrary.widgets",
+          "groupIdentifier": "group.com.yourcompany.virtuallibrary",
+          "widgets": [
+            {
+              "name": "BookshelfWidget",
+              "displayName": "My Bookshelf",
+              "description": "Show one shelf from your library.",
+              "supportedFamilies": [
+                "systemSmall",
+                "systemMedium",
+                "systemLarge"
+              ]
+            }
+          ]
+        }
+      ],
       [
         "expo-camera",
         {
