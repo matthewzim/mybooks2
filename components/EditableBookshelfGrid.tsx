@@ -631,7 +631,9 @@ function StackedBookSpine({
   const { colors } = useTheme();
   const spineImageUrl = useSpineImageUrl(book.image_url);
   const hasValidUrl = Boolean(spineImageUrl);
-  const backgroundColor = getBookColor(book.title);
+  const displayTitle = book.title?.trim() || 'Untitled';
+  const displayAuthor = book.author?.trim() || 'Unknown Author';
+  const backgroundColor = getBookColor(displayTitle);
 
   return (
     <Pressable
@@ -642,7 +644,7 @@ function StackedBookSpine({
       ]}
       onPress={() => onPress(book)}
       accessibilityRole="button"
-      accessibilityLabel={`${book.title} by ${book.author} (stacked)`}
+      accessibilityLabel={`${displayTitle} by ${displayAuthor} (stacked)`}
     >
       {hasValidUrl ? (
         <View style={styles.stackedImageContainer}>
@@ -664,7 +666,7 @@ function StackedBookSpine({
             style={[styles.stackedTitle, { color: colors.textOnDark }]}
             numberOfLines={1}
           >
-            {book.title}
+            {displayTitle}
           </Text>
         </View>
       )}

@@ -49,11 +49,12 @@ interface OnboardingContextType extends OnboardingState {
 
 const STEPS: OnboardingStep[] = ['welcome', 'style', 'populate', 'layout', 'name', 'reveal'];
 
-function getBookColor(title: string): string {
+function getBookColor(title?: string | null): string {
   const colors = BookSpineConstants.colors;
+  const safeTitle = title?.trim() || 'Untitled';
   let hash = 0;
-  for (let i = 0; i < title.length; i++) {
-    hash = title.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < safeTitle.length; i++) {
+    hash = safeTitle.charCodeAt(i) + ((hash << 5) - hash);
   }
   return colors[Math.abs(hash) % colors.length];
 }
