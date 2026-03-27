@@ -3,6 +3,9 @@
  *
  * Persistent mini-bookshelf preview that updates in real-time
  * as the user makes selections during onboarding.
+ *
+ * Matches the BookshelfPreview component used on the home page:
+ * same spine dimensions, shelf height, and scaling behaviour.
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -11,9 +14,10 @@ import { Spacing, BorderRadius, Typography, getFontFamily } from '@/constants/th
 import { useTheme } from '@/contexts/ThemeContext';
 import { useOnboarding, type PreviewBook } from './OnboardingContext';
 
-const SPINE_WIDTH = 28;
-const SPINE_HEIGHT = 90;
+const SPINE_WIDTH = 20;
+const SPINE_HEIGHT = 132;
 const SHELF_BORDER = 4;
+const SHELF_THICKNESS = 12;
 
 function MiniSpine({ book, index }: { book: PreviewBook; index: number }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -52,7 +56,7 @@ function MiniSpine({ book, index }: { book: PreviewBook; index: number }) {
         <Image
           source={{ uri: book.image_url }}
           style={styles.spineImage}
-          resizeMode="cover"
+          resizeMode="contain"
         />
       )}
     </Animated.View>
@@ -150,12 +154,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'flex-start',
+    flexWrap: 'nowrap',
     zIndex: 1,
   },
   spine: {
     width: SPINE_WIDTH,
     height: SPINE_HEIGHT,
-    borderRadius: 1,
     overflow: 'hidden',
   },
   spineImage: {
@@ -172,8 +176,13 @@ const styles = StyleSheet.create({
     fontFamily: getFontFamily('regular'),
   },
   shelfSurface: {
-    height: 10,
-    borderRadius: 2,
+    height: SHELF_THICKNESS,
+    borderRadius: BorderRadius.sm,
     marginTop: -1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 4,
   },
 });
