@@ -39,6 +39,19 @@ const patches = [
         to: '    case .prominent:\n      // `.prominent` is only available with a newer iOS SDK.\n      return .done\n'
       }
     ]
+  },
+  {
+    file: 'node_modules/expo-image-picker/ios/MediaHandler.swift',
+    replacements: [
+      {
+        from: '  private func getMimeType(from asset: PHAsset?, fileExtension: String) -> String? {\n    let utType: UTType? = if #available(iOS 26.0, *) {\n      asset?.contentType ?? UTType(filenameExtension: fileExtension)\n    } else {\n      UTType(filenameExtension: fileExtension)\n    }\n    return utType?.preferredMIMEType\n  }\n',
+        to: '  private func getMimeType(from asset: PHAsset?, fileExtension: String) -> String? {\n    // `PHAsset.contentType` requires a newer Photos SDK and is unavailable in older Xcode toolchains.\n    // Fall back to extension-based detection for broad compatibility.\n    let utType = UTType(filenameExtension: fileExtension)\n    return utType?.preferredMIMEType\n  }\n'
+      },
+      {
+        from: '  private func getMimeType(from resource: PHAssetResource, fileExtension: String) -> String? {\n    let utType: UTType? = if #available(iOS 26.0, *) {\n      resource.contentType\n    } else {\n      UTType(resource.uniformTypeIdentifier) ?? UTType(filenameExtension: fileExtension)\n    }\n    return utType?.preferredMIMEType\n  }\n',
+        to: '  private func getMimeType(from resource: PHAssetResource, fileExtension: String) -> String? {\n    // `PHAssetResource.contentType` requires a newer Photos SDK and is unavailable in older Xcode toolchains.\n    let utType = UTType(resource.uniformTypeIdentifier) ?? UTType(filenameExtension: fileExtension)\n    return utType?.preferredMIMEType\n  }\n'
+      }
+    ]
   }
 ];
 
