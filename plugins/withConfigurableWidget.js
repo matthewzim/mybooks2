@@ -114,22 +114,29 @@ struct BookshelfConfigurableProvider: AppIntentTimelineProvider {
   }
 
   // Build a timeline entry by selecting the right bookshelf from stored data.
+  // Includes the isPremium flag so the widget can gate content for free users.
   private func buildEntry(for intent: SelectBookshelfIntent) -> WidgetsTimelineEntry {
     let timeline = WidgetsStorage.getArray(forKey: "__expo_widgets_\\(name)_timeline") ?? []
     guard let firstEntry = timeline.first as? [String: Any],
-          let allProps = firstEntry["props"] as? [String: Any],
-          let bookshelves = allProps["bookshelves"] as? [[String: Any]] else {
-      return WidgetsTimelineEntry(date: Date(), name: name, props: nil, entryIndex: 0)
+          let allProps = firstEntry["props"] as? [String: Any] else {
+      return WidgetsTimelineEntry(date: Date(), name: name, props: ["isPremium": false], entryIndex: 0)
+    }
+
+    let isPremium = allProps["isPremium"] as? Bool ?? false
+
+    guard let bookshelves = allProps["bookshelves"] as? [[String: Any]] else {
+      return WidgetsTimelineEntry(date: Date(), name: name, props: ["isPremium": isPremium], entryIndex: 0)
     }
 
     let selectedId = intent.bookshelf?.id
     let shelf = bookshelves.first { ($0["id"] as? String) == selectedId } ?? bookshelves.first
 
     guard let shelf else {
-      return WidgetsTimelineEntry(date: Date(), name: name, props: nil, entryIndex: 0)
+      return WidgetsTimelineEntry(date: Date(), name: name, props: ["isPremium": isPremium], entryIndex: 0)
     }
 
     let props: [String: Any] = [
+      "isPremium": isPremium,
       "bookshelfName": shelf["name"] ?? "",
       "bookshelfId": shelf["id"] ?? "",
       "books": shelf["books"] ?? []

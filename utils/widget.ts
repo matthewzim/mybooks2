@@ -15,6 +15,7 @@ import type { WidgetData, WidgetBookshelf, WidgetBook, Bookshelf, Book } from '@
 
 const WIDGET_DATA_KEY = '@virtual_library_widget_data';
 const WIDGET_SELECTED_SHELF_KEY = '@virtual_library_widget_shelf';
+const WIDGET_PREMIUM_KEY = '@virtual_library_widget_premium';
 
 /**
  * Lazily import the widget so Android/web bundles don't crash.
@@ -37,12 +38,15 @@ function getBookshelfWidget(): {
  * Push all bookshelf data to the native widget via expo-widgets updateSnapshot.
  * The native configurable timeline provider reads the selected bookshelf from
  * this data based on the user's AppIntent selection.
+ *
+ * Includes `isPremium` so the widget can gate content for free users.
  */
-function pushToWidget(widgetData: WidgetData): void {
+function pushToWidget(widgetData: WidgetData, isPremium: boolean): void {
   const widget = getBookshelfWidget();
   if (!widget) return;
 
   widget.updateSnapshot({
+    isPremium,
     bookshelves: widgetData.bookshelves.map((shelf) => ({
       id: shelf.id,
       name: shelf.name,
@@ -104,7 +108,8 @@ class WidgetManager {
       };
 
       await AsyncStorage.setItem(WIDGET_DATA_KEY, JSON.stringify(widgetData));
-      pushToWidget(widgetData);
+      const isPremium = await this.getIsPremium();
+      pushToWidget(widgetData, isPremium);
     } catch (error) {
       console.error('Failed to save widget data:', error);
     }
@@ -128,7 +133,8 @@ class WidgetManager {
       };
 
       await AsyncStorage.setItem(WIDGET_DATA_KEY, JSON.stringify(widgetData));
-      pushToWidget(widgetData);
+      const isPremium = await this.getIsPremium();
+      pushToWidget(widgetData, isPremium);
     } catch (error) {
       console.error('Failed syncing widget library snapshot:', error);
     }
@@ -210,9 +216,47 @@ class WidgetManager {
       await AsyncStorage.removeItem(WIDGET_SELECTED_SHELF_KEY);
 
       // Push empty state to widget
-      pushToWidget({ bookshelves: [], lastUpdated: new Date().toISOString() });
+      pushToWidget({ bookshelves: [], lastUpdated: new Date().toISOString() }, false);
     } catch (error) {
       console.error('Failed to clear widget data:', error);
+    }
+  }
+
+  /**
+   * Store the user's premium status locally so it can be included
+   * when pushing data to the native widget.
+   */
+  async setIsPremium(isPremium: boolean): Promise<void> {
+    try {
+      await AsyncStorage.setItem(WIDGET_PREMIUM_KEY, JSON.stringify(isPremium));
+    } catch (error) {
+      console.error('Failed to save widget premium status:', error);
+    }
+  }
+
+  /**
+   * Read the cached premium status.
+   */
+  async getIsPremium(): Promise<boolean> {
+    try {
+      const value = await AsyncStorage.getItem(WIDGET_PREMIUM_KEY);
+      return value ? JSON.parse(value) === true : false;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Sync the premium flag and re-push existing widget data so the
+   * widget immediately reflects the subscription change.
+   */
+  async syncPremiumStatus(isPremium: boolean): Promise<void> {
+    await this.setIsPremium(isPremium);
+    const widgetData = await this.getWidgetData();
+    if (widgetData) {
+      pushToWidget(widgetData, isPremium);
+    } else {
+      pushToWidget({ bookshelves: [], lastUpdated: new Date().toISOString() }, isPremium);
     }
   }
 
