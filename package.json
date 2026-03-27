@@ -9,7 +9,8 @@
     "web": "expo start --web",
     "lint": "eslint .",
     "test": "jest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "node scripts/patch-expo-router-ios-compat.js"
   },
   "dependencies": {
     "@expo/ui": "^55.0.5",
