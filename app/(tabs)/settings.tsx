@@ -40,7 +40,7 @@ import {
   Shadows,
   ThemeColors,
 } from '@/constants/theme';
-import { FREE_TIER_LIMITS } from '@/services/stripe';
+import { FREE_TIER_LIMITS } from '@/services/revenuecat';
 import { bookshelvesService } from '@/services/bookshelves';
 import { booksService } from '@/services/books';
 import { accountService } from '@/services/account';

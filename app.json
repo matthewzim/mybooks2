@@ -80,13 +80,7 @@
           "photosPermission": "Allow Virtual Library to access your photos to upload book spine images."
         }
       ],
-      [
-        "@stripe/stripe-react-native",
-        {
-          "merchantIdentifier": "merchant.com.yourcompany.virtuallibrary",
-          "enableGooglePay": false
-        }
-      ]
+      "react-native-purchases"
     ],
     "experiments": {
       "typedRoutes": true

@@ -286,40 +286,20 @@ export interface PaginatedResponse<T> {
 }
 
 // ============================================
-// Payment Types (Stripe)
+// Subscription Types (RevenueCat)
 // ============================================
 
-export interface PaymentIntent {
-  id: string;
-  client_secret: string;
-  amount: number;
-  currency: string;
-  status: PaymentStatus;
-}
-
-export type PaymentStatus =
-  | 'requires_payment_method'
-  | 'requires_confirmation'
-  | 'requires_action'
-  | 'processing'
-  | 'requires_capture'
-  | 'canceled'
-  | 'succeeded';
-
-export interface SubscriptionPlan {
-  id: string;
-  name: string;
-  price: number;
-  currency: string;
-  interval: 'month' | 'year';
-  features: string[];
-}
-
+/**
+ * Subscription status derived from RevenueCat entitlements.
+ * The SDK manages products, offerings, and receipts;
+ * these types are used for local Supabase tracking only.
+ */
 export interface UserSubscription {
   id: string;
   user_id: string;
-  plan_id: string;
-  status: 'active' | 'canceled' | 'past_due';
+  entitlement_id: string;
+  status: 'active' | 'canceled' | 'expired';
+  product_identifier: string;
   current_period_end: string;
   created_at: string;
 }

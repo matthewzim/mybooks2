@@ -20,7 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { BookshelfPreview } from '@/components/BookshelfPreview';
 import { LoadingView, EmptyState } from '@/components/ui';
-import { FREE_TIER_LIMITS } from '@/services/stripe';
+import { FREE_TIER_LIMITS } from '@/services/revenuecat';
 import { Spacing, BorderRadius, Typography, getFontFamily } from '@/constants/theme';
 import type { Bookshelf } from '@/types';
 

@@ -1,14 +1,15 @@
 /**
  * Payment Screen
  *
- * Premium subscription purchase screen.
+ * Premium subscription purchase screen powered by RevenueCat.
  * Features:
- * - Plan selection
- * - Feature comparison
- * - Stripe payment integration
+ * - RevenueCat native Paywall presentation
+ * - Manual plan selection fallback
+ * - Customer Center for managing subscriptions
+ * - Restore purchases
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,12 +17,16 @@ import {
   ScrollView,
   Alert,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { router, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
+import { PurchasesPackage } from 'react-native-purchases';
 import { useAuth } from '@/contexts/AuthContext';
-import { stripeService, SUBSCRIPTION_PLANS, FREE_TIER_LIMITS } from '@/services/stripe';
+import { useRevenueCat } from '@/contexts/RevenueCatContext';
+import { FREE_TIER_LIMITS, PREMIUM_FEATURES } from '@/services/revenuecat';
 import { Button } from '@/components/ui';
 import {
   Colors,
@@ -30,32 +35,69 @@ import {
   Typography,
   Shadows,
 } from '@/constants/theme';
-import type { SubscriptionPlan } from '@/types';
 
 export default function PaymentScreen() {
   const { user, refreshUser } = useAuth();
-  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan>(
-    SUBSCRIPTION_PLANS[0]
-  );
+  const {
+    isPro,
+    currentOffering,
+    purchasePackage,
+    restorePurchases,
+    refresh,
+  } = useRevenueCat();
   const [isLoading, setIsLoading] = useState(false);
+  const [isRestoringPurchases, setIsRestoringPurchases] = useState(false);
 
   /**
-   * Handle plan purchase
+   * Present the RevenueCat native Paywall.
+   * This uses the paywall configured in the RevenueCat dashboard.
    */
-  const handlePurchase = async () => {
-    setIsLoading(true);
-
+  const handlePresentPaywall = async () => {
     try {
-      const result = await stripeService.purchasePlan(selectedPlan);
+      const result = await RevenueCatUI.presentPaywall();
 
-      if (result.error) {
-        if (result.error.code === 'canceled') {
-          // User canceled - do nothing
-          return;
-        }
-        Alert.alert('Payment Failed', result.error.message);
-      } else {
-        // Payment successful
+      if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
+        await refreshUser();
+        await refresh();
+        Alert.alert(
+          'Welcome to Premium!',
+          'Thank you for your purchase. You now have access to all premium features.',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      }
+      // PAYWALL_RESULT.CANCELLED and PAYWALL_RESULT.ERROR are handled silently
+    } catch (error) {
+      console.error('Paywall presentation error:', error);
+      Alert.alert(
+        'Error',
+        'Unable to display the subscription options. Please try again.'
+      );
+    }
+  };
+
+  /**
+   * Present the RevenueCat Customer Center for subscription management.
+   */
+  const handlePresentCustomerCenter = async () => {
+    try {
+      await RevenueCatUI.presentCustomerCenter();
+    } catch (error) {
+      console.error('Customer Center error:', error);
+      Alert.alert(
+        'Manage Subscription',
+        'To manage your subscription, visit your App Store or Google Play account settings.'
+      );
+    }
+  };
+
+  /**
+   * Fallback: purchase a specific package manually (if paywall is unavailable).
+   */
+  const handlePurchasePackage = async (pkg: PurchasesPackage) => {
+    setIsLoading(true);
+    try {
+      const purchased = await purchasePackage(pkg);
+      if (purchased) {
         await refreshUser();
         Alert.alert(
           'Welcome to Premium!',
@@ -63,10 +105,10 @@ export default function PaymentScreen() {
           [{ text: 'OK', onPress: () => router.back() }]
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       Alert.alert(
-        'Payment Error',
-        'Unable to process payment. Please check your payment setup or try again later.'
+        'Purchase Failed',
+        error?.message || 'Unable to complete purchase. Please try again.'
       );
     } finally {
       setIsLoading(false);
@@ -74,14 +116,37 @@ export default function PaymentScreen() {
   };
 
   /**
-   * Format price for display
+   * Restore previous purchases.
    */
-  const formatPrice = (cents: number): string => {
-    return `$${(cents / 100).toFixed(2)}`;
+  const handleRestorePurchases = async () => {
+    setIsRestoringPurchases(true);
+    try {
+      const restored = await restorePurchases();
+      if (restored) {
+        await refreshUser();
+        Alert.alert(
+          'Purchases Restored',
+          'Your premium subscription has been restored.',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      } else {
+        Alert.alert(
+          'No Purchases Found',
+          'We could not find any previous purchases to restore.'
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        'Restore Failed',
+        'Unable to restore purchases. Please try again later.'
+      );
+    } finally {
+      setIsRestoringPurchases(false);
+    }
   };
 
-  // If user is already premium, show status
-  if (user?.is_premium) {
+  // If user is already premium, show status + Customer Center
+  if (isPro || user?.is_premium) {
     return (
       <>
         <Stack.Screen
@@ -108,7 +173,7 @@ export default function PaymentScreen() {
 
             <View style={styles.featuresContainer}>
               <Text style={styles.featuresTitle}>Your Benefits:</Text>
-              {SUBSCRIPTION_PLANS[0].features.map((feature, index) => (
+              {PREMIUM_FEATURES.map((feature, index) => (
                 <View key={index} style={styles.featureRow}>
                   <Ionicons
                     name="checkmark-circle"
@@ -123,12 +188,7 @@ export default function PaymentScreen() {
             <Button
               title="Manage Subscription"
               variant="outline"
-              onPress={() => {
-                Alert.alert(
-                  'Manage Subscription',
-                  'To manage your subscription, please visit your App Store account settings.'
-                );
-              }}
+              onPress={handlePresentCustomerCenter}
               fullWidth
               style={styles.manageButton}
             />
@@ -166,40 +226,6 @@ export default function PaymentScreen() {
             </Text>
           </View>
 
-          {/* Plan Cards */}
-          <View style={styles.plansContainer}>
-            {SUBSCRIPTION_PLANS.map((plan) => (
-              <Pressable
-                key={plan.id}
-                style={[
-                  styles.planCard,
-                  selectedPlan.id === plan.id && styles.planCardSelected,
-                ]}
-                onPress={() => setSelectedPlan(plan)}
-              >
-                {plan.interval === 'year' && (
-                  <View style={styles.saveBadge}>
-                    <Text style={styles.saveBadgeText}>Best Value</Text>
-                  </View>
-                )}
-
-                <View style={styles.planHeader}>
-                  <View style={styles.radioOuter}>
-                    {selectedPlan.id === plan.id && (
-                      <View style={styles.radioInner} />
-                    )}
-                  </View>
-                  <View style={styles.planInfo}>
-                    <Text style={styles.planName}>{plan.name}</Text>
-                    <Text style={styles.planPrice}>
-                      {formatPrice(plan.price)}/{plan.interval}
-                    </Text>
-                  </View>
-                </View>
-              </Pressable>
-            ))}
-          </View>
-
           {/* Features Comparison */}
           <View style={styles.comparisonContainer}>
             <Text style={styles.comparisonTitle}>What you get:</Text>
@@ -233,15 +259,57 @@ export default function PaymentScreen() {
             </View>
           </View>
 
-          {/* Purchase Button */}
+          {/* RevenueCat Paywall Button */}
           <View style={styles.purchaseContainer}>
             <Button
-              title={`Subscribe for ${formatPrice(selectedPlan.price)}/${selectedPlan.interval}`}
-              onPress={handlePurchase}
+              title="View Subscription Options"
+              onPress={handlePresentPaywall}
               loading={isLoading}
               fullWidth
               size="lg"
             />
+
+            {/* Manual Package Selection (fallback if paywall display isn't desired) */}
+            {currentOffering?.availablePackages &&
+              currentOffering.availablePackages.length > 0 && (
+                <View style={styles.packagesContainer}>
+                  <Text style={styles.packagesTitle}>Or choose a plan:</Text>
+                  {currentOffering.availablePackages.map((pkg) => (
+                    <Pressable
+                      key={pkg.identifier}
+                      style={styles.packageCard}
+                      onPress={() => handlePurchasePackage(pkg)}
+                      disabled={isLoading}
+                    >
+                      <View style={styles.packageInfo}>
+                        <Text style={styles.packageName}>
+                          {pkg.product.title}
+                        </Text>
+                        <Text style={styles.packageDescription}>
+                          {pkg.product.description}
+                        </Text>
+                      </View>
+                      <Text style={styles.packagePrice}>
+                        {pkg.product.priceString}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
+            {/* Restore Purchases */}
+            <Pressable
+              style={styles.restoreButton}
+              onPress={handleRestorePurchases}
+              disabled={isRestoringPurchases}
+            >
+              {isRestoringPurchases ? (
+                <ActivityIndicator size="small" color={Colors.primary} />
+              ) : (
+                <Text style={styles.restoreText}>Restore Purchases</Text>
+              )}
+            </Pressable>
+
             <Text style={styles.termsText}>
               Subscription will auto-renew. Cancel anytime in App Store settings.
             </Text>
@@ -319,69 +387,6 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     marginTop: Spacing.xs,
   },
-  plansContainer: {
-    padding: Spacing.lg,
-    gap: Spacing.md,
-  },
-  planCard: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    ...Shadows.sm,
-  },
-  planCardSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: `${Colors.primary}10`,
-  },
-  saveBadge: {
-    position: 'absolute',
-    top: -10,
-    right: Spacing.md,
-    backgroundColor: Colors.accent,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
-  },
-  saveBadgeText: {
-    color: Colors.textInverse,
-    fontSize: Typography.sizes.xs,
-    fontWeight: Typography.weights.bold,
-  },
-  planHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  radioOuter: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: Spacing.md,
-  },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: Colors.primary,
-  },
-  planInfo: {
-    flex: 1,
-  },
-  planName: {
-    fontSize: Typography.sizes.lg,
-    fontWeight: Typography.weights.semibold,
-    color: Colors.text,
-  },
-  planPrice: {
-    fontSize: Typography.sizes.md,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
   comparisonContainer: {
     padding: Spacing.lg,
   },
@@ -433,6 +438,57 @@ const styles = StyleSheet.create({
   },
   purchaseContainer: {
     padding: Spacing.lg,
+  },
+  packagesContainer: {
+    marginTop: Spacing.lg,
+  },
+  packagesTitle: {
+    fontSize: Typography.sizes.md,
+    fontWeight: Typography.weights.semibold,
+    color: Colors.text,
+    marginBottom: Spacing.md,
+    textAlign: 'center',
+  },
+  packageCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadows.sm,
+  },
+  packageInfo: {
+    flex: 1,
+    marginRight: Spacing.md,
+  },
+  packageName: {
+    fontSize: Typography.sizes.md,
+    fontWeight: Typography.weights.semibold,
+    color: Colors.text,
+  },
+  packageDescription: {
+    fontSize: Typography.sizes.sm,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  packagePrice: {
+    fontSize: Typography.sizes.lg,
+    fontWeight: Typography.weights.bold,
+    color: Colors.primary,
+  },
+  restoreButton: {
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  restoreText: {
+    fontSize: Typography.sizes.sm,
+    color: Colors.primary,
+    fontWeight: Typography.weights.medium,
   },
   termsText: {
     fontSize: Typography.sizes.xs,
