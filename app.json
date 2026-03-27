@@ -79,8 +79,7 @@
         {
           "photosPermission": "Allow Virtual Library to access your photos to upload book spine images."
         }
-      ],
-      "react-native-purchases"
+      ]
     ],
     "experiments": {
       "typedRoutes": true
