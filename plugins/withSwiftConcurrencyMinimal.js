@@ -11,9 +11,9 @@ const path = require("path");
  * dependencies like StripeCore that haven't been fully annotated for
  * strict concurrency yet.
  *
- * Note: We intentionally do NOT force SWIFT_VERSION = "6.0" on pod targets,
- * as that turns concurrency warnings into hard errors even with "minimal"
- * checking. Pods should use their own declared Swift version.
+ * Expo SDK 55's expo-modules-core uses Swift 6-only actor isolation syntax
+ * (e.g. `extension Foo: @MainActor Protocol`), so we also force Swift 6 for
+ * Expo modules to avoid parser errors like "unknown attribute 'MainActor'".
  */
 const withSwiftConcurrencyMinimal = (config) => {
   // 1. Set the build setting on all Xcode project configurations
@@ -48,6 +48,9 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |bc|
       bc.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
+      if target.name.start_with?('Expo') || target.name == 'expo-modules-core'
+        bc.build_settings['SWIFT_VERSION'] = '6.0'
+      end
     end
   end
 end
@@ -66,6 +69,9 @@ end
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |bc|
       bc.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
+      if target.name.start_with?('Expo') || target.name == 'expo-modules-core'
+        bc.build_settings['SWIFT_VERSION'] = '6.0'
+      end
     end
   end`
           );
