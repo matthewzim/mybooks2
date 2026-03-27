@@ -167,6 +167,39 @@ class GoogleBooksService {
       };
     }
   }
+
+  /**
+   * Pre-fetch and cache covers for a list of books that don't have one yet.
+   * Runs in the background and calls `onCached` for each book as it completes
+   * so the caller can update local state incrementally.
+   *
+   * @param books - Array of books to check / cache
+   * @param onCached - Callback fired for each book whose cover was successfully cached
+   */
+  async prefetchCovers(
+    books: Pick<Book, 'book_id' | 'title' | 'author' | 'cover_image_url'>[],
+    onCached: (bookId: string, coverUrl: string) => void
+  ): Promise<void> {
+    const uncached = books.filter((b) => !b.cover_image_url);
+    if (uncached.length === 0) return;
+
+    // Process sequentially to avoid hammering the Google Books API
+    for (const book of uncached) {
+      try {
+        const result = await this.fetchAndCacheCover({
+          book_id: book.book_id,
+          title: book.title,
+          author: book.author,
+        });
+
+        if (result.data) {
+          onCached(book.book_id, result.data);
+        }
+      } catch {
+        // Silently skip failures – the cover will be fetched on-demand later
+      }
+    }
+  }
 }
 
 export const googleBooksService = new GoogleBooksService();
