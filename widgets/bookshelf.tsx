@@ -11,8 +11,8 @@ import {
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
 /**
- * Props passed to the widget via updateSnapshot / updateTimeline.
- * Mirrors the WidgetData shape from the app.
+ * Props passed to the widget from the configurable timeline provider.
+ * The native AppIntent selects a bookshelf and passes its data here.
  */
 type BookshelfWidgetProps = {
   bookshelfName: string | null;
@@ -34,27 +34,64 @@ function stableHue(title: string): string {
     hash += title.charCodeAt(i);
   }
   const hue = (hash % 360);
-  // Return an HSL color string
   return `hsl(${hue}, 50%, 55%)`;
 }
 
 /**
  * Returns the max number of book spines to show for a given widget family.
+ * Medium = 1 row (7 books), Large = 2 rows (14 books).
  */
 function maxBooksForFamily(family: string): number {
   switch (family) {
-    case 'systemSmall':
-      return 4;
     case 'systemMedium':
-      return 8;
+      return 7;
     default:
-      return 12;
+      return 14;
   }
 }
 
 /**
+ * Renders a single row of book spines.
+ */
+function SpineRow({
+  books,
+  spineWidth,
+  spineHeight,
+}: {
+  books: BookshelfWidgetProps['books'];
+  spineWidth: number;
+  spineHeight: number;
+}) {
+  return (
+    <HStack>
+      {books.map((book) => (
+        <Section key={book.id}>
+          <VStack
+            modifiers={[
+              frame({ width: spineWidth, height: spineHeight }),
+              cornerRadius(3),
+              background(stableHue(book.title)),
+            ]}
+          >
+            <Text
+              modifiers={[
+                font({ weight: 'bold', size: Math.round(spineWidth * 0.4) }),
+                foregroundStyle('#FFFFFF'),
+              ]}
+            >
+              {book.title.charAt(0)}
+            </Text>
+          </VStack>
+        </Section>
+      ))}
+    </HStack>
+  );
+}
+
+/**
  * BookshelfWidget component rendered using @expo/ui SwiftUI primitives.
- * Displays a bookshelf with book spines on the iOS home screen.
+ * Medium: single horizontal row of spines.
+ * Large: two horizontal rows of spines.
  */
 const BookshelfWidget = (
   props: BookshelfWidgetProps,
@@ -67,7 +104,7 @@ const BookshelfWidget = (
   const maxBooks = maxBooksForFamily(family);
   const visibleBooks = books.slice(0, maxBooks);
 
-  const spineWidth = family === 'systemSmall' ? 32 : family === 'systemMedium' ? 36 : 40;
+  const spineWidth = 36;
   const spineHeight = Math.round(spineWidth * 1.5);
 
   // Empty state when no bookshelf is selected
@@ -86,6 +123,11 @@ const BookshelfWidget = (
     );
   }
 
+  const isLarge = family === 'systemLarge';
+  const booksPerRow = 7;
+  const topRow = visibleBooks.slice(0, booksPerRow);
+  const bottomRow = isLarge ? visibleBooks.slice(booksPerRow, booksPerRow * 2) : [];
+
   return (
     <VStack
       modifiers={[
@@ -102,29 +144,13 @@ const BookshelfWidget = (
         {bookshelfName}
       </Text>
 
-      {/* Book spines row */}
-      <HStack>
-        {visibleBooks.map((book) => (
-          <Section key={book.id}>
-            <VStack
-              modifiers={[
-                frame({ width: spineWidth, height: spineHeight }),
-                cornerRadius(3),
-                background(stableHue(book.title)),
-              ]}
-            >
-              <Text
-                modifiers={[
-                  font({ weight: 'bold', size: Math.round(spineWidth * 0.4) }),
-                  foregroundStyle('#FFFFFF'),
-                ]}
-              >
-                {book.title.charAt(0)}
-              </Text>
-            </VStack>
-          </Section>
-        ))}
-      </HStack>
+      {/* First row of spines */}
+      <SpineRow books={topRow} spineWidth={spineWidth} spineHeight={spineHeight} />
+
+      {/* Second row of spines (large only) */}
+      {isLarge && bottomRow.length > 0 && (
+        <SpineRow books={bottomRow} spineWidth={spineWidth} spineHeight={spineHeight} />
+      )}
     </VStack>
   );
 };

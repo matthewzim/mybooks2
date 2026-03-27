@@ -677,7 +677,7 @@ export default function SettingsScreen() {
                 if (user?.is_premium || FREE_TIER_LIMITS.CAN_USE_WIDGET) {
                   Alert.alert(
                     'Widget Setup',
-                    'To add the widget:\n\n1. Long press on your home screen\n2. Tap the + button\n3. Search for "Virtual Library"\n4. Select the widget size\n5. Choose a bookshelf to display'
+                    'To add the widget:\n\n1. Long press on your home screen\n2. Tap the + button\n3. Search for "Virtual Library"\n4. Select Medium (one row) or Large (two rows)\n5. Long-press the widget and tap "Edit Widget" to choose a bookshelf'
                   );
                 } else {
                   Alert.alert(

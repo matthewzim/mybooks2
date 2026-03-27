@@ -59,7 +59,6 @@
               "displayName": "My Bookshelf",
               "description": "Show one shelf from your library.",
               "supportedFamilies": [
-                "systemSmall",
                 "systemMedium",
                 "systemLarge"
               ]
@@ -68,6 +67,7 @@
         }
       ],
       "./plugins/withDeduplicateWidgetTargets",
+      "./plugins/withConfigurableWidget",
       [
         "expo-camera",
         {
