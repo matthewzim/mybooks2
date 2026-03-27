@@ -3,6 +3,10 @@
  *
  * Utilities for managing iOS home screen widget data.
  * Uses expo-widgets to share data with the widget via updateSnapshot.
+ *
+ * The widget is configurable via an AppIntent so users can choose which
+ * bookshelf to display.  We push ALL bookshelves to the native side;
+ * the Swift timeline provider picks the one selected by the intent.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -30,21 +34,24 @@ function getBookshelfWidget(): {
 }
 
 /**
- * Push data to the native widget via expo-widgets updateSnapshot.
+ * Push all bookshelf data to the native widget via expo-widgets updateSnapshot.
+ * The native configurable timeline provider reads the selected bookshelf from
+ * this data based on the user's AppIntent selection.
  */
 function pushToWidget(widgetData: WidgetData): void {
   const widget = getBookshelfWidget();
   if (!widget) return;
 
-  const bookshelf = widgetData.bookshelf;
   widget.updateSnapshot({
-    bookshelfName: bookshelf?.name ?? null,
-    bookshelfId: bookshelf?.id ?? null,
-    books: (bookshelf?.books ?? []).map((b) => ({
-      id: b.id,
-      title: b.title,
-      author: b.author,
-      imageUrl: b.image_url,
+    bookshelves: widgetData.bookshelves.map((shelf) => ({
+      id: shelf.id,
+      name: shelf.name,
+      books: shelf.books.map((b) => ({
+        id: b.id,
+        title: b.title,
+        author: b.author,
+        imageUrl: b.image_url,
+      })),
     })),
   });
 }
@@ -89,10 +96,10 @@ class WidgetManager {
    * Writes to AsyncStorage (for the app) and pushes to the native widget
    * via expo-widgets updateSnapshot.
    */
-  async saveWidgetData(bookshelf: WidgetBookshelf | null): Promise<void> {
+  async saveWidgetData(bookshelves: WidgetBookshelf[]): Promise<void> {
     try {
       const widgetData: WidgetData = {
-        bookshelf,
+        bookshelves,
         lastUpdated: new Date().toISOString(),
       };
 
@@ -104,28 +111,23 @@ class WidgetManager {
   }
 
   /**
-   * Pushes the currently selected shelf snapshot to the widget.
+   * Pushes all shelf snapshots to the widget so the configurable intent
+   * can let the user pick any shelf.
    */
   async syncLibrarySnapshot(
     shelves: (Bookshelf & { books: Book[] })[]
   ): Promise<void> {
     try {
-      const selectedShelfId = await this.getSelectedWidgetShelf();
-      const activeShelf =
-        shelves.find((s) => s.id === selectedShelfId) ?? shelves[0];
-
-      if (!activeShelf) return;
-
-      const widgetShelf = this.transformBookshelfForWidget(
-        activeShelf,
-        activeShelf.books
+      const widgetShelves = shelves.map((shelf) =>
+        this.transformBookshelfForWidget(shelf, shelf.books)
       );
 
       const widgetData: WidgetData = {
-        bookshelf: widgetShelf,
+        bookshelves: widgetShelves,
         lastUpdated: new Date().toISOString(),
       };
 
+      await AsyncStorage.setItem(WIDGET_DATA_KEY, JSON.stringify(widgetData));
       pushToWidget(widgetData);
     } catch (error) {
       console.error('Failed syncing widget library snapshot:', error);
@@ -186,7 +188,16 @@ class WidgetManager {
     books: Book[]
   ): Promise<void> {
     const widgetBookshelf = this.transformBookshelfForWidget(bookshelf, books);
-    await this.saveWidgetData(widgetBookshelf);
+    // Re-save with this shelf included (merge with existing data)
+    const existing = await this.getWidgetData();
+    const bookshelves = existing?.bookshelves ?? [];
+    const idx = bookshelves.findIndex((s) => s.id === widgetBookshelf.id);
+    if (idx >= 0) {
+      bookshelves[idx] = widgetBookshelf;
+    } else {
+      bookshelves.push(widgetBookshelf);
+    }
+    await this.saveWidgetData(bookshelves);
     await this.setSelectedWidgetShelf(bookshelf.id);
   }
 
@@ -199,7 +210,7 @@ class WidgetManager {
       await AsyncStorage.removeItem(WIDGET_SELECTED_SHELF_KEY);
 
       // Push empty state to widget
-      pushToWidget({ bookshelf: null, lastUpdated: new Date().toISOString() });
+      pushToWidget({ bookshelves: [], lastUpdated: new Date().toISOString() });
     } catch (error) {
       console.error('Failed to clear widget data:', error);
     }

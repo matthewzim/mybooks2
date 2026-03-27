@@ -42,7 +42,7 @@ export function useBooks(shelfId: string): UseBooksReturn {
   const syncWidgetShelf = useCallback(async (targetShelfId: string) => {
     const shelfResult = await bookshelvesService.getBookshelfById(targetShelfId);
     if (shelfResult.data) {
-      await widgetManager.syncLibrarySnapshot([shelfResult.data]);
+      await widgetManager.updateWidgetWithBookshelf(shelfResult.data, shelfResult.data.books);
     }
     widgetManager.reloadWidgetTimelines();
   }, []);

@@ -342,7 +342,7 @@ export interface WidgetBook {
 }
 
 export interface WidgetData {
-  bookshelf: WidgetBookshelf | null;
+  bookshelves: WidgetBookshelf[];
   lastUpdated: string;
 }
 
