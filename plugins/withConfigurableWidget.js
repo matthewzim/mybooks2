@@ -204,6 +204,10 @@ const withConfigurableWidgetFiles = (config) => {
         "systemLarge",
       ]).join(", .");
 
+      // Ensure the target directory exists (it may not yet if expo-widgets
+      // hasn't run its own dangerous mod before this one).
+      fs.mkdirSync(targetDir, { recursive: true });
+
       // 1. Overwrite the generated BookshelfWidget.swift
       const widgetSwiftPath = path.join(targetDir, "BookshelfWidget.swift");
       fs.writeFileSync(
