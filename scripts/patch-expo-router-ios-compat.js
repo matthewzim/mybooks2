@@ -52,6 +52,15 @@ const patches = [
         to: '  private func getMimeType(from resource: PHAssetResource, fileExtension: String) -> String? {\n    // `PHAssetResource.contentType` requires a newer Photos SDK and is unavailable in older Xcode toolchains.\n    let utType = UTType(resource.uniformTypeIdentifier) ?? UTType(filenameExtension: fileExtension)\n    return utType?.preferredMIMEType\n  }\n'
       }
     ]
+  },
+  {
+    file: 'node_modules/expo-image/ios/ImageView.swift',
+    replacements: [
+      {
+        from: '  @available(iOS 26.0, tvOS 26.0, *)\n  private func applySymbolEffectiOS26(effect: SFSymbolEffectType, scope: SFSymbolEffectScope?, options: SymbolEffectOptions) {\n    switch effect {\n    case .drawOn:\n      switch scope {\n      case .byLayer: sdImageView.addSymbolEffect(.drawOn.byLayer, options: options)\n      case .wholeSymbol: sdImageView.addSymbolEffect(.drawOn.wholeSymbol, options: options)\n      case .none: sdImageView.addSymbolEffect(.drawOn, options: options)\n      }\n    case .drawOff:\n      switch scope {\n      case .byLayer: sdImageView.addSymbolEffect(.drawOff.byLayer, options: options)\n      case .wholeSymbol: sdImageView.addSymbolEffect(.drawOff.wholeSymbol, options: options)\n      case .none: sdImageView.addSymbolEffect(.drawOff, options: options)\n      }\n    default:\n      break\n    }\n  }\n',
+        to: '  @available(iOS 26.0, tvOS 26.0, *)\n  private func applySymbolEffectiOS26(effect: SFSymbolEffectType, scope: SFSymbolEffectScope?, options: SymbolEffectOptions) {\n    // drawOn/drawOff symbol effects require a newer Xcode SDK and are unavailable in older toolchains.\n  }\n'
+      }
+    ]
   }
 ];
 
@@ -85,7 +94,7 @@ for (const patch of patches) {
 }
 
 if (touched > 0) {
-  console.log(`Applied iOS compatibility patch to ${touched} expo-router file(s).`);
+  console.log(`Applied iOS compatibility patch to ${touched} file(s).`);
 } else {
   console.log('No expo-router iOS compatibility patch changes were necessary.');
 }
