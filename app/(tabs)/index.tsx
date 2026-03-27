@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBookshelves } from '@/hooks/useBookshelves';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRevenueCat } from '@/contexts/RevenueCatContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { BookshelfPreview } from '@/components/BookshelfPreview';
 import { LoadingView, EmptyState } from '@/components/ui';
@@ -26,6 +27,7 @@ import type { Bookshelf } from '@/types';
 
 export default function HomeScreen() {
   const { user } = useAuth();
+  const { isPro } = useRevenueCat();
   const { colors } = useTheme();
   const {
     bookshelves,
@@ -54,7 +56,7 @@ export default function HomeScreen() {
   };
 
   const handleAddBookshelf = () => {
-    if (!user?.is_premium && bookshelfCount >= FREE_TIER_LIMITS.MAX_BOOKSHELVES) {
+    if (!isPro && bookshelfCount >= FREE_TIER_LIMITS.MAX_BOOKSHELVES) {
       Alert.alert(
         'Bookshelf Limit Reached',
         `Free accounts can have up to ${FREE_TIER_LIMITS.MAX_BOOKSHELVES} bookshelves. Upgrade to Premium for unlimited bookshelves.`,

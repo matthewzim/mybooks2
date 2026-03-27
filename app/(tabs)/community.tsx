@@ -17,6 +17,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRevenueCat } from '@/contexts/RevenueCatContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { FREE_TIER_LIMITS, bookshelvesService } from '@/services';
 import { UserSearchResult } from '@/components/UserSearchResult';
@@ -38,6 +39,7 @@ const PUBLIC_PREVIEW_LIMIT = 6;
 
 export default function CommunityScreen() {
   const { user } = useAuth();
+  const { isPro } = useRevenueCat();
   const { colors } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
@@ -46,7 +48,7 @@ export default function CommunityScreen() {
   const [publicBookshelfPreviews, setPublicBookshelfPreviews] = useState<PublicBookshelfPreview[]>([]);
   const [isLoadingPublicBookshelves, setIsLoadingPublicBookshelves] = useState(true);
 
-  const canAccessCommunity = user?.is_premium || FREE_TIER_LIMITS.CAN_ACCESS_COMMUNITY;
+  const canAccessCommunity = isPro || FREE_TIER_LIMITS.CAN_ACCESS_COMMUNITY;
 
   const loadPublicBookshelfPreviews = useCallback(async () => {
     try {

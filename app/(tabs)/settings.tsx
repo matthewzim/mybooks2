@@ -31,6 +31,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRevenueCat } from '@/contexts/RevenueCatContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Input, Button } from '@/components/ui';
 import {
@@ -122,6 +123,7 @@ function parseGoodreadsBooks(csvText: string): GoodreadsCsvBook[] {
 
 export default function SettingsScreen() {
   const { user, updateProfile, restartAnonymousSession } = useAuth();
+  const { isPro } = useRevenueCat();
   const { colors } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
@@ -668,13 +670,13 @@ export default function SettingsScreen() {
               icon="apps-outline"
               title="Home Screen Widget"
               subtitle={
-                user?.is_premium || FREE_TIER_LIMITS.CAN_USE_WIDGET
+                isPro || FREE_TIER_LIMITS.CAN_USE_WIDGET
                   ? 'Display a bookshelf on your home screen'
                   : 'Premium feature - Upgrade to unlock'
               }
               colors={colors}
               onPress={() => {
-                if (user?.is_premium || FREE_TIER_LIMITS.CAN_USE_WIDGET) {
+                if (isPro || FREE_TIER_LIMITS.CAN_USE_WIDGET) {
                   Alert.alert(
                     'Widget Setup',
                     'To add the widget:\n\n1. Long press on your home screen\n2. Tap the + button\n3. Search for "Virtual Library"\n4. Select Medium (one row) or Large (two rows)\n5. Long-press the widget and tap "Edit Widget" to choose a bookshelf'
@@ -691,7 +693,7 @@ export default function SettingsScreen() {
                 }
               }}
               trailing={
-                !(user?.is_premium || FREE_TIER_LIMITS.CAN_USE_WIDGET) ? (
+                !(isPro || FREE_TIER_LIMITS.CAN_USE_WIDGET) ? (
                   <Ionicons name="lock-closed" size={18} color={colors.textSecondary} />
                 ) : undefined
               }
