@@ -180,8 +180,10 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
     setHasSearched(true);
 
     try {
+      const apiKey = process.env.EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY || '';
+      const keyParam = apiKey ? `&key=${apiKey}` : '';
       const response = await fetch(
-        `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(trimmed)}&maxResults=8`
+        `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(trimmed)}&maxResults=8${keyParam}`
       );
 
       if (!response.ok) {

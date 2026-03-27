@@ -14,6 +14,7 @@ import { storageService } from './storage';
 import type { Book, ApiResponse } from '@/types';
 
 const GOOGLE_BOOKS_API = 'https://www.googleapis.com/books/v1/volumes';
+const GOOGLE_BOOKS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY || '';
 
 interface GoogleBooksVolume {
   id: string;
@@ -49,7 +50,8 @@ class GoogleBooksService {
   }
 
   private async searchQuery(query: string): Promise<string | null> {
-    const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=5`;
+    const keyParam = GOOGLE_BOOKS_API_KEY ? `&key=${GOOGLE_BOOKS_API_KEY}` : '';
+    const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=5${keyParam}`;
     const response = await fetch(url);
     if (!response.ok) return null;
 
