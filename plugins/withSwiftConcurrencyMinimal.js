@@ -42,44 +42,35 @@ const withSwiftConcurrencyMinimal = (config) => {
       );
       let podfile = fs.readFileSync(podfilePath, "utf8");
 
+      const marker =
+        "# [withSwiftConcurrencyMinimal] Set minimal concurrency for all pod targets";
       const snippet = `
-# [withSwiftConcurrencyMinimal] Set minimal concurrency for all pod targets
-post_install do |installer|
+${marker}
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |bc|
       bc.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
-      if target.name.start_with?('Expo') || target.name == 'expo-modules-core'
+      if target.name.downcase.include?('expo')
         bc.build_settings['SWIFT_VERSION'] = '6.0'
       end
     end
-  end
-end
-`;
+  end`;
 
-      // Only add if not already present
-      if (!podfile.includes("SWIFT_STRICT_CONCURRENCY")) {
-        // If there's already a post_install block we need to inject into it;
-        // otherwise append to the end.
-        if (podfile.includes("post_install do |installer|")) {
-          // Inject our loop right after the existing post_install opener
+      if (podfile.includes("post_install do |installer|")) {
+        // Keep idempotent behavior while allowing updates to this block.
+        if (!podfile.includes(marker)) {
           podfile = podfile.replace(
             /post_install do \|installer\|/,
-            `post_install do |installer|
-  # [withSwiftConcurrencyMinimal] Set minimal concurrency for all pod targets
-  installer.pods_project.targets.each do |target|
-    target.build_configurations.each do |bc|
-      bc.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
-      if target.name.start_with?('Expo') || target.name == 'expo-modules-core'
-        bc.build_settings['SWIFT_VERSION'] = '6.0'
-      end
-    end
-  end`
+            `post_install do |installer|${snippet}`
           );
-        } else {
-          podfile += snippet;
         }
-        fs.writeFileSync(podfilePath, podfile);
+      } else {
+        podfile += `
+post_install do |installer|${snippet}
+end
+`;
       }
+
+      fs.writeFileSync(podfilePath, podfile);
 
       return config;
     },
