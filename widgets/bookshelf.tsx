@@ -15,6 +15,7 @@ import { createWidget, type WidgetEnvironment } from 'expo-widgets';
  * The native AppIntent selects a bookshelf and passes its data here.
  */
 type BookshelfWidgetProps = {
+  isPremium: boolean;
   bookshelfName: string | null;
   bookshelfId: string | null;
   books: {
@@ -99,13 +100,29 @@ const BookshelfWidget = (
 ) => {
   'widget';
 
-  const { bookshelfName, bookshelfId, books } = props;
+  const { isPremium, bookshelfName, bookshelfId, books } = props;
   const family = environment.widgetFamily;
   const maxBooks = maxBooksForFamily(family);
   const visibleBooks = books.slice(0, maxBooks);
 
   const spineWidth = 36;
   const spineHeight = Math.round(spineWidth * 1.5);
+
+  // Subscription gate: show upgrade prompt for free users
+  if (!isPremium) {
+    return (
+      <VStack modifiers={[padding({ all: 12 })]}>
+        <Text
+          modifiers={[
+            font({ weight: 'semibold', size: 14 }),
+            foregroundStyle('#8E8E93'),
+          ]}
+        >
+          Subscribe to display your shelf
+        </Text>
+      </VStack>
+    );
+  }
 
   // Empty state when no bookshelf is selected
   if (!bookshelfName || !bookshelfId) {

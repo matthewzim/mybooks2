@@ -32,6 +32,7 @@ import {
   PREMIUM_FEATURES,
 } from '@/services/revenuecat';
 import { useAuth } from '@/contexts/AuthContext';
+import { widgetManager } from '@/utils/widget';
 
 // ============================================
 // Types
@@ -82,6 +83,8 @@ export function RevenueCatProvider({
     setCustomerInfo(info);
     const { isActive } = revenueCatService.extractProEntitlement(info);
     setIsPro(isActive);
+    // Keep the widget in sync with premium status
+    widgetManager.syncPremiumStatus(isActive);
   }, []);
 
   /**
