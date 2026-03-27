@@ -151,10 +151,7 @@ export default function CommunityScreen() {
       >
         <View style={[styles.heroSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.heroEyebrow, { color: colors.primary }]}>Community</Text>
-          <Text style={[styles.heroTitle, { color: colors.text }]}>Discover other readers</Text>
-          <Text style={[styles.heroBody, { color: colors.textSecondary }]}>
-            Search for collectors, preview public shelves, and bring inspiring finds into your own library.
-          </Text>
+          <Text style={[styles.heroTitle, { color: colors.text }]}>Discover other shelves</Text>
         </View>
 
         <View style={[styles.userSearchContainer, { backgroundColor: colors.background }]}>
@@ -172,7 +169,7 @@ export default function CommunityScreen() {
               setUserSearchQuery('');
               setUserSearchResults([]);
             }}
-            colors={colors}
+            colors={{ ...colors, inputBackground: colors.card }}
           />
 
           {(userSearchResults.length > 0 || isSearchingUsers) && (
