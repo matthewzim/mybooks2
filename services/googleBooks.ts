@@ -49,7 +49,7 @@ class GoogleBooksService {
   }
 
   private async searchQuery(query: string): Promise<string | null> {
-    const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=5&fields=totalItems,items(id,volumeInfo/title,volumeInfo/authors,volumeInfo/imageLinks)`;
+    const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=5`;
     const response = await fetch(url);
     if (!response.ok) return null;
 
@@ -57,11 +57,10 @@ class GoogleBooksService {
     if (!data.items || data.items.length === 0) return null;
 
     for (const item of data.items) {
-      const imageLinks = item.volumeInfo.imageLinks;
+      const imageLinks = item.volumeInfo?.imageLinks;
       if (imageLinks?.thumbnail || imageLinks?.smallThumbnail) {
         let imageUrl = imageLinks.thumbnail || imageLinks.smallThumbnail || '';
         imageUrl = imageUrl.replace('http://', 'https://');
-        imageUrl = imageUrl.replace('zoom=1', 'zoom=2');
         return imageUrl;
       }
     }
@@ -124,11 +123,17 @@ class GoogleBooksService {
         };
       }
 
-      // 2. Download and upload to Supabase storage
-      const uploadResult = await storageService.uploadBookCover(
-        googleCoverUrl,
-        book.book_id
-      );
+      // 2. Try to download and upload to Supabase storage
+      let uploadResult: { data: string | null; error: { message: string } | null };
+      try {
+        uploadResult = await storageService.uploadBookCover(
+          googleCoverUrl,
+          book.book_id
+        );
+      } catch {
+        // If caching fails, still use the direct Google image URL for display.
+        return { data: googleCoverUrl, error: null };
+      }
 
       if (uploadResult.error || !uploadResult.data) {
         // If caching fails, still use the direct Google image URL for display.

@@ -17,6 +17,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -167,22 +168,40 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
   const handleSearch = useCallback(async () => {
-    if (!query.trim()) return;
+    const trimmed = query.trim();
+    if (!trimmed) return;
     setIsSearching(true);
+    setSearchError(null);
+    setHasSearched(true);
 
     try {
       const response = await fetch(
-        `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=8&fields=items(id,volumeInfo/title,volumeInfo/authors)`
+        `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(trimmed)}&maxResults=8`
       );
+
+      if (!response.ok) {
+        setSearchError('Search failed. Please try again.');
+        setResults([]);
+        return;
+      }
+
       const data = await response.json();
       const items: SearchResult[] = (data.items || []).map((item: any) => ({
         id: item.id,
         title: item.volumeInfo?.title || 'Untitled',
         author: item.volumeInfo?.authors?.[0] || 'Unknown Author',
       }));
+
+      if (items.length === 0) {
+        setResults([]);
+        Keyboard.dismiss();
+        return;
+      }
 
       // Check Supabase for spine images for each result
       const itemsWithImages = await Promise.all(
@@ -208,9 +227,11 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
 
       setResults(itemsWithImages);
     } catch {
+      setSearchError('Network error. Check your connection and try again.');
       setResults([]);
     } finally {
       setIsSearching(false);
+      Keyboard.dismiss();
     }
   }, [query]);
 
@@ -237,26 +258,42 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
         </Pressable>
       </View>
 
-      <Pressable
-        style={[styles.searchInputRow, { backgroundColor: colors.inputBackground, borderColor: colors.inputBorder }]}
-        onPress={() => inputRef.current?.focus()}
-      >
-        <Ionicons name="search" size={18} color={colors.textLight} />
-        <TextInput
-          ref={inputRef}
-          style={[styles.searchInput, { color: colors.text }]}
-          placeholder="Search by title or author..."
-          placeholderTextColor={colors.textLight}
-          value={query}
-          onChangeText={setQuery}
-          onSubmitEditing={handleSearch}
-          returnKeyType="search"
-          autoFocus
-          showSoftInputOnFocus
-        />
-      </Pressable>
+      <View style={styles.searchInputWithButton}>
+        <Pressable
+          style={[styles.searchInputRow, { backgroundColor: colors.inputBackground, borderColor: colors.inputBorder, flex: 1 }]}
+          onPress={() => inputRef.current?.focus()}
+        >
+          <Ionicons name="search" size={18} color={colors.textLight} />
+          <TextInput
+            ref={inputRef}
+            style={[styles.searchInput, { color: colors.text }]}
+            placeholder="Search by title or author..."
+            placeholderTextColor={colors.textLight}
+            value={query}
+            onChangeText={setQuery}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+            autoFocus
+          />
+        </Pressable>
+        <Pressable
+          style={[styles.searchButton, { backgroundColor: colors.accent, opacity: query.trim() ? 1 : 0.5 }]}
+          onPress={handleSearch}
+          disabled={!query.trim() || isSearching}
+        >
+          <Text style={styles.searchButtonText}>Search</Text>
+        </Pressable>
+      </View>
 
       {isSearching && <ActivityIndicator style={styles.loader} color={colors.accent} />}
+
+      {searchError && (
+        <Text style={[styles.searchErrorText, { color: colors.error || '#ef4444' }]}>{searchError}</Text>
+      )}
+
+      {hasSearched && !isSearching && !searchError && results.length === 0 && (
+        <Text style={[styles.noResultsText, { color: colors.textSecondary }]}>No results found. Try a different search.</Text>
+      )}
 
       {results.map(result => (
         <Pressable
@@ -589,6 +626,11 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.lg,
     fontFamily: getFontFamily('semibold'),
   },
+  searchInputWithButton: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+    alignItems: 'stretch',
+  },
   searchInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -602,6 +644,29 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     fontSize: Typography.sizes.md,
     fontFamily: getFontFamily('regular'),
+  },
+  searchButton: {
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchButtonText: {
+    color: '#fff',
+    fontSize: Typography.sizes.sm,
+    fontFamily: getFontFamily('semibold'),
+  },
+  searchErrorText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: getFontFamily('regular'),
+    textAlign: 'center',
+    paddingVertical: Spacing.sm,
+  },
+  noResultsText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: getFontFamily('regular'),
+    textAlign: 'center',
+    paddingVertical: Spacing.sm,
   },
   loader: {
     paddingVertical: Spacing.md,

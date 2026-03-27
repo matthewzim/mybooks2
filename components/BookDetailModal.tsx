@@ -328,6 +328,12 @@ export function BookDetailModal({
 
     let cancelled = false;
 
+    const cachedCoverForBook = coverUrlCacheRef.current[book.book_id];
+    if (cachedCoverForBook) {
+      setCoverImageUrl(cachedCoverForBook);
+      return;
+    }
+
     // Already have a cached cover — resolve its URL (handles signed URLs for private buckets)
     if (book.cover_image_url) {
       getCoverImageUrl(book.cover_image_url).then((resolved) => {
@@ -336,12 +342,6 @@ export function BookDetailModal({
           setCoverImageUrl(resolved);
         }
       });
-      return;
-    }
-
-    const cachedCoverForBook = coverUrlCacheRef.current[book.book_id];
-    if (cachedCoverForBook) {
-      setCoverImageUrl(cachedCoverForBook);
       return;
     }
 
@@ -356,7 +356,14 @@ export function BookDetailModal({
       .then(async (result) => {
         if (cancelled) return;
         if (result.data) {
-          const resolved = await getCoverImageUrl(result.data);
+          // If the returned URL is a direct external URL (e.g. Google Books),
+          // use it directly instead of running through Supabase URL resolution.
+          const isExternalUrl =
+            result.data.startsWith('https://books.google.com') ||
+            result.data.startsWith('https://encrypted-tbn');
+          const resolved = isExternalUrl
+            ? result.data
+            : await getCoverImageUrl(result.data);
           if (!cancelled && resolved) {
             coverUrlCacheRef.current[book.book_id] = resolved;
             setCoverImageUrl(resolved);

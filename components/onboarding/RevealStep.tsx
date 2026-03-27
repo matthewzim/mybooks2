@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Easing, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Spacing, BorderRadius, Typography, BookshelfDimensions, getFontFamily } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -70,10 +70,20 @@ function ConfettiPiece({ index }: { index: number }) {
   );
 }
 
-const SPINE_WIDTH = 32;
-const SPINE_HEIGHT = 110;
+const SPINE_WIDTH = 20;
+const SPINE_HEIGHT = 132;
+const REVEAL_SHELF_THICKNESS = 12;
+const REVEAL_BORDER_WIDTH = 5;
 
-function RevealShelf({ books, shelfStyle }: { books: PreviewBook[]; shelfStyle: string }) {
+function darkenColor(hex: string, factor: number = 0.7): string {
+  const c = hex.replace('#', '');
+  const r = Math.round(parseInt(c.substring(0, 2), 16) * factor);
+  const g = Math.round(parseInt(c.substring(2, 4), 16) * factor);
+  const b = Math.round(parseInt(c.substring(4, 6), 16) * factor);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
+function RevealShelf({ books, shelfStyle, shelfColor }: { books: PreviewBook[]; shelfStyle: string; shelfColor: string }) {
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -86,7 +96,7 @@ function RevealShelf({ books, shelfStyle }: { books: PreviewBook[]; shelfStyle: 
     }).start();
   }, []);
 
-  const visibleBooks = books.slice(0, 10);
+  const visibleBooks = books.slice(0, 16);
 
   return (
     <Animated.View
@@ -107,23 +117,23 @@ function RevealShelf({ books, shelfStyle }: { books: PreviewBook[]; shelfStyle: 
         style={[
           styles.shelfFrame,
           shelfStyle === 'full' && {
-            borderWidth: 5,
-            borderColor: BookshelfDimensions.shelfColor,
+            borderWidth: REVEAL_BORDER_WIDTH,
+            borderColor: shelfColor,
           },
         ]}
       >
         {shelfStyle === 'full' && (
-          <View style={[styles.shelfBack, { backgroundColor: BookshelfDimensions.backColor }]} />
+          <View style={[styles.shelfBack, { backgroundColor: darkenColor(shelfColor) }]} />
         )}
         <View style={styles.revealBooks}>
           {visibleBooks.length > 0 ? (
-            visibleBooks.map((book, i) => (
+            visibleBooks.map((book) => (
               <Animated.View
                 key={book.id}
                 style={[
                   styles.revealSpine,
                   {
-                    backgroundColor: book.color,
+                    backgroundColor: book.image_url ? 'transparent' : book.color,
                     opacity: slideAnim,
                     transform: [{
                       translateY: slideAnim.interpolate({
@@ -133,7 +143,15 @@ function RevealShelf({ books, shelfStyle }: { books: PreviewBook[]; shelfStyle: 
                     }],
                   },
                 ]}
-              />
+              >
+                {book.image_url && (
+                  <Image
+                    source={{ uri: book.image_url }}
+                    style={styles.revealSpineImage}
+                    resizeMode="contain"
+                  />
+                )}
+              </Animated.View>
             ))
           ) : (
             <View style={styles.emptyReveal}>
@@ -142,7 +160,7 @@ function RevealShelf({ books, shelfStyle }: { books: PreviewBook[]; shelfStyle: 
           )}
         </View>
         {shelfStyle === 'bottom' && (
-          <View style={styles.revealShelfBar} />
+          <View style={[styles.revealShelfBar, { backgroundColor: shelfColor }]} />
         )}
       </View>
     </Animated.View>
@@ -151,7 +169,7 @@ function RevealShelf({ books, shelfStyle }: { books: PreviewBook[]; shelfStyle: 
 
 export function RevealStep({ onComplete }: { onComplete: () => void }) {
   const { colors } = useTheme();
-  const { shelfName, books, shelfStyle } = useOnboarding();
+  const { shelfName, books, shelfStyle, shelfColor } = useOnboarding();
 
   const titleAnim = useRef(new Animated.Value(0)).current;
   const subtitleAnim = useRef(new Animated.Value(0)).current;
@@ -200,7 +218,7 @@ export function RevealStep({ onComplete }: { onComplete: () => void }) {
         <Text style={[styles.shelfTitle, { color: colors.text }]}>{displayName}</Text>
       </Animated.View>
 
-      <RevealShelf books={books} shelfStyle={shelfStyle} />
+      <RevealShelf books={books} shelfStyle={shelfStyle} shelfColor={shelfColor} />
 
       <Animated.View
         style={[
@@ -301,20 +319,29 @@ const styles = StyleSheet.create({
   revealBooks: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     minHeight: SPINE_HEIGHT,
-    paddingHorizontal: 4,
     zIndex: 1,
+    flexWrap: 'nowrap',
   },
   revealSpine: {
     width: SPINE_WIDTH,
     height: SPINE_HEIGHT,
-    borderRadius: 1,
+    overflow: 'hidden',
+  },
+  revealSpineImage: {
+    width: '100%',
+    height: '100%',
   },
   revealShelfBar: {
-    height: 8,
-    backgroundColor: BookshelfDimensions.shelfColor,
+    height: REVEAL_SHELF_THICKNESS,
+    borderRadius: BorderRadius.sm,
     marginTop: -1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 4,
   },
   emptyReveal: {
     flex: 1,
