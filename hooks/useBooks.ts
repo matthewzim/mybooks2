@@ -8,9 +8,10 @@
  * const { books, isLoading, addBook, deleteBook } = useBooks(shelfId);
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { booksService } from '@/services/books';
 import { bookshelvesService } from '@/services/bookshelves';
+import { googleBooksService } from '@/services/googleBooks';
 import { widgetManager } from '@/utils';
 import type { Book, CreateBookInput, UpdateBookInput, LoadingState } from '@/types';
 
@@ -276,6 +277,32 @@ export function useBooks(shelfId: string): UseBooksReturn {
   useEffect(() => {
     fetchBooks();
   }, [fetchBooks]);
+
+  // Pre-fetch and cache Google Books covers in the background for books
+  // that don't have a cover_image_url yet. Updates local state as each
+  // cover is cached so the BookDetailModal can display them instantly.
+  const prefetchStartedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (books.length === 0 || loadingState !== 'success') return;
+    // Only run once per shelf load (avoid re-triggering when books state updates)
+    const key = `${shelfId}:${books.map((b) => b.book_id).join(',')}`;
+    if (prefetchStartedRef.current === key) return;
+    prefetchStartedRef.current = key;
+
+    let cancelled = false;
+    googleBooksService.prefetchCovers(books, (bookId, coverUrl) => {
+      if (cancelled) return;
+      setBooks((prev) =>
+        prev.map((b) =>
+          b.book_id === bookId ? { ...b, cover_image_url: coverUrl } : b
+        )
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [books, shelfId, loadingState]);
 
   return {
     books,
