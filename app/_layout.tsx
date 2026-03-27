@@ -5,7 +5,7 @@
  * Sets up:
  * - Theme provider for app-wide theming
  * - Auth provider for global authentication state
- * - Stripe provider for payments
+ * - RevenueCat provider for in-app purchases & subscriptions
  * - Navigation structure
  * - Font loading
  * - Splash screen handling
@@ -17,12 +17,11 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
-import { StripeProvider } from '@stripe/stripe-react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Platform } from 'react-native';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
-import { stripeService } from '@/services/stripe';
+import { RevenueCatProvider } from '@/contexts/RevenueCatContext';
 import { getFontFamily } from '@/constants/theme';
 
 // Prevent splash screen from auto-hiding
@@ -204,14 +203,11 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
-        <StripeProvider
-          publishableKey={stripeService.getPublishableKey()}
-          merchantIdentifier="merchant.com.yourcompany.virtuallibrary"
-        >
-          <AuthProvider>
+        <AuthProvider>
+          <RevenueCatProvider>
             <RootLayoutContent />
-          </AuthProvider>
-        </StripeProvider>
+          </RevenueCatProvider>
+        </AuthProvider>
       </ThemeProvider>
     </GestureHandlerRootView>
   );

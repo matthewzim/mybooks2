@@ -14,7 +14,9 @@ export { bookshelvesService } from './bookshelves';
 export { booksService } from './books';
 export { storageService } from './storage';
 export {
-  stripeService,
-  SUBSCRIPTION_PLANS,
+  revenueCatService,
   FREE_TIER_LIMITS,
-} from './stripe';
+  PREMIUM_FEATURES,
+  ENTITLEMENT_ID,
+  PRODUCT_IDS,
+} from './revenuecat';
