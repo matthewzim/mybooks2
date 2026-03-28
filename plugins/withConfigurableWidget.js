@@ -1,4 +1,4 @@
-const { withDangerousMod, withXcodeProject } = require("expo/config-plugins");
+const { withXcodeProject } = require("expo/config-plugins");
 const fs = require("fs");
 const path = require("path");
 
@@ -179,53 +179,25 @@ struct BookshelfWidget: Widget {
 `;
 
 // ---------------------------------------------------------------------------
-// Plugin: write Swift files into the widget target directory
+// Helper: read widget display metadata from app.json expo-widgets plugin
 // ---------------------------------------------------------------------------
-const withConfigurableWidgetFiles = (config) => {
-  return withDangerousMod(config, [
-    "ios",
-    async (config) => {
-      const projectRoot = config.modRequest.platformProjectRoot;
-      const targetDir = path.join(projectRoot, TARGET_NAME);
-
-      // Read widget config from app.json expo-widgets plugin
-      const expoWidgetsPlugin = (config.plugins || []).find(
-        (p) => Array.isArray(p) && p[0] === "expo-widgets"
-      );
-      const widgetDef =
-        expoWidgetsPlugin?.[1]?.widgets?.find(
-          (w) => w.name === "BookshelfWidget"
-        ) || {};
-      const displayName = widgetDef.displayName || "My Bookshelf";
-      const description =
-        widgetDef.description || "Show one shelf from your library.";
-      const families = (widgetDef.supportedFamilies || [
-        "systemMedium",
-        "systemLarge",
-      ]).join(", .");
-
-      // Ensure the target directory exists (it may not yet if expo-widgets
-      // hasn't run its own dangerous mod before this one).
-      fs.mkdirSync(targetDir, { recursive: true });
-
-      // 1. Overwrite the generated BookshelfWidget.swift
-      const widgetSwiftPath = path.join(targetDir, "BookshelfWidget.swift");
-      fs.writeFileSync(
-        widgetSwiftPath,
-        bookshelfWidgetSwift(displayName, description, families)
-      );
-
-      // 2. Write the AppIntent file
-      const intentSwiftPath = path.join(
-        targetDir,
-        "BookshelfAppIntent.swift"
-      );
-      fs.writeFileSync(intentSwiftPath, bookshelfAppIntentSwift);
-
-      return config;
-    },
-  ]);
-};
+function readWidgetMeta(config) {
+  const expoWidgetsPlugin = (config.plugins || []).find(
+    (p) => Array.isArray(p) && p[0] === "expo-widgets"
+  );
+  const widgetDef =
+    expoWidgetsPlugin?.[1]?.widgets?.find(
+      (w) => w.name === "BookshelfWidget"
+    ) || {};
+  const displayName = widgetDef.displayName || "My Bookshelf";
+  const description =
+    widgetDef.description || "Show one shelf from your library.";
+  const families = (widgetDef.supportedFamilies || [
+    "systemMedium",
+    "systemLarge",
+  ]).join(", .");
+  return { displayName, description, families };
+}
 
 // ---------------------------------------------------------------------------
 // Plugin: add the new BookshelfAppIntent.swift to Xcode build sources
@@ -234,11 +206,32 @@ const withConfigurableWidgetXcode = (config) => {
   return withXcodeProject(config, (config) => {
     const project = config.modResults;
     const projectRoot = config.modRequest.platformProjectRoot;
-    const intentFilePath = path.join(
-      projectRoot,
-      TARGET_NAME,
-      "BookshelfAppIntent.swift"
+    const targetDir = path.join(projectRoot, TARGET_NAME);
+
+    // ---------------------------------------------------------------
+    // Write (or overwrite) the Swift source files.
+    // This MUST happen inside withXcodeProject so it runs AFTER
+    // expo-widgets has generated its default BookshelfWidget.swift
+    // (which uses StaticConfiguration).  Previously this lived in a
+    // withDangerousMod handler that ran too early, so expo-widgets
+    // would overwrite our AppIntentConfiguration version.
+    // ---------------------------------------------------------------
+    const { displayName, description, families } = readWidgetMeta(config);
+
+    fs.mkdirSync(targetDir, { recursive: true });
+
+    const widgetSwiftPath = path.join(targetDir, "BookshelfWidget.swift");
+    fs.writeFileSync(
+      widgetSwiftPath,
+      bookshelfWidgetSwift(displayName, description, families)
     );
+
+    const intentSwiftPath = path.join(targetDir, "BookshelfAppIntent.swift");
+    fs.writeFileSync(intentSwiftPath, bookshelfAppIntentSwift);
+
+    // ---------------------------------------------------------------
+    // Add BookshelfAppIntent.swift to Xcode build sources
+    // ---------------------------------------------------------------
 
     // Find the widget target's PBXNativeTarget
     const nativeTargets = project.pbxNativeTargetSection();
@@ -336,7 +329,9 @@ const withConfigurableWidgetXcode = (config) => {
 // Combined plugin
 // ---------------------------------------------------------------------------
 const withConfigurableWidget = (config) => {
-  config = withConfigurableWidgetFiles(config);
+  // All work (file writes + Xcode project changes) now happens in a single
+  // withXcodeProject handler so that we always run AFTER expo-widgets has
+  // generated its default StaticConfiguration widget.
   config = withConfigurableWidgetXcode(config);
   return config;
 };
