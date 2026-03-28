@@ -680,14 +680,7 @@ export default function SettingsScreen() {
                     'To add the widget:\n\n1. Long press on your home screen\n2. Tap the + button\n3. Search for "Virtual Library"\n4. Select Medium (one row) or Large (two rows)\n5. Long-press the widget and tap "Edit Widget" to choose a bookshelf'
                   );
                 } else {
-                  Alert.alert(
-                    'Premium Feature',
-                    'Home Screen Widget is a premium feature. Upgrade to Premium to display your bookshelf on your home screen.',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Upgrade', onPress: () => router.push('/payment') },
-                    ]
-                  );
+                  router.push('/payment');
                 }
               }}
               trailing={
