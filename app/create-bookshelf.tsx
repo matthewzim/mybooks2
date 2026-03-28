@@ -27,12 +27,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBookshelves } from '@/hooks/useBookshelves';
 import { Button, Input } from '@/components/ui';
 import { BOOKSHELF_COLORS } from '@/types';
+import type { ShelfStyle } from '@/types';
 import {
   Spacing,
   BorderRadius,
   Typography,
+  BookshelfDimensions,
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
+
+const SHELF_STYLE_OPTIONS: { id: ShelfStyle; label: string }[] = [
+  { id: 'full', label: 'Classic Cabinet' },
+  { id: 'bottom', label: 'Open Shelf' },
+];
 
 export default function CreateBookshelfScreen() {
   const { colors } = useTheme();
@@ -41,6 +48,7 @@ export default function CreateBookshelfScreen() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedColor, setSelectedColor] = useState(BOOKSHELF_COLORS[0]);
+  const [shelfStyle, setShelfStyle] = useState<ShelfStyle>('full');
   const [isPublic, setIsPublic] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +84,7 @@ export default function CreateBookshelfScreen() {
         name: name.trim(),
         description: description.trim() || undefined,
         cover_color: selectedColor,
+        shelf_style: shelfStyle,
         is_public: isPublic,
       });
 
@@ -175,6 +184,62 @@ export default function CreateBookshelfScreen() {
                           size={20}
                           color={colors.textOnDark}
                         />
+                      )}
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              {/* Shelf Style Picker */}
+              <View style={styles.styleSection}>
+                <Text style={[styles.colorLabel, { color: colors.text }]}>Shelf Style</Text>
+                <View style={styles.styleRow}>
+                  {SHELF_STYLE_OPTIONS.map((option) => (
+                    <Pressable
+                      key={option.id}
+                      style={[
+                        styles.styleCard,
+                        {
+                          backgroundColor: colors.card,
+                          borderColor: shelfStyle === option.id ? colors.text : colors.border,
+                          borderWidth: shelfStyle === option.id ? 2 : 1,
+                        },
+                      ]}
+                      onPress={() => setShelfStyle(option.id)}
+                    >
+                      {/* Mini shelf preview */}
+                      <View
+                        style={[
+                          styles.miniShelf,
+                          option.id === 'full' && {
+                            borderWidth: 3,
+                            borderColor: BookshelfDimensions.shelfColor,
+                          },
+                        ]}
+                      >
+                        {option.id === 'full' && (
+                          <View style={[styles.miniBack, { backgroundColor: BookshelfDimensions.backColor }]} />
+                        )}
+                        <View style={styles.miniBooks}>
+                          {[
+                            { color: '#8B0000', h: 42 },
+                            { color: '#00008B', h: 50 },
+                            { color: '#006400', h: 38 },
+                            { color: '#4B0082', h: 46 },
+                            { color: '#8B4513', h: 44 },
+                          ].map((b, i) => (
+                            <View key={i} style={[styles.miniSpine, { backgroundColor: b.color, height: b.h }]} />
+                          ))}
+                        </View>
+                        {option.id === 'bottom' && (
+                          <View style={styles.miniShelfBar} />
+                        )}
+                      </View>
+                      <Text style={[styles.styleLabel, { color: colors.text }]}>{option.label}</Text>
+                      {shelfStyle === option.id && (
+                        <View style={styles.styleCheck}>
+                          <Ionicons name="checkmark-circle" size={18} color={colors.text} />
+                        </View>
                       )}
                     </Pressable>
                   ))}
@@ -295,6 +360,58 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: 'transparent',
+  },
+  styleSection: {
+    marginBottom: Spacing.lg,
+  },
+  styleRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
+  styleCard: {
+    flex: 1,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  miniShelf: {
+    width: '100%',
+    overflow: 'hidden',
+    borderRadius: BorderRadius.sm,
+    marginBottom: Spacing.xs,
+  },
+  miniBack: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+  },
+  miniBooks: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    minHeight: 55,
+    paddingHorizontal: 4,
+  },
+  miniSpine: {
+    width: 16,
+    borderRadius: 1,
+  },
+  miniShelfBar: {
+    height: 5,
+    backgroundColor: BookshelfDimensions.shelfColor,
+    marginTop: -1,
+  },
+  styleLabel: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.medium,
+  },
+  styleCheck: {
+    position: 'absolute',
+    top: Spacing.xs,
+    right: Spacing.xs,
   },
   privacySection: {
     marginBottom: Spacing.lg,
