@@ -311,6 +311,7 @@ export interface UserSubscription {
 export interface WidgetBookshelf {
   id: string;
   name: string;
+  cover_color: string;
   books: WidgetBook[];
 }
 
@@ -319,6 +320,7 @@ export interface WidgetBook {
   title: string;
   author: string;
   image_url: string | null;
+  resolved_image_url: string | null;
 }
 
 export interface WidgetData {

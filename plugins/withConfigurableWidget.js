@@ -51,7 +51,35 @@ struct BookshelfEntry: TimelineEntry {
   let isPremium: Bool
   let bookshelfName: String?
   let bookshelfId: String?
+  let coverColor: String?
   let books: [[String: Any]]
+  let bookImages: [String: Data]
+}
+
+// MARK: - Color helpers
+
+private func hexToColor(_ hex: String?) -> Color? {
+  guard let hex = hex?.trimmingCharacters(in: .whitespacesAndNewlines),
+        hex.hasPrefix("#") else { return nil }
+  let stripped = String(hex.dropFirst())
+  guard stripped.count == 6, let val = UInt64(stripped, radix: 16) else { return nil }
+  let r = Double((val >> 16) & 0xFF) / 255.0
+  let g = Double((val >> 8) & 0xFF) / 255.0
+  let b = Double(val & 0xFF) / 255.0
+  return Color(red: r, green: g, blue: b)
+}
+
+private func darkenColor(_ hex: String?, amount: Double = 0.14) -> Color {
+  guard let hex = hex?.trimmingCharacters(in: .whitespacesAndNewlines),
+        hex.hasPrefix("#") else { return Color(red: 0.396, green: 0.263, blue: 0.129) }
+  let stripped = String(hex.dropFirst())
+  guard stripped.count == 6, let val = UInt64(stripped, radix: 16) else {
+    return Color(red: 0.396, green: 0.263, blue: 0.129)
+  }
+  let r = max(0, Double((val >> 16) & 0xFF) / 255.0 - amount)
+  let g = max(0, Double((val >> 8) & 0xFF) / 255.0 - amount)
+  let b = max(0, Double(val & 0xFF) / 255.0 - amount)
+  return Color(red: r, green: g, blue: b)
 }
 
 // MARK: - Native SwiftUI widget view
@@ -59,6 +87,13 @@ struct BookshelfEntry: TimelineEntry {
 struct BookshelfWidgetView: View {
   let entry: BookshelfEntry
   @Environment(\\.widgetFamily) var family
+
+  private var shelfColor: Color {
+    hexToColor(entry.coverColor) ?? Color(red: 0.545, green: 0.271, blue: 0.075)
+  }
+  private var shelfBackColor: Color {
+    darkenColor(entry.coverColor)
+  }
 
   var body: some View {
     Group {
@@ -82,47 +117,98 @@ struct BookshelfWidgetView: View {
     }
   }
 
-  private var maxBooks: Int {
-    family == .systemMedium ? 7 : 14
+  private var booksPerRow: Int { 7 }
+
+  private var spineHeight: CGFloat {
+    family == .systemMedium ? 68 : 62
   }
 
-  private var spineWidth: CGFloat { 36 }
-  private var spineHeight: CGFloat { 54 }
+  private var shelfThickness: CGFloat { 8 }
 
   @ViewBuilder
   private var bookshelfContent: some View {
-    let visible = Array(entry.books.prefix(maxBooks))
-    let booksPerRow = 7
+    let visible = Array(entry.books.prefix(family == .systemMedium ? booksPerRow : booksPerRow * 2))
     let topRow = Array(visible.prefix(booksPerRow))
     let bottomRow = family == .systemLarge ? Array(visible.dropFirst(booksPerRow).prefix(booksPerRow)) : []
 
-    VStack(alignment: .leading, spacing: 8) {
-      Text(entry.bookshelfName ?? "")
-        .font(.system(size: 14, weight: .bold))
-        .lineLimit(1)
+    GeometryReader { geo in
+      let availableWidth = geo.size.width - 16
+      let spineWidth = min(42, max(28, availableWidth / CGFloat(booksPerRow)))
 
-      spineRow(topRow)
+      VStack(alignment: .leading, spacing: 0) {
+        // Shelf title – positioned above the first shelf border
+        Text(entry.bookshelfName ?? "")
+          .font(.system(size: 11, weight: .bold))
+          .foregroundColor(.primary)
+          .lineLimit(1)
+          .padding(.leading, 8)
+          .padding(.bottom, 2)
+          .padding(.top, family == .systemLarge ? 4 : 6)
 
-      if !bottomRow.isEmpty {
-        spineRow(bottomRow)
+        // First shelf row
+        shelfRow(books: topRow, spineWidth: spineWidth)
+
+        if family == .systemLarge {
+          Spacer().frame(height: 6)
+
+          // Second shelf row
+          shelfRow(books: bottomRow, spineWidth: spineWidth)
+        }
+
+        Spacer(minLength: 0)
       }
     }
-    .padding(12)
   }
 
-  private func spineRow(_ books: [[String: Any]]) -> some View {
-    HStack(spacing: 4) {
-      ForEach(Array(books.enumerated()), id: \\.offset) { _, book in
-        let title = book["title"] as? String ?? ""
-        RoundedRectangle(cornerRadius: 3)
-          .fill(stableColor(for: title))
-          .frame(width: spineWidth, height: spineHeight)
-          .overlay(
-            Text(String(title.prefix(1)))
-              .font(.system(size: round(spineWidth * 0.4), weight: .bold))
-              .foregroundColor(.white)
-          )
+  private func shelfRow(books: [[String: Any]], spineWidth: CGFloat) -> some View {
+    VStack(spacing: 0) {
+      // Shelf back + book spines
+      ZStack(alignment: .bottom) {
+        // Shelf background
+        shelfBackColor
+          .cornerRadius(2)
+
+        // Book spines aligned to bottom
+        HStack(spacing: 1) {
+          ForEach(Array(books.enumerated()), id: \\.offset) { _, book in
+            spineView(book: book, width: spineWidth, height: spineHeight)
+          }
+          Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 3)
+        .padding(.bottom, 1)
       }
+      .frame(height: spineHeight + 6)
+
+      // Shelf ledge
+      shelfColor
+        .frame(height: shelfThickness)
+        .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 2)
+    }
+  }
+
+  @ViewBuilder
+  private func spineView(book: [String: Any], width: CGFloat, height: CGFloat) -> some View {
+    let bookId = book["id"] as? String ?? ""
+    let title = book["title"] as? String ?? ""
+
+    if let imageData = entry.bookImages[bookId],
+       let uiImage = UIImage(data: imageData) {
+      Image(uiImage: uiImage)
+        .resizable()
+        .aspectRatio(contentMode: .fill)
+        .frame(width: width, height: height)
+        .clipped()
+        .cornerRadius(1)
+    } else {
+      RoundedRectangle(cornerRadius: 1)
+        .fill(stableColor(for: title))
+        .frame(width: width, height: height)
+        .overlay(
+          Text(String(title.prefix(1)))
+            .font(.system(size: round(width * 0.38), weight: .bold))
+            .foregroundColor(.white)
+        )
     }
   }
 
@@ -198,19 +284,19 @@ private func buildBookshelfEntry(selectedId: String?) -> BookshelfEntry {
   let timeline = WidgetDataStore.getTimeline()
   guard let firstEntry = timeline.first,
         let allProps = firstEntry["props"] as? [String: Any] else {
-    return BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, books: [])
+    return BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, coverColor: nil, books: [], bookImages: [:])
   }
 
   let isPremium = allProps["isPremium"] as? Bool ?? false
 
   guard let bookshelves = allProps["bookshelves"] as? [[String: Any]] else {
-    return BookshelfEntry(date: Date(), isPremium: isPremium, bookshelfName: nil, bookshelfId: nil, books: [])
+    return BookshelfEntry(date: Date(), isPremium: isPremium, bookshelfName: nil, bookshelfId: nil, coverColor: nil, books: [], bookImages: [:])
   }
 
   let shelf = bookshelves.first { ($0["id"] as? String) == selectedId } ?? bookshelves.first
 
   guard let shelf else {
-    return BookshelfEntry(date: Date(), isPremium: isPremium, bookshelfName: nil, bookshelfId: nil, books: [])
+    return BookshelfEntry(date: Date(), isPremium: isPremium, bookshelfName: nil, bookshelfId: nil, coverColor: nil, books: [], bookImages: [:])
   }
 
   return BookshelfEntry(
@@ -218,8 +304,40 @@ private func buildBookshelfEntry(selectedId: String?) -> BookshelfEntry {
     isPremium: isPremium,
     bookshelfName: shelf["name"] as? String,
     bookshelfId: shelf["id"] as? String,
-    books: shelf["books"] as? [[String: Any]] ?? []
+    coverColor: shelf["coverColor"] as? String,
+    books: shelf["books"] as? [[String: Any]] ?? [],
+    bookImages: [:]
   )
+}
+
+/// Downloads book spine images for display in the widget.
+private func downloadBookImages(for books: [[String: Any]], limit: Int) async -> [String: Data] {
+  var result: [String: Data] = [:]
+  let booksToFetch = Array(books.prefix(limit))
+  await withTaskGroup(of: (String, Data?).self) { group in
+    for book in booksToFetch {
+      guard let id = book["id"] as? String,
+            let urlString = book["resolvedImageUrl"] as? String,
+            !urlString.isEmpty,
+            let url = URL(string: urlString) else { continue }
+      group.addTask {
+        do {
+          let (data, response) = try await URLSession.shared.data(from: url)
+          if let httpResponse = response as? HTTPURLResponse,
+             httpResponse.statusCode == 200 {
+            return (id, data)
+          }
+        } catch {}
+        return (id, nil)
+      }
+    }
+    for await (id, data) in group {
+      if let data = data {
+        result[id] = data
+      }
+    }
+  }
+  return result
 }
 
 // MARK: - Configurable timeline provider (iOS 17+)
@@ -230,15 +348,22 @@ struct BookshelfConfigurableProvider: AppIntentTimelineProvider {
   typealias Intent = SelectBookshelfIntent
 
   func placeholder(in context: Context) -> BookshelfEntry {
-    BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, books: [])
+    BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, coverColor: nil, books: [], bookImages: [:])
   }
 
   func snapshot(for configuration: SelectBookshelfIntent, in context: Context) async -> BookshelfEntry {
-    return buildBookshelfEntry(selectedId: configuration.bookshelf?.id)
+    var entry = buildBookshelfEntry(selectedId: configuration.bookshelf?.id)
+    let maxImages = context.family == .systemMedium ? 7 : 14
+    let images = await downloadBookImages(for: entry.books, limit: maxImages)
+    entry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, books: entry.books, bookImages: images)
+    return entry
   }
 
   func timeline(for configuration: SelectBookshelfIntent, in context: Context) async -> Timeline<BookshelfEntry> {
-    let entry = buildBookshelfEntry(selectedId: configuration.bookshelf?.id)
+    var entry = buildBookshelfEntry(selectedId: configuration.bookshelf?.id)
+    let maxImages = context.family == .systemMedium ? 7 : 14
+    let images = await downloadBookImages(for: entry.books, limit: maxImages)
+    entry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, books: entry.books, bookImages: images)
     return Timeline(entries: [entry], policy: .atEnd)
   }
 }
@@ -249,16 +374,27 @@ struct BookshelfStaticProvider: TimelineProvider {
   typealias Entry = BookshelfEntry
 
   func placeholder(in context: Context) -> BookshelfEntry {
-    BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, books: [])
+    BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, coverColor: nil, books: [], bookImages: [:])
   }
 
   func getSnapshot(in context: Context, completion: @escaping (BookshelfEntry) -> Void) {
-    completion(buildBookshelfEntry(selectedId: nil))
+    let entry = buildBookshelfEntry(selectedId: nil)
+    let maxImages = context.family == .systemMedium ? 7 : 14
+    Task {
+      let images = await downloadBookImages(for: entry.books, limit: maxImages)
+      let finalEntry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, books: entry.books, bookImages: images)
+      completion(finalEntry)
+    }
   }
 
   func getTimeline(in context: Context, completion: @escaping (Timeline<BookshelfEntry>) -> Void) {
     let entry = buildBookshelfEntry(selectedId: nil)
-    completion(Timeline(entries: [entry], policy: .atEnd))
+    let maxImages = context.family == .systemMedium ? 7 : 14
+    Task {
+      let images = await downloadBookImages(for: entry.books, limit: maxImages)
+      let finalEntry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, books: entry.books, bookImages: images)
+      completion(Timeline(entries: [finalEntry], policy: .atEnd))
+    }
   }
 }
 
