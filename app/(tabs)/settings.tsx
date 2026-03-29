@@ -131,6 +131,7 @@ export default function SettingsScreen() {
   const [isSavingUsername, setIsSavingUsername] = useState(false);
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState(true);
+  const [showWidgetModal, setShowWidgetModal] = useState(false);
   const [showGoodreadsImportModal, setShowGoodreadsImportModal] = useState(false);
   const [isImportingGoodreads, setIsImportingGoodreads] = useState(false);
   const [isResettingData, setIsResettingData] = useState(false);
@@ -675,10 +676,7 @@ export default function SettingsScreen() {
               colors={colors}
               onPress={() => {
                 if (user?.is_premium || FREE_TIER_LIMITS.CAN_USE_WIDGET) {
-                  Alert.alert(
-                    'Widget Setup',
-                    'To add the widget:\n\n1. Long press on your home screen\n2. Tap the + button\n3. Search for "Virtual Library"\n4. Select Medium (one row) or Large (two rows)\n5. Long-press the widget and tap "Edit Widget" to choose a bookshelf'
-                  );
+                  setShowWidgetModal(true);
                 } else {
                   router.push('/payment');
                 }
@@ -853,6 +851,29 @@ export default function SettingsScreen() {
                 <Text style={[styles.importingText, { color: colors.textSecondary }]}>Import in progress...</Text>
               </View>
             )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showWidgetModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowWidgetModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowWidgetModal(false)}
+        >
+          <Pressable
+            style={[styles.modalCard, { backgroundColor: colors.card }]}
+            onPress={() => {}}
+          >
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Home Screen Widget</Text>
+            <Text style={[styles.modalBody, { color: colors.textSecondary }]}>
+              1. Add widget – Long press home screen → tap "+" → select Library Widget.{'\n\n'}
+              2. Choose shelf – Long press widget → edit widget → select the shelf you want to display.
+            </Text>
           </Pressable>
         </Pressable>
       </Modal>
