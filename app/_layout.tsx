@@ -113,6 +113,15 @@ function RootLayoutContent() {
           }}
         />
 
+        {/* Customer Center screen */}
+        <Stack.Screen
+          name="customer-center"
+          options={{
+            title: 'Manage Subscription',
+            presentation: 'card',
+          }}
+        />
+
         {/* Add book modal */}
         <Stack.Screen
           name="add-book"
