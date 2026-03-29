@@ -66,6 +66,13 @@ function pushToWidget(widgetData: WidgetData, isPremium: boolean): void {
  */
 class WidgetManager {
   /**
+   * In-memory cache of the premium flag so that `getIsPremium` never returns
+   * a stale value due to an AsyncStorage race.  `syncPremiumStatus` sets this
+   * synchronously; `syncLibrarySnapshot` reads it without awaiting AsyncStorage.
+   */
+  private _isPremiumCached: boolean | null = null;
+
+  /**
    * Transform a bookshelf to widget-compatible format
    */
   transformBookshelfForWidget(
@@ -212,8 +219,10 @@ class WidgetManager {
    */
   async clearWidgetData(): Promise<void> {
     try {
+      this._isPremiumCached = null;
       await AsyncStorage.removeItem(WIDGET_DATA_KEY);
       await AsyncStorage.removeItem(WIDGET_SELECTED_SHELF_KEY);
+      await AsyncStorage.removeItem(WIDGET_PREMIUM_KEY);
 
       // Push empty state to widget
       pushToWidget({ bookshelves: [], lastUpdated: new Date().toISOString() }, false);
@@ -227,6 +236,9 @@ class WidgetManager {
    * when pushing data to the native widget.
    */
   async setIsPremium(isPremium: boolean): Promise<void> {
+    // Update the in-memory cache synchronously so subsequent reads within the
+    // same tick (e.g. from syncLibrarySnapshot) see the correct value.
+    this._isPremiumCached = isPremium;
     try {
       await AsyncStorage.setItem(WIDGET_PREMIUM_KEY, JSON.stringify(isPremium));
     } catch (error) {
@@ -238,9 +250,16 @@ class WidgetManager {
    * Read the cached premium status.
    */
   async getIsPremium(): Promise<boolean> {
+    // Prefer the in-memory cache to avoid reading a stale AsyncStorage value
+    // when setIsPremium was called but hasn't flushed yet.
+    if (this._isPremiumCached !== null) {
+      return this._isPremiumCached;
+    }
     try {
       const value = await AsyncStorage.getItem(WIDGET_PREMIUM_KEY);
-      return value ? JSON.parse(value) === true : false;
+      const result = value ? JSON.parse(value) === true : false;
+      this._isPremiumCached = result;
+      return result;
     } catch {
       return false;
     }
