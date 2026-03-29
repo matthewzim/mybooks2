@@ -35,18 +35,12 @@ export default function PaymentScreen() {
   const { isPro, refresh } = useRevenueCat();
 
   /**
-   * Present the RevenueCat Customer Center for subscription management.
+   * Navigate to the Customer Center screen for subscription management.
+   * Uses a dedicated screen with inline CustomerCenterView to avoid
+   * modal-on-modal issues with presentCustomerCenter().
    */
-  const handlePresentCustomerCenter = async () => {
-    try {
-      await RevenueCatUI.presentCustomerCenter();
-    } catch (error) {
-      console.error('Customer Center error:', error);
-      Alert.alert(
-        'Manage Subscription',
-        'To manage your subscription, visit your App Store or Google Play account settings.'
-      );
-    }
+  const handleManageSubscription = () => {
+    router.push('/customer-center');
   };
 
   // If user is already premium, show status + Customer Center
@@ -92,7 +86,7 @@ export default function PaymentScreen() {
             <Button
               title="Manage Subscription"
               variant="outline"
-              onPress={handlePresentCustomerCenter}
+              onPress={handleManageSubscription}
               fullWidth
               style={styles.manageButton}
             />
