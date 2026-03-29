@@ -6,21 +6,23 @@ const path = require("path");
  * Expo config plugin that transforms the expo-widgets generated
  * BookshelfWidget from a StaticConfiguration into an AppIntentConfiguration.
  *
- * It does two things:
- *   1. Overwrites the generated BookshelfWidget.swift with a version that uses
- *      AppIntentConfiguration + a custom AppIntentTimelineProvider.
- *   2. Writes a BookshelfAppIntent.swift file that defines the AppEntity,
- *      EntityQuery, and WidgetConfigurationIntent so users can pick a shelf.
- *   3. Adds the new Swift file to the Xcode project's build phases.
+ * It overwrites the generated BookshelfWidget.swift with a single file that
+ * contains the AppEntity, EntityQuery, WidgetConfigurationIntent, the
+ * configurable timeline provider, and the widget definition itself.
+ *
+ * Everything lives in one file so there is no need to manually wire a second
+ * Swift file into the Xcode project's build phases (which was fragile and
+ * caused "cannot find type 'SelectBookshelfIntent'" build failures).
  */
 
 const TARGET_NAME = "ExpoWidgetsTarget";
 
 // ---------------------------------------------------------------------------
-// Swift source for the AppIntent (bookshelf selection)
+// Swift source – single file containing intents + configurable widget
 // ---------------------------------------------------------------------------
-const bookshelfAppIntentSwift = `import AppIntents
+const bookshelfWidgetSwift = (displayName, description, families) => `import AppIntents
 import WidgetKit
+import SwiftUI
 internal import ExpoWidgets
 
 // MARK: - Bookshelf entity for the widget picker
@@ -82,14 +84,6 @@ struct SelectBookshelfIntent: WidgetConfigurationIntent {
   @Parameter(title: "Bookshelf")
   var bookshelf: BookshelfEntity?
 }
-`;
-
-// ---------------------------------------------------------------------------
-// Swift source for the configurable widget (replaces the generated static one)
-// ---------------------------------------------------------------------------
-const bookshelfWidgetSwift = (displayName, description, families) => `import WidgetKit
-import SwiftUI
-internal import ExpoWidgets
 
 // MARK: - Configurable timeline provider
 
@@ -200,22 +194,16 @@ function readWidgetMeta(config) {
 }
 
 // ---------------------------------------------------------------------------
-// Plugin: add the new BookshelfAppIntent.swift to Xcode build sources
+// Plugin: overwrite the generated BookshelfWidget.swift
 // ---------------------------------------------------------------------------
-const withConfigurableWidgetXcode = (config) => {
+const withConfigurableWidget = (config) => {
   return withXcodeProject(config, (config) => {
-    const project = config.modResults;
     const projectRoot = config.modRequest.platformProjectRoot;
     const targetDir = path.join(projectRoot, TARGET_NAME);
 
-    // ---------------------------------------------------------------
-    // Write (or overwrite) the Swift source files.
     // This MUST happen inside withXcodeProject so it runs AFTER
     // expo-widgets has generated its default BookshelfWidget.swift
-    // (which uses StaticConfiguration).  Previously this lived in a
-    // withDangerousMod handler that ran too early, so expo-widgets
-    // would overwrite our AppIntentConfiguration version.
-    // ---------------------------------------------------------------
+    // (which uses StaticConfiguration).
     const { displayName, description, families } = readWidgetMeta(config);
 
     fs.mkdirSync(targetDir, { recursive: true });
@@ -226,114 +214,14 @@ const withConfigurableWidgetXcode = (config) => {
       bookshelfWidgetSwift(displayName, description, families)
     );
 
-    const intentSwiftPath = path.join(targetDir, "BookshelfAppIntent.swift");
-    fs.writeFileSync(intentSwiftPath, bookshelfAppIntentSwift);
-
-    // ---------------------------------------------------------------
-    // Add BookshelfAppIntent.swift to Xcode build sources
-    // ---------------------------------------------------------------
-
-    // Find the widget target's PBXNativeTarget
-    const nativeTargets = project.pbxNativeTargetSection();
-    let widgetTargetKey = null;
-    for (const key in nativeTargets) {
-      if (key.endsWith("_comment")) continue;
-      const target = nativeTargets[key];
-      if (target && target.name === TARGET_NAME) {
-        widgetTargetKey = key;
-        break;
-      }
-    }
-
-    if (!widgetTargetKey) {
-      console.warn(
-        "withConfigurableWidget: Could not find ExpoWidgetsTarget in Xcode project"
-      );
-      return config;
-    }
-
-    // Find the "Sources" build phase for the widget target
-    const target = nativeTargets[widgetTargetKey];
-    const buildPhases = target.buildPhases || [];
-    let sourcesBuildPhaseId = null;
-
-    const sourcesBuildPhases =
-      project.hash.project.objects["PBXSourcesBuildPhase"];
-    for (const phase of buildPhases) {
-      const phaseId = phase.value;
-      if (sourcesBuildPhases && sourcesBuildPhases[phaseId]) {
-        sourcesBuildPhaseId = phaseId;
-        break;
-      }
-    }
-
-    if (!sourcesBuildPhaseId) {
-      console.warn(
-        "withConfigurableWidget: Could not find Sources build phase for widget target"
-      );
-      return config;
-    }
-
-    // Add the file to PBXFileReference
-    const fileRefUuid = project.generateUuid();
-    const fileRefs =
-      project.hash.project.objects["PBXFileReference"];
-    fileRefs[fileRefUuid] = {
-      isa: "PBXFileReference",
-      lastKnownFileType: "sourcecode.swift",
-      path: "BookshelfAppIntent.swift",
-      sourceTree: '"<group>"',
-    };
-    fileRefs[`${fileRefUuid}_comment`] = "BookshelfAppIntent.swift";
-
-    // Add to PBXBuildFile
-    const buildFileUuid = project.generateUuid();
-    const buildFiles =
-      project.hash.project.objects["PBXBuildFile"];
-    buildFiles[buildFileUuid] = {
-      isa: "PBXBuildFile",
-      fileRef: fileRefUuid,
-      fileRef_comment: "BookshelfAppIntent.swift",
-    };
-    buildFiles[`${buildFileUuid}_comment`] =
-      "BookshelfAppIntent.swift in Sources";
-
-    // Add to the Sources build phase
-    const sourcesPhase = sourcesBuildPhases[sourcesBuildPhaseId];
-    if (sourcesPhase && sourcesPhase.files) {
-      sourcesPhase.files.push({
-        value: buildFileUuid,
-        comment: "BookshelfAppIntent.swift in Sources",
-      });
-    }
-
-    // Add to the PBXGroup for the widget target
-    const groups = project.hash.project.objects["PBXGroup"];
-    for (const groupKey in groups) {
-      if (groupKey.endsWith("_comment")) continue;
-      const group = groups[groupKey];
-      if (group && group.name === TARGET_NAME && group.children) {
-        group.children.push({
-          value: fileRefUuid,
-          comment: "BookshelfAppIntent.swift",
-        });
-        break;
-      }
+    // Clean up the old separate intent file if it exists from a previous build
+    const oldIntentPath = path.join(targetDir, "BookshelfAppIntent.swift");
+    if (fs.existsSync(oldIntentPath)) {
+      fs.unlinkSync(oldIntentPath);
     }
 
     return config;
   });
-};
-
-// ---------------------------------------------------------------------------
-// Combined plugin
-// ---------------------------------------------------------------------------
-const withConfigurableWidget = (config) => {
-  // All work (file writes + Xcode project changes) now happens in a single
-  // withXcodeProject handler so that we always run AFTER expo-widgets has
-  // generated its default StaticConfiguration widget.
-  config = withConfigurableWidgetXcode(config);
-  return config;
 };
 
 module.exports = withConfigurableWidget;
