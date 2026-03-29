@@ -81,6 +81,12 @@
         }
       ]
     ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/virtual-library-app"
+    },
     "experiments": {
       "typedRoutes": true
     }
