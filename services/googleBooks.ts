@@ -144,14 +144,13 @@ class GoogleBooksService {
 
       const supabaseCoverUrl = uploadResult.data;
 
-      // 3. Persist the cover URL on the global books record
-      const { error: updateError } = await supabase
-        .from(TABLES.BOOKS)
-        .update({
-          cover_image_url: supabaseCoverUrl,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', book.book_id);
+      // 3. Persist the cover URL on the global books record.
+      //    Uses an RPC with SECURITY DEFINER so any authenticated user can
+      //    set the cover, not just the original uploader.
+      const { error: updateError } = await supabase.rpc('set_book_cover_url', {
+        p_book_id: book.book_id,
+        p_cover_url: supabaseCoverUrl,
+      });
 
       if (updateError) {
         // Upload succeeded but DB write failed – still return the URL

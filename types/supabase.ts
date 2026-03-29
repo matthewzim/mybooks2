@@ -229,6 +229,13 @@ export interface Database {
           created_at: string;
         }[];
       };
+      set_book_cover_url: {
+        Args: {
+          p_book_id: string;
+          p_cover_url: string;
+        };
+        Returns: undefined;
+      };
     };
     Enums: {
       subscription_status: 'active' | 'canceled' | 'past_due' | 'trialing';
