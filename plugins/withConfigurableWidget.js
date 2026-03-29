@@ -6,21 +6,28 @@ const path = require("path");
  * Expo config plugin that transforms the expo-widgets generated
  * BookshelfWidget from a StaticConfiguration into an AppIntentConfiguration.
  *
- * It does two things:
- *   1. Overwrites the generated BookshelfWidget.swift with a version that uses
- *      AppIntentConfiguration + a custom AppIntentTimelineProvider.
- *   2. Writes a BookshelfAppIntent.swift file that defines the AppEntity,
- *      EntityQuery, and WidgetConfigurationIntent so users can pick a shelf.
- *   3. Adds the new Swift file to the Xcode project's build phases.
+ * It overwrites the generated BookshelfWidget.swift with a version that
+ * includes AppEntity, EntityQuery, WidgetConfigurationIntent, and an
+ * AppIntentTimelineProvider — all in a single file so users can pick a shelf
+ * without needing to manipulate Xcode build phases for extra source files.
  */
 
 const TARGET_NAME = "ExpoWidgetsTarget";
 
 // ---------------------------------------------------------------------------
-// Swift source for the AppIntent (bookshelf selection)
+// BookshelfAppIntent.swift is no longer written as a separate file.
+// All AppIntent types are now inlined into BookshelfWidget.swift above to
+// avoid fragile Xcode build-phase manipulation for extra source files.
 // ---------------------------------------------------------------------------
-const bookshelfAppIntentSwift = `import AppIntents
-import WidgetKit
+
+// ---------------------------------------------------------------------------
+// Swift source for the configurable widget (replaces the generated static one)
+// All types are in a single file to avoid Xcode build-phase issues with adding
+// extra Swift files to the widget target programmatically.
+// ---------------------------------------------------------------------------
+const bookshelfWidgetSwift = (displayName, description, families) => `import WidgetKit
+import SwiftUI
+import AppIntents
 internal import ExpoWidgets
 
 // MARK: - Bookshelf entity for the widget picker
@@ -54,8 +61,6 @@ struct BookshelfEntityQuery: EntityQuery {
     return loadShelves().first
   }
 
-  // Read the bookshelves array that the JS side pushes via updateSnapshot.
-  // Data lives at: __expo_widgets_BookshelfWidget_timeline[0].props.bookshelves
   private func loadShelves() -> [BookshelfEntity] {
     let timeline = WidgetsStorage.getArray(forKey: "__expo_widgets_BookshelfWidget_timeline") ?? []
     guard let firstEntry = timeline.first as? [String: Any],
@@ -82,14 +87,6 @@ struct SelectBookshelfIntent: WidgetConfigurationIntent {
   @Parameter(title: "Bookshelf")
   var bookshelf: BookshelfEntity?
 }
-`;
-
-// ---------------------------------------------------------------------------
-// Swift source for the configurable widget (replaces the generated static one)
-// ---------------------------------------------------------------------------
-const bookshelfWidgetSwift = (displayName, description, families) => `import WidgetKit
-import SwiftUI
-internal import ExpoWidgets
 
 // MARK: - Configurable timeline provider
 
@@ -113,8 +110,6 @@ struct BookshelfConfigurableProvider: AppIntentTimelineProvider {
     return Timeline(entries: [entry], policy: .atEnd)
   }
 
-  // Build a timeline entry by selecting the right bookshelf from stored data.
-  // Includes the isPremium flag so the widget can gate content for free users.
   private func buildEntry(for intent: SelectBookshelfIntent) -> WidgetsTimelineEntry {
     let timeline = WidgetsStorage.getArray(forKey: "__expo_widgets_\\(name)_timeline") ?? []
     guard let firstEntry = timeline.first as? [String: Any],
@@ -200,21 +195,20 @@ function readWidgetMeta(config) {
 }
 
 // ---------------------------------------------------------------------------
-// Plugin: add the new BookshelfAppIntent.swift to Xcode build sources
+// Plugin: overwrite the expo-widgets generated BookshelfWidget.swift
 // ---------------------------------------------------------------------------
 const withConfigurableWidgetXcode = (config) => {
   return withXcodeProject(config, (config) => {
-    const project = config.modResults;
     const projectRoot = config.modRequest.platformProjectRoot;
     const targetDir = path.join(projectRoot, TARGET_NAME);
 
     // ---------------------------------------------------------------
-    // Write (or overwrite) the Swift source files.
+    // Write (or overwrite) BookshelfWidget.swift.
     // This MUST happen inside withXcodeProject so it runs AFTER
     // expo-widgets has generated its default BookshelfWidget.swift
-    // (which uses StaticConfiguration).  Previously this lived in a
-    // withDangerousMod handler that ran too early, so expo-widgets
-    // would overwrite our AppIntentConfiguration version.
+    // (which uses StaticConfiguration).
+    // All AppIntent types are inlined into this single file so we
+    // don't need to add extra files to the Xcode build sources.
     // ---------------------------------------------------------------
     const { displayName, description, families } = readWidgetMeta(config);
 
@@ -226,99 +220,10 @@ const withConfigurableWidgetXcode = (config) => {
       bookshelfWidgetSwift(displayName, description, families)
     );
 
-    const intentSwiftPath = path.join(targetDir, "BookshelfAppIntent.swift");
-    fs.writeFileSync(intentSwiftPath, bookshelfAppIntentSwift);
-
-    // ---------------------------------------------------------------
-    // Add BookshelfAppIntent.swift to Xcode build sources
-    // ---------------------------------------------------------------
-
-    // Find the widget target's PBXNativeTarget
-    const nativeTargets = project.pbxNativeTargetSection();
-    let widgetTargetKey = null;
-    for (const key in nativeTargets) {
-      if (key.endsWith("_comment")) continue;
-      const target = nativeTargets[key];
-      if (target && target.name === TARGET_NAME) {
-        widgetTargetKey = key;
-        break;
-      }
-    }
-
-    if (!widgetTargetKey) {
-      console.warn(
-        "withConfigurableWidget: Could not find ExpoWidgetsTarget in Xcode project"
-      );
-      return config;
-    }
-
-    // Find the "Sources" build phase for the widget target
-    const target = nativeTargets[widgetTargetKey];
-    const buildPhases = target.buildPhases || [];
-    let sourcesBuildPhaseId = null;
-
-    const sourcesBuildPhases =
-      project.hash.project.objects["PBXSourcesBuildPhase"];
-    for (const phase of buildPhases) {
-      const phaseId = phase.value;
-      if (sourcesBuildPhases && sourcesBuildPhases[phaseId]) {
-        sourcesBuildPhaseId = phaseId;
-        break;
-      }
-    }
-
-    if (!sourcesBuildPhaseId) {
-      console.warn(
-        "withConfigurableWidget: Could not find Sources build phase for widget target"
-      );
-      return config;
-    }
-
-    // Add the file to PBXFileReference
-    const fileRefUuid = project.generateUuid();
-    const fileRefs =
-      project.hash.project.objects["PBXFileReference"];
-    fileRefs[fileRefUuid] = {
-      isa: "PBXFileReference",
-      lastKnownFileType: "sourcecode.swift",
-      path: "BookshelfAppIntent.swift",
-      sourceTree: '"<group>"',
-    };
-    fileRefs[`${fileRefUuid}_comment`] = "BookshelfAppIntent.swift";
-
-    // Add to PBXBuildFile
-    const buildFileUuid = project.generateUuid();
-    const buildFiles =
-      project.hash.project.objects["PBXBuildFile"];
-    buildFiles[buildFileUuid] = {
-      isa: "PBXBuildFile",
-      fileRef: fileRefUuid,
-      fileRef_comment: "BookshelfAppIntent.swift",
-    };
-    buildFiles[`${buildFileUuid}_comment`] =
-      "BookshelfAppIntent.swift in Sources";
-
-    // Add to the Sources build phase
-    const sourcesPhase = sourcesBuildPhases[sourcesBuildPhaseId];
-    if (sourcesPhase && sourcesPhase.files) {
-      sourcesPhase.files.push({
-        value: buildFileUuid,
-        comment: "BookshelfAppIntent.swift in Sources",
-      });
-    }
-
-    // Add to the PBXGroup for the widget target
-    const groups = project.hash.project.objects["PBXGroup"];
-    for (const groupKey in groups) {
-      if (groupKey.endsWith("_comment")) continue;
-      const group = groups[groupKey];
-      if (group && group.name === TARGET_NAME && group.children) {
-        group.children.push({
-          value: fileRefUuid,
-          comment: "BookshelfAppIntent.swift",
-        });
-        break;
-      }
+    // Clean up the old separate intent file if it exists from a previous build
+    const oldIntentPath = path.join(targetDir, "BookshelfAppIntent.swift");
+    if (fs.existsSync(oldIntentPath)) {
+      fs.unlinkSync(oldIntentPath);
     }
 
     return config;
