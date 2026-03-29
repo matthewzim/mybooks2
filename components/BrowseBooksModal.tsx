@@ -27,7 +27,11 @@ import { booksService } from '@/services/books';
 import { Input } from '@/components/ui';
 import { BorderRadius, Spacing, Typography } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
+import { supabase, TABLES } from '@/services/supabase';
+import { getSpineImageUrl } from '@/services/storage';
 import type { CommunityBookSpine } from '@/types';
+
+const GOOGLE_BOOKS_API = 'https://www.googleapis.com/books/v1/volumes';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_WIDTH = Math.min(SCREEN_WIDTH * 0.9, 420);
@@ -102,7 +106,7 @@ export function BrowseBooksModal({
     }
   }, [visible, overlayOpacity, cardOpacity, cardTranslateY, cardScale]);
 
-  // Debounced search
+  // Debounced search via Google Books API
   useEffect(() => {
     const trimmedQuery = searchQuery.trim();
 
@@ -115,10 +119,55 @@ export function BrowseBooksModal({
     setIsSearching(true);
 
     const timeoutId = setTimeout(async () => {
-      const result = await booksService.getCommunityBooks(0, 20, trimmedQuery);
-      if (result.data) {
-        setBookSearchResults(result.data.data);
-      } else {
+      try {
+        const apiKey = process.env.EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY || '';
+        const keyParam = apiKey ? `&key=${apiKey}` : '';
+        const response = await fetch(
+          `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(trimmedQuery)}&maxResults=20${keyParam}`
+        );
+
+        if (!response.ok) {
+          setBookSearchResults([]);
+          setIsSearching(false);
+          return;
+        }
+
+        const data = await response.json();
+        const items: CommunityBookSpine[] = (data.items || []).map((item: any) => ({
+          id: item.id,
+          title: item.volumeInfo?.title || 'Untitled',
+          author: item.volumeInfo?.authors?.[0] || 'Unknown Author',
+          image_url: null,
+          uploaded_by_user_id: '',
+          uploader_name: null,
+          times_added: 0,
+          created_at: new Date().toISOString(),
+        }));
+
+        // Check Supabase for existing spine images for each result
+        const itemsWithImages = await Promise.all(
+          items.map(async (item) => {
+            try {
+              const { data: matchedBook } = await supabase
+                .from(TABLES.BOOKS)
+                .select('id, image_url')
+                .eq('title', item.title)
+                .eq('author', item.author)
+                .not('image_url', 'is', null)
+                .limit(1)
+                .maybeSingle();
+
+              if (matchedBook?.image_url) {
+                const resolvedUrl = await getSpineImageUrl(matchedBook.image_url);
+                return { ...item, id: matchedBook.id, image_url: resolvedUrl };
+              }
+            } catch {}
+            return item;
+          })
+        );
+
+        setBookSearchResults(itemsWithImages);
+      } catch {
         setBookSearchResults([]);
       }
       setIsSearching(false);
@@ -165,7 +214,18 @@ export function BrowseBooksModal({
   const handleAddBook = async (book: CommunityBookSpine) => {
     setIsAdding(book.id);
     try {
-      const result = await booksService.addCommunityBookToShelf(book, shelfId);
+      // If the book has an existing Supabase ID (matched from community), reference it
+      // Otherwise create a new book record
+      const isExistingBook = book.uploaded_by_user_id !== '';
+      const result = isExistingBook
+        ? await booksService.addCommunityBookToShelf(book, shelfId)
+        : await booksService.createBook({
+            title: book.title,
+            author: book.author,
+            shelf_id: shelfId,
+            is_community: false,
+          });
+
       if (result.data) {
         onBookAdded();
         Alert.alert('Added', `"${book.title}" has been added to your shelf.`);
@@ -280,7 +340,7 @@ export function BrowseBooksModal({
                 <View style={styles.centerContainer}>
                   <Ionicons name="search" size={32} color={colors.textLight} />
                   <Text style={[styles.statusText, { color: colors.textSecondary }]}>
-                    Search for community books to add to your shelf
+                    Search for books to add to your shelf
                   </Text>
                 </View>
               )}
