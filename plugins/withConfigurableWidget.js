@@ -25,10 +25,114 @@ const TARGET_NAME = "ExpoWidgetsTarget";
 // All types are in a single file to avoid Xcode build-phase issues with adding
 // extra Swift files to the widget target programmatically.
 // ---------------------------------------------------------------------------
-const bookshelfWidgetSwift = (displayName, description, families) => `import WidgetKit
+const bookshelfWidgetSwift = (displayName, description, families, groupIdentifier) => `import WidgetKit
 import SwiftUI
 import AppIntents
-internal import ExpoWidgets
+
+// MARK: - Shared UserDefaults helper (replaces internal ExpoWidgets WidgetsStorage)
+
+private enum WidgetDataStore {
+  static let suiteName = "${groupIdentifier}"
+  static let timelineKey = "__expo_widgets_BookshelfWidget_timeline"
+
+  static func getTimeline() -> [[String: Any]] {
+    guard let defaults = UserDefaults(suiteName: suiteName),
+          let arr = defaults.array(forKey: timelineKey) as? [[String: Any]] else {
+      return []
+    }
+    return arr
+  }
+}
+
+// MARK: - Timeline entry (replaces internal ExpoWidgets WidgetsTimelineEntry)
+
+struct BookshelfEntry: TimelineEntry {
+  let date: Date
+  let isPremium: Bool
+  let bookshelfName: String?
+  let bookshelfId: String?
+  let books: [[String: Any]]
+}
+
+// MARK: - Native SwiftUI widget view
+
+struct BookshelfWidgetView: View {
+  let entry: BookshelfEntry
+  @Environment(\\.widgetFamily) var family
+
+  var body: some View {
+    Group {
+      if !entry.isPremium {
+        VStack {
+          Text("Subscribe to display your shelf")
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundColor(Color(red: 142/255, green: 142/255, blue: 147/255))
+        }
+        .padding(12)
+      } else if entry.bookshelfName == nil || entry.bookshelfId == nil {
+        VStack {
+          Text("Long-press to choose a shelf")
+            .font(.system(size: 13))
+            .foregroundColor(Color(red: 142/255, green: 142/255, blue: 147/255))
+        }
+        .padding(12)
+      } else {
+        bookshelfContent
+      }
+    }
+  }
+
+  private var maxBooks: Int {
+    family == .systemMedium ? 7 : 14
+  }
+
+  private var spineWidth: CGFloat { 36 }
+  private var spineHeight: CGFloat { 54 }
+
+  @ViewBuilder
+  private var bookshelfContent: some View {
+    let visible = Array(entry.books.prefix(maxBooks))
+    let booksPerRow = 7
+    let topRow = Array(visible.prefix(booksPerRow))
+    let bottomRow = family == .systemLarge ? Array(visible.dropFirst(booksPerRow).prefix(booksPerRow)) : []
+
+    VStack(alignment: .leading, spacing: 8) {
+      Text(entry.bookshelfName ?? "")
+        .font(.system(size: 14, weight: .bold))
+        .lineLimit(1)
+
+      spineRow(topRow)
+
+      if !bottomRow.isEmpty {
+        spineRow(bottomRow)
+      }
+    }
+    .padding(12)
+  }
+
+  private func spineRow(_ books: [[String: Any]]) -> some View {
+    HStack(spacing: 4) {
+      ForEach(Array(books.enumerated()), id: \\.offset) { _, book in
+        let title = book["title"] as? String ?? ""
+        RoundedRectangle(cornerRadius: 3)
+          .fill(stableColor(for: title))
+          .frame(width: spineWidth, height: spineHeight)
+          .overlay(
+            Text(String(title.prefix(1)))
+              .font(.system(size: round(spineWidth * 0.4), weight: .bold))
+              .foregroundColor(.white)
+          )
+      }
+    }
+  }
+
+  private func stableColor(for title: String) -> Color {
+    var hash = 0
+    for ch in title.unicodeScalars { hash += Int(ch.value) }
+    let hue = Double(hash % 360) / 360.0
+    return Color(hue: hue, saturation: 0.5, brightness: 0.55)
+  }
+}
 
 // MARK: - Bookshelf entity for the widget picker
 
@@ -62,8 +166,8 @@ struct BookshelfEntityQuery: EntityQuery {
   }
 
   private func loadShelves() -> [BookshelfEntity] {
-    let timeline = WidgetsStorage.getArray(forKey: "__expo_widgets_BookshelfWidget_timeline") ?? []
-    guard let firstEntry = timeline.first as? [String: Any],
+    let timeline = WidgetDataStore.getTimeline()
+    guard let firstEntry = timeline.first,
           let props = firstEntry["props"] as? [String: Any],
           let shelves = props["bookshelves"] as? [[String: Any]] else {
       return []
@@ -88,82 +192,99 @@ struct SelectBookshelfIntent: WidgetConfigurationIntent {
   var bookshelf: BookshelfEntity?
 }
 
-// MARK: - Configurable timeline provider
+// MARK: - Helper to build a BookshelfEntry from stored data
+
+private func buildBookshelfEntry(selectedId: String?) -> BookshelfEntry {
+  let timeline = WidgetDataStore.getTimeline()
+  guard let firstEntry = timeline.first,
+        let allProps = firstEntry["props"] as? [String: Any] else {
+    return BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, books: [])
+  }
+
+  let isPremium = allProps["isPremium"] as? Bool ?? false
+
+  guard let bookshelves = allProps["bookshelves"] as? [[String: Any]] else {
+    return BookshelfEntry(date: Date(), isPremium: isPremium, bookshelfName: nil, bookshelfId: nil, books: [])
+  }
+
+  let shelf = bookshelves.first { ($0["id"] as? String) == selectedId } ?? bookshelves.first
+
+  guard let shelf else {
+    return BookshelfEntry(date: Date(), isPremium: isPremium, bookshelfName: nil, bookshelfId: nil, books: [])
+  }
+
+  return BookshelfEntry(
+    date: Date(),
+    isPremium: isPremium,
+    bookshelfName: shelf["name"] as? String,
+    bookshelfId: shelf["id"] as? String,
+    books: shelf["books"] as? [[String: Any]] ?? []
+  )
+}
+
+// MARK: - Configurable timeline provider (iOS 17+)
 
 @available(iOS 17.0, *)
 struct BookshelfConfigurableProvider: AppIntentTimelineProvider {
-  typealias Entry = WidgetsTimelineEntry
+  typealias Entry = BookshelfEntry
   typealias Intent = SelectBookshelfIntent
 
-  let name: String = "BookshelfWidget"
-
-  func placeholder(in context: Context) -> WidgetsTimelineEntry {
-    WidgetsTimelineEntry(date: Date(), name: name, props: nil, entryIndex: nil)
+  func placeholder(in context: Context) -> BookshelfEntry {
+    BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, books: [])
   }
 
-  func snapshot(for configuration: SelectBookshelfIntent, in context: Context) async -> WidgetsTimelineEntry {
-    return buildEntry(for: configuration)
+  func snapshot(for configuration: SelectBookshelfIntent, in context: Context) async -> BookshelfEntry {
+    return buildBookshelfEntry(selectedId: configuration.bookshelf?.id)
   }
 
-  func timeline(for configuration: SelectBookshelfIntent, in context: Context) async -> Timeline<WidgetsTimelineEntry> {
-    let entry = buildEntry(for: configuration)
+  func timeline(for configuration: SelectBookshelfIntent, in context: Context) async -> Timeline<BookshelfEntry> {
+    let entry = buildBookshelfEntry(selectedId: configuration.bookshelf?.id)
     return Timeline(entries: [entry], policy: .atEnd)
   }
+}
 
-  private func buildEntry(for intent: SelectBookshelfIntent) -> WidgetsTimelineEntry {
-    let timeline = WidgetsStorage.getArray(forKey: "__expo_widgets_\\(name)_timeline") ?? []
-    guard let firstEntry = timeline.first as? [String: Any],
-          let allProps = firstEntry["props"] as? [String: Any] else {
-      return WidgetsTimelineEntry(date: Date(), name: name, props: ["isPremium": false], entryIndex: 0)
-    }
+// MARK: - Static timeline provider (pre-iOS 17 fallback)
 
-    let isPremium = allProps["isPremium"] as? Bool ?? false
+struct BookshelfStaticProvider: TimelineProvider {
+  typealias Entry = BookshelfEntry
 
-    guard let bookshelves = allProps["bookshelves"] as? [[String: Any]] else {
-      return WidgetsTimelineEntry(date: Date(), name: name, props: ["isPremium": isPremium], entryIndex: 0)
-    }
+  func placeholder(in context: Context) -> BookshelfEntry {
+    BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, books: [])
+  }
 
-    let selectedId = intent.bookshelf?.id
-    let shelf = bookshelves.first { ($0["id"] as? String) == selectedId } ?? bookshelves.first
+  func getSnapshot(in context: Context, completion: @escaping (BookshelfEntry) -> Void) {
+    completion(buildBookshelfEntry(selectedId: nil))
+  }
 
-    guard let shelf else {
-      return WidgetsTimelineEntry(date: Date(), name: name, props: ["isPremium": isPremium], entryIndex: 0)
-    }
-
-    let props: [String: Any] = [
-      "isPremium": isPremium,
-      "bookshelfName": shelf["name"] ?? "",
-      "bookshelfId": shelf["id"] ?? "",
-      "books": shelf["books"] ?? []
-    ]
-
-    return WidgetsTimelineEntry(date: Date(), name: name, props: props, entryIndex: 0)
+  func getTimeline(in context: Context, completion: @escaping (Timeline<BookshelfEntry>) -> Void) {
+    let entry = buildBookshelfEntry(selectedId: nil)
+    completion(Timeline(entries: [entry], policy: .atEnd))
   }
 }
 
 // MARK: - Widget definition using AppIntentConfiguration
 
 struct BookshelfWidget: Widget {
-  let name: String = "BookshelfWidget"
+  let kind: String = "BookshelfWidget"
 
   var body: some WidgetConfiguration {
     if #available(iOS 17.0, *) {
       return AppIntentConfiguration(
-        kind: name,
+        kind: kind,
         intent: SelectBookshelfIntent.self,
         provider: BookshelfConfigurableProvider()
       ) { entry in
-        WidgetsEntryView(entry: entry)
+        BookshelfWidgetView(entry: entry)
       }
       .configurationDisplayName("${displayName}")
       .description("${description}")
       .supportedFamilies([.${families}])
     } else {
       return StaticConfiguration(
-        kind: name,
-        provider: WidgetsTimelineProvider(name: name)
+        kind: kind,
+        provider: BookshelfStaticProvider()
       ) { entry in
-        WidgetsEntryView(entry: entry)
+        BookshelfWidgetView(entry: entry)
       }
       .configurationDisplayName("${displayName}")
       .description("${description}")
@@ -180,10 +301,9 @@ function readWidgetMeta(config) {
   const expoWidgetsPlugin = (config.plugins || []).find(
     (p) => Array.isArray(p) && p[0] === "expo-widgets"
   );
+  const pluginOpts = expoWidgetsPlugin?.[1] || {};
   const widgetDef =
-    expoWidgetsPlugin?.[1]?.widgets?.find(
-      (w) => w.name === "BookshelfWidget"
-    ) || {};
+    pluginOpts.widgets?.find((w) => w.name === "BookshelfWidget") || {};
   const displayName = widgetDef.displayName || "My Bookshelf";
   const description =
     widgetDef.description || "Show one shelf from your library.";
@@ -191,7 +311,9 @@ function readWidgetMeta(config) {
     "systemMedium",
     "systemLarge",
   ]).join(", .");
-  return { displayName, description, families };
+  const groupIdentifier =
+    pluginOpts.groupIdentifier || "group.com.yourcompany.virtuallibrary";
+  return { displayName, description, families, groupIdentifier };
 }
 
 // ---------------------------------------------------------------------------
@@ -210,14 +332,15 @@ const withConfigurableWidgetXcode = (config) => {
     // All AppIntent types are inlined into this single file so we
     // don't need to add extra files to the Xcode build sources.
     // ---------------------------------------------------------------
-    const { displayName, description, families } = readWidgetMeta(config);
+    const { displayName, description, families, groupIdentifier } =
+      readWidgetMeta(config);
 
     fs.mkdirSync(targetDir, { recursive: true });
 
     const widgetSwiftPath = path.join(targetDir, "BookshelfWidget.swift");
     fs.writeFileSync(
       widgetSwiftPath,
-      bookshelfWidgetSwift(displayName, description, families)
+      bookshelfWidgetSwift(displayName, description, families, groupIdentifier)
     );
 
     // Clean up the old separate intent file if it exists from a previous build
