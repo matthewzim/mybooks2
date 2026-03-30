@@ -31,7 +31,7 @@ import {
 } from '@/constants/theme';
 
 export default function PaymentScreen() {
-  const { user, refreshUser } = useAuth();
+  const { refreshUser } = useAuth();
   const { isPro, refresh } = useRevenueCat();
 
   /**
@@ -44,7 +44,8 @@ export default function PaymentScreen() {
   };
 
   // If user is already premium, show status + Customer Center
-  if (isPro || user?.is_premium) {
+  // Use isPro (RevenueCat) as the source of truth, not the cached Supabase value
+  if (isPro) {
     return (
       <>
         <Stack.Screen
