@@ -23,6 +23,7 @@ type BookshelfWidgetProps = {
   bookshelfName: string | null;
   bookshelfId: string | null;
   coverColor: string | null;
+  shelfStyle: 'full' | 'bottom';
   books: {
     id: string;
     title: string;
@@ -66,44 +67,59 @@ function SpineRow({
   spineHeight,
   shelfBackColor,
   shelfColor,
+  shelfStyle,
 }: {
   books: BookshelfWidgetProps['books'];
   spineWidth: number;
   spineHeight: number;
   shelfBackColor: string;
   shelfColor: string;
+  shelfStyle: 'full' | 'bottom';
 }) {
-  return (
-    <VStack>
-      {/* Shelf back + spines */}
-      <HStack
+  const spines = books.map((book) => (
+    <Section key={book.id}>
+      <VStack
         modifiers={[
-          background(shelfBackColor),
-          cornerRadius(2),
-          padding({ horizontal: 3, bottom: 1 }),
+          frame({ width: spineWidth, height: spineHeight }),
+          cornerRadius(1),
+          background(stableHue(book.title)),
         ]}
       >
-        {books.map((book) => (
-          <Section key={book.id}>
-            <VStack
-              modifiers={[
-                frame({ width: spineWidth, height: spineHeight }),
-                cornerRadius(1),
-                background(stableHue(book.title)),
-              ]}
-            >
-              <Text
-                modifiers={[
-                  font({ weight: 'bold', size: Math.round(spineWidth * 0.38) }),
-                  foregroundStyle('#FFFFFF'),
-                ]}
-              >
-                {book.title.charAt(0)}
-              </Text>
-            </VStack>
-          </Section>
-        ))}
-      </HStack>
+        <Text
+          modifiers={[
+            font({ weight: 'bold', size: Math.round(spineWidth * 0.38) }),
+            foregroundStyle('#FFFFFF'),
+          ]}
+        >
+          {book.title.charAt(0)}
+        </Text>
+      </VStack>
+    </Section>
+  ));
+
+  return (
+    <VStack>
+      {shelfStyle === 'bottom' ? (
+        /* Bottom line shelf: no background, just spines */
+        <HStack
+          modifiers={[
+            padding({ horizontal: 3 }),
+          ]}
+        >
+          {spines}
+        </HStack>
+      ) : (
+        /* Full shelf: spines on a background */
+        <HStack
+          modifiers={[
+            background(shelfBackColor),
+            cornerRadius(2),
+            padding({ horizontal: 3, bottom: 1 }),
+          ]}
+        >
+          {spines}
+        </HStack>
+      )}
 
       {/* Shelf ledge */}
       <VStack
@@ -130,7 +146,7 @@ const BookshelfWidget = (
 ) => {
   'widget';
 
-  const { isPremium, bookshelfName, bookshelfId, coverColor, books } = props;
+  const { isPremium, bookshelfName, bookshelfId, coverColor, shelfStyle, books } = props;
   const family = environment.widgetFamily;
   const maxBooks = maxBooksForFamily(family);
   const visibleBooks = books.slice(0, maxBooks);
@@ -191,6 +207,7 @@ const BookshelfWidget = (
         spineHeight={spineHeight}
         shelfBackColor={shelfBackColor}
         shelfColor={shelfColor}
+        shelfStyle={shelfStyle}
       />
 
       {/* Second row of spines with shelf (large only) */}
@@ -201,6 +218,7 @@ const BookshelfWidget = (
           spineHeight={spineHeight}
           shelfBackColor={shelfBackColor}
           shelfColor={shelfColor}
+          shelfStyle={shelfStyle}
         />
       )}
     </VStack>

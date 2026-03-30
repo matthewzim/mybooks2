@@ -52,6 +52,7 @@ function pushToWidget(widgetData: WidgetData, isPremium: boolean): void {
       id: shelf.id,
       name: shelf.name,
       coverColor: shelf.cover_color,
+      shelfStyle: shelf.shelf_style,
       books: shelf.books.map((b) => ({
         id: b.id,
         title: b.title,
@@ -96,6 +97,7 @@ class WidgetManager {
       id: bookshelf.id,
       name: bookshelf.name,
       cover_color: bookshelf.cover_color,
+      shelf_style: bookshelf.shelf_style,
       books: widgetBooks,
     };
   }

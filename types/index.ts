@@ -312,6 +312,7 @@ export interface WidgetBookshelf {
   id: string;
   name: string;
   cover_color: string;
+  shelf_style: ShelfStyle;
   books: WidgetBook[];
 }
 
