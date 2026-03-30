@@ -29,6 +29,7 @@ import { LivePreview } from './LivePreview';
 import { BookSpine as BookSpineConstants } from '@/constants/theme';
 import { supabase, TABLES } from '@/services/supabase';
 import { getSpineImageUrl } from '@/services/storage';
+import { googleBooksService } from '@/services/googleBooks';
 
 function getBookColor(title?: string | null): string {
   const colors = BookSpineConstants.colors;
@@ -180,23 +181,11 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
     setHasSearched(true);
 
     try {
-      const apiKey = process.env.EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY || '';
-      const keyParam = apiKey ? `&key=${apiKey}` : '';
-      const response = await fetch(
-        `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(trimmed)}&maxResults=8${keyParam}`
-      );
-
-      if (!response.ok) {
-        setSearchError('Search failed. Please try again.');
-        setResults([]);
-        return;
-      }
-
-      const data = await response.json();
-      const items: SearchResult[] = (data.items || []).map((item: any) => ({
-        id: item.id,
-        title: item.volumeInfo?.title || 'Untitled',
-        author: item.volumeInfo?.authors?.[0] || 'Unknown Author',
+      const searchResults = await googleBooksService.searchBooks(trimmed, 8);
+      const items: SearchResult[] = searchResults.map((result) => ({
+        id: result.id,
+        title: result.title,
+        author: result.author,
       }));
 
       if (items.length === 0) {

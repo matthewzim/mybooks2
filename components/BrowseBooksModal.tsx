@@ -24,14 +24,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { booksService } from '@/services/books';
+import { googleBooksService } from '@/services/googleBooks';
 import { Input } from '@/components/ui';
 import { BorderRadius, Spacing, Typography } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase, TABLES } from '@/services/supabase';
 import { getSpineImageUrl } from '@/services/storage';
 import type { CommunityBookSpine } from '@/types';
-
-const GOOGLE_BOOKS_API = 'https://www.googleapis.com/books/v1/volumes';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_WIDTH = Math.min(SCREEN_WIDTH * 0.9, 420);
@@ -120,23 +119,11 @@ export function BrowseBooksModal({
 
     const timeoutId = setTimeout(async () => {
       try {
-        const apiKey = process.env.EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY || '';
-        const keyParam = apiKey ? `&key=${apiKey}` : '';
-        const response = await fetch(
-          `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(trimmedQuery)}&maxResults=20${keyParam}`
-        );
-
-        if (!response.ok) {
-          setBookSearchResults([]);
-          setIsSearching(false);
-          return;
-        }
-
-        const data = await response.json();
-        const items: CommunityBookSpine[] = (data.items || []).map((item: any) => ({
-          id: item.id,
-          title: item.volumeInfo?.title || 'Untitled',
-          author: item.volumeInfo?.authors?.[0] || 'Unknown Author',
+        const searchResults = await googleBooksService.searchBooks(trimmedQuery, 20);
+        const items: CommunityBookSpine[] = searchResults.map((result) => ({
+          id: result.id,
+          title: result.title,
+          author: result.author,
           image_url: null,
           uploaded_by_user_id: '',
           uploader_name: null,

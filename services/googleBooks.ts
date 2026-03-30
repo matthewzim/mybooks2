@@ -1,8 +1,9 @@
 /**
- * Google Books Service
+ * Book Search & Cover Service
  *
- * Searches the Google Books API by title and author to retrieve
- * book cover images, then caches them in a Supabase storage bucket.
+ * Searches the Google Books API (with Open Library fallback) by title and
+ * author to retrieve book cover images, then caches them in a Supabase
+ * storage bucket.
  *
  * Usage:
  * import { googleBooksService } from '@/services/googleBooks';
@@ -15,6 +16,8 @@ import type { Book, ApiResponse } from '@/types';
 
 const GOOGLE_BOOKS_API = 'https://www.googleapis.com/books/v1/volumes';
 const GOOGLE_BOOKS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY || '';
+const OPEN_LIBRARY_SEARCH_API = 'https://openlibrary.org/search.json';
+const OPEN_LIBRARY_COVERS_API = 'https://covers.openlibrary.org/b/id';
 
 interface GoogleBooksVolume {
   id: string;
@@ -31,6 +34,12 @@ interface GoogleBooksVolume {
 interface GoogleBooksResponse {
   totalItems: number;
   items?: GoogleBooksVolume[];
+}
+
+export interface BookSearchResult {
+  id: string;
+  title: string;
+  author: string;
 }
 
 class GoogleBooksService {
@@ -71,18 +80,25 @@ class GoogleBooksService {
   }
 
   /**
-   * Search Google Books API by title and author.
-   * Returns the best-matching cover image URL or null.
+   * Search Open Library API for a cover image by title and author.
    */
-  async searchCoverUrl(
+  private async searchOpenLibraryCover(
     title: string,
     author: string
   ): Promise<string | null> {
     try {
-      const queries = this.buildSearchQueries(title, author);
-      for (const query of queries) {
-        const imageUrl = await this.searchQuery(query);
-        if (imageUrl) return imageUrl;
+      const query = `${title} ${author}`.trim();
+      const url = `${OPEN_LIBRARY_SEARCH_API}?q=${encodeURIComponent(query)}&limit=5&fields=cover_i,title,author_name`;
+      const response = await fetch(url);
+      if (!response.ok) return null;
+
+      const data = await response.json();
+      if (!data.docs || data.docs.length === 0) return null;
+
+      for (const doc of data.docs) {
+        if (doc.cover_i) {
+          return `${OPEN_LIBRARY_COVERS_API}/${doc.cover_i}-L.jpg`;
+        }
       }
 
       return null;
@@ -92,8 +108,84 @@ class GoogleBooksService {
   }
 
   /**
-   * Fetch the book cover from Google Books, upload it to the Supabase
-   * `book-covers` bucket, and persist the URL on the books table.
+   * Search Google Books API by title and author.
+   * Falls back to Open Library if Google Books fails.
+   * Returns the best-matching cover image URL or null.
+   */
+  async searchCoverUrl(
+    title: string,
+    author: string
+  ): Promise<string | null> {
+    try {
+      // Try Google Books first
+      const queries = this.buildSearchQueries(title, author);
+      for (const query of queries) {
+        const imageUrl = await this.searchQuery(query);
+        if (imageUrl) return imageUrl;
+      }
+    } catch {
+      // Google Books failed entirely, fall through to Open Library
+    }
+
+    // Fallback to Open Library
+    return this.searchOpenLibraryCover(title, author);
+  }
+
+  /**
+   * Search for books by query string.
+   * Tries Google Books first, falls back to Open Library.
+   * Returns an array of book search results.
+   */
+  async searchBooks(
+    query: string,
+    maxResults: number = 20
+  ): Promise<BookSearchResult[]> {
+    // Try Google Books first
+    try {
+      const apiKey = GOOGLE_BOOKS_API_KEY;
+      const keyParam = apiKey ? `&key=${apiKey}` : '';
+      const response = await fetch(
+        `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=${maxResults}${keyParam}`
+      );
+
+      if (response.ok) {
+        const data: GoogleBooksResponse = await response.json();
+        if (data.items && data.items.length > 0) {
+          return data.items.map((item) => ({
+            id: item.id,
+            title: item.volumeInfo?.title || 'Untitled',
+            author: item.volumeInfo?.authors?.[0] || 'Unknown Author',
+          }));
+        }
+      }
+    } catch {
+      // Google Books failed, fall through to Open Library
+    }
+
+    // Fallback to Open Library
+    try {
+      const url = `${OPEN_LIBRARY_SEARCH_API}?q=${encodeURIComponent(query)}&limit=${maxResults}&fields=key,title,author_name,cover_i`;
+      const response = await fetch(url);
+
+      if (!response.ok) return [];
+
+      const data = await response.json();
+      if (!data.docs || data.docs.length === 0) return [];
+
+      return data.docs.map((doc: any) => ({
+        id: doc.key || `ol-${Math.random().toString(36).slice(2)}`,
+        title: doc.title || 'Untitled',
+        author: doc.author_name?.[0] || 'Unknown Author',
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Fetch the book cover from Google Books (with Open Library fallback),
+   * upload it to the Supabase `book-covers` bucket, and persist the URL
+   * on the books table.
    *
    * Returns the public Supabase URL of the cached cover, or null if
    * no cover was found.
@@ -115,7 +207,7 @@ class GoogleBooksService {
         return { data: existingBook.cover_image_url, error: null };
       }
 
-      // 1. Search Google Books for a cover image URL
+      // 1. Search for a cover image URL (Google Books → Open Library fallback)
       const googleCoverUrl = await this.searchCoverUrl(book.title, book.author);
 
       if (!googleCoverUrl) {
@@ -133,12 +225,12 @@ class GoogleBooksService {
           book.book_id
         );
       } catch {
-        // If caching fails, still use the direct Google image URL for display.
+        // If caching fails, still use the direct image URL for display.
         return { data: googleCoverUrl, error: null };
       }
 
       if (uploadResult.error || !uploadResult.data) {
-        // If caching fails, still use the direct Google image URL for display.
+        // If caching fails, still use the direct image URL for display.
         return { data: googleCoverUrl, error: null };
       }
 
@@ -182,7 +274,7 @@ class GoogleBooksService {
     const uncached = books.filter((b) => !b.cover_image_url);
     if (uncached.length === 0) return;
 
-    // Process sequentially to avoid hammering the Google Books API
+    // Process sequentially to avoid hammering the APIs
     for (const book of uncached) {
       try {
         const result = await this.fetchAndCacheCover({
