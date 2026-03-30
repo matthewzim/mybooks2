@@ -56,7 +56,7 @@ function MiniSpine({ book, index }: { book: PreviewBook; index: number }) {
         <Image
           source={{ uri: book.image_url }}
           style={styles.spineImage}
-          resizeMode="contain"
+          resizeMode="cover"
         />
       )}
     </Animated.View>
