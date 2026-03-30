@@ -52,6 +52,7 @@ struct BookshelfEntry: TimelineEntry {
   let bookshelfName: String?
   let bookshelfId: String?
   let coverColor: String?
+  let shelfStyle: String
   let books: [[String: Any]]
   let bookImages: [String: Data]
 }
@@ -165,15 +166,14 @@ struct BookshelfWidgetView: View {
     }
   }
 
+  private var isBottomStyle: Bool {
+    entry.shelfStyle == "bottom"
+  }
+
   private func shelfRow(books: [[String: Any]], spineWidth: CGFloat) -> some View {
     VStack(spacing: 0) {
-      // Shelf back + book spines
-      ZStack(alignment: .bottom) {
-        // Shelf background
-        shelfBackColor
-          .cornerRadius(2)
-
-        // Book spines aligned to bottom
+      if isBottomStyle {
+        // Bottom line shelf: no background, just spines sitting on a ledge
         HStack(spacing: 1) {
           ForEach(Array(books.enumerated()), id: \\.offset) { _, book in
             spineView(book: book, width: spineWidth, height: spineHeight)
@@ -181,9 +181,26 @@ struct BookshelfWidgetView: View {
           Spacer(minLength: 0)
         }
         .padding(.horizontal, 3)
-        .padding(.bottom, 1)
+        .frame(height: spineHeight + 6)
+      } else {
+        // Full shelf: spines on a background
+        ZStack(alignment: .bottom) {
+          // Shelf background
+          shelfBackColor
+            .cornerRadius(2)
+
+          // Book spines aligned to bottom
+          HStack(spacing: 1) {
+            ForEach(Array(books.enumerated()), id: \\.offset) { _, book in
+              spineView(book: book, width: spineWidth, height: spineHeight)
+            }
+            Spacer(minLength: 0)
+          }
+          .padding(.horizontal, 3)
+          .padding(.bottom, 1)
+        }
+        .frame(height: spineHeight + 6)
       }
-      .frame(height: spineHeight + 6)
 
       // Shelf ledge
       shelfColor
@@ -289,19 +306,19 @@ private func buildBookshelfEntry(selectedId: String?) -> BookshelfEntry {
   let timeline = WidgetDataStore.getTimeline()
   guard let firstEntry = timeline.first,
         let allProps = firstEntry["props"] as? [String: Any] else {
-    return BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, coverColor: nil, books: [], bookImages: [:])
+    return BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, coverColor: nil, shelfStyle: "full", books: [], bookImages: [:])
   }
 
   let isPremium = allProps["isPremium"] as? Bool ?? false
 
   guard let bookshelves = allProps["bookshelves"] as? [[String: Any]] else {
-    return BookshelfEntry(date: Date(), isPremium: isPremium, bookshelfName: nil, bookshelfId: nil, coverColor: nil, books: [], bookImages: [:])
+    return BookshelfEntry(date: Date(), isPremium: isPremium, bookshelfName: nil, bookshelfId: nil, coverColor: nil, shelfStyle: "full", books: [], bookImages: [:])
   }
 
   let shelf = bookshelves.first { ($0["id"] as? String) == selectedId } ?? bookshelves.first
 
   guard let shelf else {
-    return BookshelfEntry(date: Date(), isPremium: isPremium, bookshelfName: nil, bookshelfId: nil, coverColor: nil, books: [], bookImages: [:])
+    return BookshelfEntry(date: Date(), isPremium: isPremium, bookshelfName: nil, bookshelfId: nil, coverColor: nil, shelfStyle: "full", books: [], bookImages: [:])
   }
 
   return BookshelfEntry(
@@ -310,6 +327,7 @@ private func buildBookshelfEntry(selectedId: String?) -> BookshelfEntry {
     bookshelfName: shelf["name"] as? String,
     bookshelfId: shelf["id"] as? String,
     coverColor: shelf["coverColor"] as? String,
+    shelfStyle: shelf["shelfStyle"] as? String ?? "full",
     books: shelf["books"] as? [[String: Any]] ?? [],
     bookImages: [:]
   )
@@ -353,14 +371,14 @@ struct BookshelfConfigurableProvider: AppIntentTimelineProvider {
   typealias Intent = SelectBookshelfIntent
 
   func placeholder(in context: Context) -> BookshelfEntry {
-    BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, coverColor: nil, books: [], bookImages: [:])
+    BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, coverColor: nil, shelfStyle: "full", books: [], bookImages: [:])
   }
 
   func snapshot(for configuration: SelectBookshelfIntent, in context: Context) async -> BookshelfEntry {
     var entry = buildBookshelfEntry(selectedId: configuration.bookshelf?.id)
     let maxImages = context.family == .systemMedium ? 7 : 14
     let images = await downloadBookImages(for: entry.books, limit: maxImages)
-    entry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, books: entry.books, bookImages: images)
+    entry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, shelfStyle: entry.shelfStyle, books: entry.books, bookImages: images)
     return entry
   }
 
@@ -368,7 +386,7 @@ struct BookshelfConfigurableProvider: AppIntentTimelineProvider {
     var entry = buildBookshelfEntry(selectedId: configuration.bookshelf?.id)
     let maxImages = context.family == .systemMedium ? 7 : 14
     let images = await downloadBookImages(for: entry.books, limit: maxImages)
-    entry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, books: entry.books, bookImages: images)
+    entry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, shelfStyle: entry.shelfStyle, books: entry.books, bookImages: images)
     return Timeline(entries: [entry], policy: .atEnd)
   }
 }
@@ -379,7 +397,7 @@ struct BookshelfStaticProvider: TimelineProvider {
   typealias Entry = BookshelfEntry
 
   func placeholder(in context: Context) -> BookshelfEntry {
-    BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, coverColor: nil, books: [], bookImages: [:])
+    BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, coverColor: nil, shelfStyle: "full", books: [], bookImages: [:])
   }
 
   func getSnapshot(in context: Context, completion: @escaping (BookshelfEntry) -> Void) {
@@ -387,7 +405,7 @@ struct BookshelfStaticProvider: TimelineProvider {
     let maxImages = context.family == .systemMedium ? 7 : 14
     Task {
       let images = await downloadBookImages(for: entry.books, limit: maxImages)
-      let finalEntry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, books: entry.books, bookImages: images)
+      let finalEntry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, shelfStyle: entry.shelfStyle, books: entry.books, bookImages: images)
       completion(finalEntry)
     }
   }
@@ -397,7 +415,7 @@ struct BookshelfStaticProvider: TimelineProvider {
     let maxImages = context.family == .systemMedium ? 7 : 14
     Task {
       let images = await downloadBookImages(for: entry.books, limit: maxImages)
-      let finalEntry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, books: entry.books, bookImages: images)
+      let finalEntry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, shelfStyle: entry.shelfStyle, books: entry.books, bookImages: images)
       completion(Timeline(entries: [finalEntry], policy: .atEnd))
     }
   }
