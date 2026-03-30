@@ -1,5 +1,6 @@
--- Adds a security-definer RPC that lets an authenticated user fully delete
--- their own account and all first-party relational data.
+-- Re-create the delete_my_account function and reload the PostgREST schema
+-- cache to fix: "could not find the function public.delete_my_account without
+-- parameters in the schema cache"
 
 CREATE OR REPLACE FUNCTION public.delete_my_account()
 RETURNS void
@@ -31,5 +32,5 @@ $$;
 REVOKE ALL ON FUNCTION public.delete_my_account() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.delete_my_account() TO authenticated;
 
--- Force PostgREST to reload its schema cache so the new function is discoverable
+-- Force PostgREST to reload its schema cache so the function is discoverable
 NOTIFY pgrst, 'reload schema';
