@@ -136,7 +136,7 @@ const BookshelfWidget = (
   const visibleBooks = books.slice(0, maxBooks);
 
   const spineWidth = 36;
-  const spineHeight = family === 'systemMedium' ? 68 : 62;
+  const spineHeight = family === 'systemMedium' ? 136 : 124;
   const shelfColor = coverColor || '#8B4513';
   const shelfBackColor = '#654321';
 
@@ -181,19 +181,9 @@ const BookshelfWidget = (
     <VStack
       modifiers={[
         padding({ all: 0 }),
+        background('#f8fafc'),
       ]}
     >
-      {/* Shelf name header – upper left, above the shelf border */}
-      <Text
-        modifiers={[
-          font({ weight: 'bold', size: 11 }),
-          lineLimit(1),
-          padding({ leading: 8, bottom: 2, top: 6 }),
-        ]}
-      >
-        {bookshelfName}
-      </Text>
-
       {/* First row of spines with shelf */}
       <SpineRow
         books={topRow}
