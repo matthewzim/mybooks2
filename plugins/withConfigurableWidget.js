@@ -56,6 +56,20 @@ struct BookshelfEntry: TimelineEntry {
   let bookImages: [String: Data]
 }
 
+// MARK: - App background color (matches main app theme)
+
+private var appBackgroundColor: Color {
+  Color(UIColor { traitCollection in
+    if traitCollection.userInterfaceStyle == .dark {
+      // Dark theme: #0b1220
+      return UIColor(red: 11/255, green: 18/255, blue: 32/255, alpha: 1)
+    } else {
+      // Light theme: #f8fafc
+      return UIColor(red: 248/255, green: 250/255, blue: 252/255, alpha: 1)
+    }
+  })
+}
+
 // MARK: - Color helpers
 
 private func hexToColor(_ hex: String?) -> Color? {
@@ -120,7 +134,7 @@ struct BookshelfWidgetView: View {
   private var booksPerRow: Int { 7 }
 
   private var spineHeight: CGFloat {
-    family == .systemMedium ? 68 : 62
+    family == .systemMedium ? 136 : 124
   }
 
   private var shelfThickness: CGFloat { 8 }
@@ -136,15 +150,6 @@ struct BookshelfWidgetView: View {
       let spineWidth = min(42, max(28, availableWidth / CGFloat(booksPerRow)))
 
       VStack(alignment: .leading, spacing: 0) {
-        // Shelf title – positioned above the first shelf border
-        Text(entry.bookshelfName ?? "")
-          .font(.system(size: 11, weight: .bold))
-          .foregroundColor(.primary)
-          .lineLimit(1)
-          .padding(.leading, 8)
-          .padding(.bottom, 2)
-          .padding(.top, family == .systemLarge ? 4 : 6)
-
         // First shelf row
         shelfRow(books: topRow, spineWidth: spineWidth)
 
@@ -196,8 +201,8 @@ struct BookshelfWidgetView: View {
        let uiImage = UIImage(data: imageData) {
       Image(uiImage: uiImage)
         .resizable()
-        .aspectRatio(contentMode: .fill)
-        .frame(width: width, height: height)
+        .aspectRatio(contentMode: .fit)
+        .frame(height: height)
         .clipped()
         .cornerRadius(1)
     } else {
@@ -411,6 +416,7 @@ struct BookshelfWidget: Widget {
         provider: BookshelfConfigurableProvider()
       ) { entry in
         BookshelfWidgetView(entry: entry)
+          .containerBackground(appBackgroundColor, for: .widget)
       }
       .configurationDisplayName("${displayName}")
       .description("${description}")
@@ -421,6 +427,7 @@ struct BookshelfWidget: Widget {
         provider: BookshelfStaticProvider()
       ) { entry in
         BookshelfWidgetView(entry: entry)
+          .background(appBackgroundColor)
       }
       .configurationDisplayName("${displayName}")
       .description("${description}")
