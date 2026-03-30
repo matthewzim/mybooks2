@@ -40,7 +40,7 @@ export default function PaymentScreen() {
    * modal-on-modal issues with presentCustomerCenter().
    */
   const handleManageSubscription = () => {
-    router.push('/customer-center');
+    router.replace('/customer-center');
   };
 
   // If user is already premium, show status + Customer Center
