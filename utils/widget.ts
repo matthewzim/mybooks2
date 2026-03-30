@@ -57,8 +57,8 @@ function pushToWidget(widgetData: WidgetData, isPremium: boolean): void {
         id: b.id,
         title: b.title,
         author: b.author,
-        imageUrl: b.image_url,
-        resolvedImageUrl: b.resolved_image_url,
+        imageUrl: b.image_url ?? '',
+        resolvedImageUrl: b.resolved_image_url ?? '',
       })),
     })),
   });
