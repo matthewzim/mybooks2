@@ -16,6 +16,7 @@ import React, {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   useCallback,
   useMemo,
@@ -68,7 +69,7 @@ export function RevenueCatProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
 
   const [isReady, setIsReady] = useState(false);
   const [isPro, setIsPro] = useState(false);
@@ -76,8 +77,13 @@ export function RevenueCatProvider({
   const [currentOffering, setCurrentOffering] =
     useState<PurchasesOffering | null>(null);
 
+  // Track previous isPro to avoid redundant syncs
+  const prevIsProRef = useRef<boolean | null>(null);
+
   /**
    * Process a CustomerInfo object and update local state.
+   * Syncs premium status to widget, Supabase, and refreshes the auth user
+   * so all UI surfaces reflect the current subscription state.
    */
   const processCustomerInfo = useCallback((info: CustomerInfo) => {
     setCustomerInfo(info);
@@ -85,7 +91,12 @@ export function RevenueCatProvider({
     setIsPro(isActive);
     // Keep the widget in sync with premium status
     widgetManager.syncPremiumStatus(isActive);
-  }, []);
+    // Keep Supabase and auth context in sync
+    if (prevIsProRef.current !== isActive) {
+      prevIsProRef.current = isActive;
+      revenueCatService.syncPremiumStatus(isActive).then(() => refreshUser());
+    }
+  }, [refreshUser]);
 
   /**
    * Initialize RevenueCat and fetch initial data.
@@ -120,9 +131,6 @@ export function RevenueCatProvider({
         // Listen for real-time updates (e.g. subscription renewal, expiry)
         unsubscribe = revenueCatService.onCustomerInfoUpdated((info) => {
           processCustomerInfo(info);
-          // Keep Supabase in sync
-          const { isActive } = revenueCatService.extractProEntitlement(info);
-          revenueCatService.syncPremiumStatus(isActive);
         });
 
         setIsReady(true);

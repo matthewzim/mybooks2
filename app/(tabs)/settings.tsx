@@ -31,6 +31,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRevenueCat } from '@/contexts/RevenueCatContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Input, Button } from '@/components/ui';
 import {
@@ -122,6 +123,7 @@ function parseGoodreadsBooks(csvText: string): GoodreadsCsvBook[] {
 
 export default function SettingsScreen() {
   const { user, updateProfile, restartAnonymousSession } = useAuth();
+  const { isPro } = useRevenueCat();
   const { colors } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
@@ -543,7 +545,7 @@ export default function SettingsScreen() {
                   {(user?.name || 'U')[0].toUpperCase()}
                 </Text>
               </View>
-              {user?.is_premium && (
+              {isPro && (
                 <View style={[styles.premiumBadge, { backgroundColor: colors.primary, borderColor: colors.card }]}>
                   <Ionicons name="star" size={12} color={colors.starFilled} />
                 </View>
@@ -668,13 +670,13 @@ export default function SettingsScreen() {
               icon="apps-outline"
               title="Home Screen Widget"
               subtitle={
-                user?.is_premium || FREE_TIER_LIMITS.CAN_USE_WIDGET
+                isPro || FREE_TIER_LIMITS.CAN_USE_WIDGET
                   ? 'Display a bookshelf on your home screen'
                   : 'Premium feature - Upgrade to unlock'
               }
               colors={colors}
               onPress={() => {
-                if (user?.is_premium || FREE_TIER_LIMITS.CAN_USE_WIDGET) {
+                if (isPro || FREE_TIER_LIMITS.CAN_USE_WIDGET) {
                   Alert.alert(
                     'Widget Setup',
                     'To add the widget:\n\n1. Long press on your home screen\n2. Tap the + button\n3. Search for "Virtual Library"\n4. Select Medium (one row) or Large (two rows)\n5. Long-press the widget and tap "Edit Widget" to choose a bookshelf'
@@ -684,7 +686,7 @@ export default function SettingsScreen() {
                 }
               }}
               trailing={
-                !(user?.is_premium || FREE_TIER_LIMITS.CAN_USE_WIDGET) ? (
+                !(isPro || FREE_TIER_LIMITS.CAN_USE_WIDGET) ? (
                   <Ionicons name="lock-closed" size={18} color={colors.textSecondary} />
                 ) : undefined
               }
@@ -739,22 +741,22 @@ export default function SettingsScreen() {
             <View style={styles.premiumContent}>
               <View style={styles.premiumHeader}>
                 <Ionicons
-                  name={user?.is_premium ? 'star' : 'star-outline'}
+                  name={isPro ? 'star' : 'star-outline'}
                   size={28}
-                  color={user?.is_premium ? colors.starFilled : colors.primary}
+                  color={isPro ? colors.starFilled : colors.primary}
                 />
                 <View style={styles.premiumText}>
                   <Text style={[styles.premiumTitle, { color: colors.text }]}>
-                    {user?.is_premium ? 'Premium Member' : 'Go Premium'}
+                    {isPro ? 'Premium Member' : 'Go Premium'}
                   </Text>
                   <Text style={[styles.premiumDescription, { color: colors.textSecondary }]}>
-                    {user?.is_premium
+                    {isPro
                       ? 'Thank you for your support!'
                       : 'Unlock unlimited bookshelves and home screen widget'}
                   </Text>
                 </View>
               </View>
-              {!user?.is_premium && (
+              {!isPro && (
                 <Ionicons
                   name="chevron-forward"
                   size={20}
