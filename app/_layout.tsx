@@ -118,7 +118,7 @@ function RootLayoutContent() {
           name="customer-center"
           options={{
             title: 'Manage Subscription',
-            presentation: 'card',
+            presentation: 'modal',
           }}
         />
 
