@@ -70,27 +70,28 @@ export function Button({
   const getVariantStyle = (): ViewStyle => {
     switch (variant) {
       case 'primary':
-        return { backgroundColor: themeColors.primary };
+        return { backgroundColor: themeColors.background, borderWidth: 1, borderColor: themeColors.primary };
       case 'secondary':
-        return { backgroundColor: themeColors.secondary };
+        return { backgroundColor: themeColors.background, borderWidth: 1, borderColor: themeColors.secondary };
       case 'outline':
-        return { backgroundColor: 'transparent', borderWidth: 1, borderColor: themeColors.primary };
+        return { backgroundColor: themeColors.background, borderWidth: 1, borderColor: themeColors.primary };
       case 'ghost':
         return { backgroundColor: 'transparent' };
       case 'danger':
-        return { backgroundColor: themeColors.error };
+        return { backgroundColor: themeColors.background, borderWidth: 1, borderColor: themeColors.error };
       default:
-        return { backgroundColor: themeColors.primary };
+        return { backgroundColor: themeColors.background, borderWidth: 1, borderColor: themeColors.primary };
     }
   };
 
   const getTextColor = (): string => {
     switch (variant) {
-      case 'outline':
+      case 'danger':
+        return themeColors.error;
       case 'ghost':
         return themeColors.primary;
       default:
-        return themeColors.textInverse;
+        return themeColors.primary;
     }
   };
 
