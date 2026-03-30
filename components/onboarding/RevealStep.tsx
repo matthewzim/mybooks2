@@ -148,7 +148,7 @@ function RevealShelf({ books, shelfStyle, shelfColor }: { books: PreviewBook[]; 
                   <Image
                     source={{ uri: book.image_url }}
                     style={styles.revealSpineImage}
-                    resizeMode="contain"
+                    resizeMode="cover"
                   />
                 )}
               </Animated.View>
