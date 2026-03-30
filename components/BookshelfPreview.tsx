@@ -253,7 +253,22 @@ function BookPreviewSpine({ book, dimensions, minDisplayHeight }: BookPreviewSpi
       {hasImage ? (
         <Image source={{ uri: spineImageUrl }} style={styles.bookImage} contentFit="contain" transition={220} />
       ) : (
-        <View style={styles.bookPlaceholder} />
+        <View style={styles.bookPlaceholder}>
+          <Text
+            style={styles.previewPlaceholderTitle}
+            numberOfLines={3}
+            ellipsizeMode="tail"
+          >
+            {book.title?.trim() || 'Untitled'}
+          </Text>
+          <Text
+            style={styles.previewPlaceholderAuthor}
+            numberOfLines={2}
+            ellipsizeMode="tail"
+          >
+            {book.author?.trim() || 'Unknown Author'}
+          </Text>
+        </View>
       )}
     </View>
   );
@@ -346,6 +361,27 @@ const styles = StyleSheet.create({
   },
   bookPlaceholder: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewPlaceholderTitle: {
+    fontSize: 5,
+    fontWeight: '600',
+    textAlign: 'center',
+    color: '#ffffffcc',
+    writingDirection: 'ltr',
+    transform: [{ rotate: '-90deg' }],
+    width: 100,
+    position: 'absolute',
+  },
+  previewPlaceholderAuthor: {
+    fontSize: 4,
+    textAlign: 'center',
+    color: '#ffffff88',
+    position: 'absolute',
+    bottom: 4,
+    left: 0,
+    right: 0,
   },
 });
 
