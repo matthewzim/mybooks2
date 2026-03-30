@@ -83,24 +83,24 @@ export interface ThemeColors {
  * Light Mode Theme - Clean white with slate accents
  */
 export const LightTheme: ThemeColors = {
-  // Primary colors (slate gray)
-  primary: '#475569',
-  primaryLight: '#64748b',
-  primaryDark: '#334155',
+  // Primary colors
+  primary: '#ba541f',
+  primaryLight: '#d4723f',
+  primaryDark: '#9a4419',
 
   // Secondary colors
-  secondary: '#64748b',
-  secondaryLight: '#94a3b8',
+  secondary: '#ba541f',
+  secondaryLight: '#d4723f',
 
   // Accent colors
-  accent: '#6366f1',
-  accentLight: '#818cf8',
+  accent: '#ba541f',
+  accentLight: '#d4723f',
 
   // Background colors
-  background: '#f8fafc',
-  backgroundDark: '#f1f5f9',
-  card: '#ffffff',
-  cardDark: '#f8fafc',
+  background: '#fbf6ec',
+  backgroundDark: '#f5eddf',
+  card: '#fbf6ec',
+  cardDark: '#f5eddf',
 
   // Text colors
   text: '#1e293b',
@@ -114,13 +114,13 @@ export const LightTheme: ThemeColors = {
   bookshelfLight: '#DEB887',
 
   // Book appearance colors
-  bookBase: '#f1f5f9',
+  bookBase: '#f5eddf',
   bookPageLines: '#cbd5e1',
-  bookPageContent: '#f8fafc',
+  bookPageContent: '#fbf6ec',
   bookCoverEdge: 'rgba(0, 0, 0, 0.3)',
 
   // Input colors
-  inputBackground: '#ffffff',
+  inputBackground: '#fbf6ec',
   inputBorder: '#e2e8f0',
 
   // Status colors
@@ -153,24 +153,24 @@ export const LightTheme: ThemeColors = {
  * Dark Mode Theme - Deep dark with light gray accents
  */
 export const DarkTheme: ThemeColors = {
-  // Primary colors (light gray for dark mode)
-  primary: '#94a3b8',
-  primaryLight: '#cbd5e1',
-  primaryDark: '#64748b',
+  // Primary colors
+  primary: '#ba541f',
+  primaryLight: '#d4723f',
+  primaryDark: '#9a4419',
 
   // Secondary colors
-  secondary: '#64748b',
-  secondaryLight: '#94a3b8',
+  secondary: '#ba541f',
+  secondaryLight: '#d4723f',
 
   // Accent colors
-  accent: '#818cf8',
-  accentLight: '#a5b4fc',
+  accent: '#ba541f',
+  accentLight: '#d4723f',
 
   // Background colors
-  background: '#0b1220',
-  backgroundDark: '#111a2c',
-  card: '#131d31',
-  cardDark: '#0b1220',
+  background: '#fbf6ec',
+  backgroundDark: '#f5eddf',
+  card: '#fbf6ec',
+  cardDark: '#f5eddf',
 
   // Text colors
   text: '#f1f5f9',
@@ -184,13 +184,13 @@ export const DarkTheme: ThemeColors = {
   bookshelfLight: '#a16207',
 
   // Book appearance colors
-  bookBase: '#1e293b',
+  bookBase: '#f5eddf',
   bookPageLines: '#334155',
-  bookPageContent: '#0f172a',
+  bookPageContent: '#fbf6ec',
   bookCoverEdge: 'rgba(0, 0, 0, 0.5)',
 
   // Input colors
-  inputBackground: '#1e293b',
+  inputBackground: '#fbf6ec',
   inputBorder: '#334155',
 
   // Status colors
@@ -224,23 +224,23 @@ export const DarkTheme: ThemeColors = {
  */
 export const StandardTheme: ThemeColors = {
   // Primary colors
-  primary: '#57534e',
-  primaryLight: '#78716c',
-  primaryDark: '#44403c',
+  primary: '#ba541f',
+  primaryLight: '#d4723f',
+  primaryDark: '#9a4419',
 
   // Secondary colors
-  secondary: '#78716c',
-  secondaryLight: '#a8a29e',
+  secondary: '#ba541f',
+  secondaryLight: '#d4723f',
 
   // Accent colors
-  accent: '#6366f1',
-  accentLight: '#818cf8',
+  accent: '#ba541f',
+  accentLight: '#d4723f',
 
   // Background colors
-  background: '#fafaf9',
-  backgroundDark: '#f5f5f4',
-  card: '#ffffff',
-  cardDark: '#f5f5f4',
+  background: '#fbf6ec',
+  backgroundDark: '#f5eddf',
+  card: '#fbf6ec',
+  cardDark: '#f5eddf',
 
   // Text colors
   text: '#292524',
@@ -254,13 +254,13 @@ export const StandardTheme: ThemeColors = {
   bookshelfLight: '#DEB887',
 
   // Book appearance colors
-  bookBase: '#f5f0e6',
+  bookBase: '#f5eddf',
   bookPageLines: '#d4cfc4',
-  bookPageContent: '#fdfbf7',
+  bookPageContent: '#fbf6ec',
   bookCoverEdge: 'rgba(0, 0, 0, 0.3)',
 
   // Input colors
-  inputBackground: '#fffbeb',
+  inputBackground: '#fbf6ec',
   inputBorder: '#d6d3d1',
 
   // Status colors
