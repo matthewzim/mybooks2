@@ -148,27 +148,22 @@ export function BrowseBooksModal({
           })
         );
 
-        // Show local results immediately
+        // If Supabase returned any results, use them and skip Google API
         if (localResults.length > 0) {
           setBookSearchResults(localResults);
-        }
-
-        // 2. Supplement with Google Books API results (skip if local results are sufficient)
-        if (localResults.length >= 20) {
           setIsSearching(false);
           return;
         }
 
+        // 2. Fall back to Google Books API only when Supabase has zero matches
         const apiKey = process.env.EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY || '';
         const keyParam = apiKey ? `&key=${apiKey}` : '';
-        const maxApiResults = 20 - localResults.length;
         const response = await fetch(
-          `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(trimmedQuery)}&maxResults=${maxApiResults}${keyParam}`
+          `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(trimmedQuery)}&maxResults=20${keyParam}`
         );
 
         if (!response.ok) {
-          // If API fails but we have local results, keep showing them
-          if (localResults.length === 0) setBookSearchResults([]);
+          setBookSearchResults([]);
           setIsSearching(false);
           return;
         }
@@ -185,17 +180,9 @@ export function BrowseBooksModal({
           created_at: new Date().toISOString(),
         }));
 
-        // Deduplicate: remove API results that match local books by title+author
-        const localKeys = new Set(
-          localResults.map((b) => `${b.title.toLowerCase()}|${b.author.toLowerCase()}`)
-        );
-        const newApiItems = apiItems.filter(
-          (item) => !localKeys.has(`${item.title.toLowerCase()}|${item.author.toLowerCase()}`)
-        );
-
         // Resolve spine images for API results that exist in Supabase
         const apiItemsWithImages = await Promise.all(
-          newApiItems.map(async (item) => {
+          apiItems.map(async (item) => {
             try {
               const { data: matchedBook } = await supabase
                 .from(TABLES.BOOKS)
@@ -215,12 +202,12 @@ export function BrowseBooksModal({
           })
         );
 
-        setBookSearchResults([...localResults, ...apiItemsWithImages]);
+        setBookSearchResults(apiItemsWithImages);
       } catch {
         setBookSearchResults([]);
       }
       setIsSearching(false);
-    }, 300);
+    }, 500);
 
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
