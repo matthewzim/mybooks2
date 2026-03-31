@@ -180,34 +180,78 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
     setHasSearched(true);
 
     try {
+      // 1. Search Supabase for existing books first (free, fast)
+      const { data: localBooks } = await supabase
+        .from(TABLES.BOOKS)
+        .select('id, title, author, image_url')
+        .or(`title.ilike.%${trimmed}%,author.ilike.%${trimmed}%`)
+        .limit(8);
+
+      const localResults: SearchResult[] = await Promise.all(
+        (localBooks || []).map(async (book) => {
+          let resolvedUrl: string | null = null;
+          let sourceUrl: string | null = null;
+          if (book.image_url) {
+            try {
+              resolvedUrl = await getSpineImageUrl(book.image_url);
+              sourceUrl = book.image_url;
+            } catch {}
+          }
+          return {
+            id: book.id,
+            title: book.title,
+            author: book.author,
+            image_url: resolvedUrl,
+            source_image_url: sourceUrl,
+          };
+        })
+      );
+
+      // Show local results immediately
+      if (localResults.length > 0) {
+        setResults(localResults);
+      }
+
+      // 2. Supplement with Google Books API if needed
+      if (localResults.length >= 8) {
+        Keyboard.dismiss();
+        return;
+      }
+
       const apiKey = process.env.EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY || '';
       const keyParam = apiKey ? `&key=${apiKey}` : '';
+      const maxApiResults = 8 - localResults.length;
       const response = await fetch(
-        `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(trimmed)}&maxResults=8${keyParam}`
+        `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(trimmed)}&maxResults=${maxApiResults}${keyParam}`
       );
 
       if (!response.ok) {
-        setSearchError('Search failed. Please try again.');
-        setResults([]);
+        if (localResults.length === 0) {
+          setSearchError('Search failed. Please try again.');
+          setResults([]);
+        }
+        Keyboard.dismiss();
         return;
       }
 
       const data = await response.json();
-      const items: SearchResult[] = (data.items || []).map((item: any) => ({
+      const apiItems: SearchResult[] = (data.items || []).map((item: any) => ({
         id: item.id,
         title: item.volumeInfo?.title || 'Untitled',
         author: item.volumeInfo?.authors?.[0] || 'Unknown Author',
       }));
 
-      if (items.length === 0) {
-        setResults([]);
-        Keyboard.dismiss();
-        return;
-      }
+      // Deduplicate: remove API results that match local books
+      const localKeys = new Set(
+        localResults.map((b) => `${b.title.toLowerCase()}|${b.author.toLowerCase()}`)
+      );
+      const newApiItems = apiItems.filter(
+        (item) => !localKeys.has(`${item.title.toLowerCase()}|${item.author.toLowerCase()}`)
+      );
 
-      // Check Supabase for spine images for each result
-      const itemsWithImages = await Promise.all(
-        items.map(async (item) => {
+      // Resolve spine images for API results that exist in Supabase
+      const apiItemsWithImages = await Promise.all(
+        newApiItems.map(async (item) => {
           try {
             const { data: matchedBook } = await supabase
               .from(TABLES.BOOKS)
@@ -227,7 +271,14 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
         })
       );
 
-      setResults(itemsWithImages);
+      const combined = [...localResults, ...apiItemsWithImages];
+      if (combined.length === 0) {
+        setResults([]);
+        Keyboard.dismiss();
+        return;
+      }
+
+      setResults(combined);
     } catch {
       setSearchError('Network error. Check your connection and try again.');
       setResults([]);

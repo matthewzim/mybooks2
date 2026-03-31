@@ -106,7 +106,7 @@ export function BrowseBooksModal({
     }
   }, [visible, overlayOpacity, cardOpacity, cardTranslateY, cardScale]);
 
-  // Debounced search via Google Books API
+  // Debounced search: Supabase first, then Google Books API for additional results
   useEffect(() => {
     const trimmedQuery = searchQuery.trim();
 
@@ -120,20 +120,61 @@ export function BrowseBooksModal({
 
     const timeoutId = setTimeout(async () => {
       try {
+        // 1. Search Supabase for existing books first (free, fast)
+        const { data: localBooks } = await supabase
+          .from(TABLES.BOOKS)
+          .select('id, title, author, image_url, uploaded_by_user_id, created_at')
+          .or(`title.ilike.%${trimmedQuery}%,author.ilike.%${trimmedQuery}%`)
+          .limit(20);
+
+        const localResults: CommunityBookSpine[] = await Promise.all(
+          (localBooks || []).map(async (book) => {
+            let resolvedUrl: string | null = null;
+            if (book.image_url) {
+              try {
+                resolvedUrl = await getSpineImageUrl(book.image_url);
+              } catch {}
+            }
+            return {
+              id: book.id,
+              title: book.title,
+              author: book.author,
+              image_url: resolvedUrl,
+              uploaded_by_user_id: book.uploaded_by_user_id,
+              uploader_name: null,
+              times_added: 0,
+              created_at: book.created_at,
+            };
+          })
+        );
+
+        // Show local results immediately
+        if (localResults.length > 0) {
+          setBookSearchResults(localResults);
+        }
+
+        // 2. Supplement with Google Books API results (skip if local results are sufficient)
+        if (localResults.length >= 20) {
+          setIsSearching(false);
+          return;
+        }
+
         const apiKey = process.env.EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY || '';
         const keyParam = apiKey ? `&key=${apiKey}` : '';
+        const maxApiResults = 20 - localResults.length;
         const response = await fetch(
-          `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(trimmedQuery)}&maxResults=20${keyParam}`
+          `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(trimmedQuery)}&maxResults=${maxApiResults}${keyParam}`
         );
 
         if (!response.ok) {
-          setBookSearchResults([]);
+          // If API fails but we have local results, keep showing them
+          if (localResults.length === 0) setBookSearchResults([]);
           setIsSearching(false);
           return;
         }
 
         const data = await response.json();
-        const items: CommunityBookSpine[] = (data.items || []).map((item: any) => ({
+        const apiItems: CommunityBookSpine[] = (data.items || []).map((item: any) => ({
           id: item.id,
           title: item.volumeInfo?.title || 'Untitled',
           author: item.volumeInfo?.authors?.[0] || 'Unknown Author',
@@ -144,9 +185,17 @@ export function BrowseBooksModal({
           created_at: new Date().toISOString(),
         }));
 
-        // Check Supabase for existing spine images for each result
-        const itemsWithImages = await Promise.all(
-          items.map(async (item) => {
+        // Deduplicate: remove API results that match local books by title+author
+        const localKeys = new Set(
+          localResults.map((b) => `${b.title.toLowerCase()}|${b.author.toLowerCase()}`)
+        );
+        const newApiItems = apiItems.filter(
+          (item) => !localKeys.has(`${item.title.toLowerCase()}|${item.author.toLowerCase()}`)
+        );
+
+        // Resolve spine images for API results that exist in Supabase
+        const apiItemsWithImages = await Promise.all(
+          newApiItems.map(async (item) => {
             try {
               const { data: matchedBook } = await supabase
                 .from(TABLES.BOOKS)
@@ -166,7 +215,7 @@ export function BrowseBooksModal({
           })
         );
 
-        setBookSearchResults(itemsWithImages);
+        setBookSearchResults([...localResults, ...apiItemsWithImages]);
       } catch {
         setBookSearchResults([]);
       }

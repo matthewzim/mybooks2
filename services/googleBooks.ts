@@ -53,7 +53,10 @@ class GoogleBooksService {
     const keyParam = GOOGLE_BOOKS_API_KEY ? `&key=${GOOGLE_BOOKS_API_KEY}` : '';
     const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=5${keyParam}`;
     const response = await fetch(url);
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.warn(`Google Books API error: ${response.status} ${response.statusText}`);
+      return null;
+    }
 
     const data: GoogleBooksResponse = await response.json();
     if (!data.items || data.items.length === 0) return null;
