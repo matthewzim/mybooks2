@@ -150,18 +150,16 @@ struct BookshelfWidgetView: View {
       let availableWidth = geo.size.width - 16
       let spineWidth = min(42, max(28, availableWidth / CGFloat(booksPerRow)))
 
-      // For large widgets, compute spine height so shelves fill the entire space
+      // Compute spine height so shelves fill the widget with equal margins
       let margin: CGFloat = 8
       let shelfFrameExtra: CGFloat = isBottomStyle ? 6 : shelfThickness
       let perShelfOverhead = shelfFrameExtra + shelfThickness
-      let rowSpineHeight: CGFloat = family == .systemLarge
-        ? (geo.size.height - 3 * margin - 2 * perShelfOverhead) / 2
-        : spineHeight
+      let shelfCount: CGFloat = family == .systemLarge ? 2 : 1
+      let marginCount: CGFloat = family == .systemLarge ? 3 : 2
+      let rowSpineHeight: CGFloat = (geo.size.height - marginCount * margin - shelfCount * perShelfOverhead) / shelfCount
 
       VStack(alignment: .leading, spacing: 0) {
-        if family == .systemLarge {
-          Spacer().frame(height: margin)
-        }
+        Spacer().frame(height: margin)
 
         // First shelf row
         shelfRow(books: topRow, spineWidth: spineWidth, rowSpineHeight: rowSpineHeight)
@@ -171,11 +169,9 @@ struct BookshelfWidgetView: View {
 
           // Second shelf row
           shelfRow(books: bottomRow, spineWidth: spineWidth, rowSpineHeight: rowSpineHeight)
-
-          Spacer().frame(height: margin)
-        } else {
-          Spacer(minLength: 0)
         }
+
+        Spacer().frame(height: margin)
       }
     }
   }
