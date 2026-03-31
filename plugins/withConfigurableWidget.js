@@ -135,7 +135,7 @@ struct BookshelfWidgetView: View {
   private var booksPerRow: Int { 7 }
 
   private var spineHeight: CGFloat {
-    family == .systemMedium ? 122 : 124
+    family == .systemMedium ? 108 : 124
   }
 
   private var shelfThickness: CGFloat { 8 }

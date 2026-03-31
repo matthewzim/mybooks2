@@ -152,7 +152,7 @@ const BookshelfWidget = (
   const visibleBooks = books.slice(0, maxBooks);
 
   const spineWidth = 36;
-  const spineHeight = family === 'systemMedium' ? 122 : 124;
+  const spineHeight = family === 'systemMedium' ? 108 : 124;
   const shelfColor = coverColor || '#8B4513';
   const shelfBackColor = '#654321';
 
