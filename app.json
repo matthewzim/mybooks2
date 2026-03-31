@@ -15,7 +15,11 @@
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to scan book spines and add them to your library.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to upload book spine images.",
-        "UIViewControllerBasedStatusBarAppearance": false
+        "UIViewControllerBasedStatusBarAppearance": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true
+        }
       },
       "config": {
         "usesNonExemptEncryption": false
