@@ -150,18 +150,28 @@ struct BookshelfWidgetView: View {
       let availableWidth = geo.size.width - 16
       let spineWidth = min(42, max(28, availableWidth / CGFloat(booksPerRow)))
 
+      // Compute spine height so shelves fill the widget with equal margins
+      let margin: CGFloat = 8
+      let shelfFrameExtra: CGFloat = isBottomStyle ? 6 : shelfThickness
+      let perShelfOverhead = shelfFrameExtra + shelfThickness
+      let shelfCount: CGFloat = family == .systemLarge ? 2 : 1
+      let marginCount: CGFloat = family == .systemLarge ? 3 : 2
+      let rowSpineHeight: CGFloat = (geo.size.height - marginCount * margin - shelfCount * perShelfOverhead) / shelfCount
+
       VStack(alignment: .leading, spacing: 0) {
+        Spacer().frame(height: margin)
+
         // First shelf row
-        shelfRow(books: topRow, spineWidth: spineWidth)
+        shelfRow(books: topRow, spineWidth: spineWidth, rowSpineHeight: rowSpineHeight)
 
         if family == .systemLarge {
-          Spacer().frame(height: 16)
+          Spacer().frame(height: margin)
 
           // Second shelf row
-          shelfRow(books: bottomRow, spineWidth: spineWidth)
+          shelfRow(books: bottomRow, spineWidth: spineWidth, rowSpineHeight: rowSpineHeight)
         }
 
-        Spacer(minLength: 0)
+        Spacer().frame(height: margin)
       }
     }
   }
@@ -170,35 +180,40 @@ struct BookshelfWidgetView: View {
     entry.shelfStyle == "bottom"
   }
 
-  private func shelfRow(books: [[String: Any]], spineWidth: CGFloat) -> some View {
+  private func shelfRow(books: [[String: Any]], spineWidth: CGFloat, rowSpineHeight: CGFloat) -> some View {
     VStack(spacing: 0) {
       if isBottomStyle {
         // Bottom line shelf: no background, just spines sitting on a ledge
         HStack(spacing: 1) {
           ForEach(Array(books.enumerated()), id: \\.offset) { _, book in
-            spineView(book: book, width: spineWidth, height: spineHeight)
+            spineView(book: book, width: spineWidth, height: rowSpineHeight)
           }
           Spacer(minLength: 0)
         }
         .padding(.horizontal, 3)
-        .frame(height: spineHeight + 6)
+        .frame(height: rowSpineHeight + 6)
       } else {
-        // Full shelf: spines on a background with uniform border
+        // Full shelf: spines on a background with shelf-colored frame
         ZStack(alignment: .bottom) {
-          // Shelf background
-          shelfBackColor
+          // Shelf frame (sides and top match bottom ledge color)
+          shelfColor
             .cornerRadius(2)
+
+          // Shelf back panel (behind books)
+          shelfBackColor
+            .padding(.horizontal, shelfThickness)
+            .padding(.top, shelfThickness)
 
           // Book spines aligned to bottom
           HStack(spacing: 1) {
             ForEach(Array(books.enumerated()), id: \\.offset) { _, book in
-              spineView(book: book, width: spineWidth, height: spineHeight)
+              spineView(book: book, width: spineWidth, height: rowSpineHeight)
             }
             Spacer(minLength: 0)
           }
           .padding(.horizontal, shelfThickness)
         }
-        .frame(height: spineHeight + shelfThickness)
+        .frame(height: rowSpineHeight + shelfThickness)
       }
 
       // Shelf ledge
