@@ -65,8 +65,8 @@ private var appBackgroundColor: Color {
       // Dark theme: #0b1220
       return UIColor(red: 11/255, green: 18/255, blue: 32/255, alpha: 1)
     } else {
-      // Light theme: #f8fafc
-      return UIColor(red: 248/255, green: 250/255, blue: 252/255, alpha: 1)
+      // Light theme: #fbf6ec
+      return UIColor(red: 251/255, green: 246/255, blue: 236/255, alpha: 1)
     }
   })
 }
@@ -135,7 +135,7 @@ struct BookshelfWidgetView: View {
   private var booksPerRow: Int { 7 }
 
   private var spineHeight: CGFloat {
-    family == .systemMedium ? 136 : 124
+    family == .systemMedium ? 108 : 124
   }
 
   private var shelfThickness: CGFloat { 8 }
@@ -155,7 +155,7 @@ struct BookshelfWidgetView: View {
         shelfRow(books: topRow, spineWidth: spineWidth)
 
         if family == .systemLarge {
-          Spacer().frame(height: 6)
+          Spacer().frame(height: 16)
 
           // Second shelf row
           shelfRow(books: bottomRow, spineWidth: spineWidth)
@@ -183,7 +183,7 @@ struct BookshelfWidgetView: View {
         .padding(.horizontal, 3)
         .frame(height: spineHeight + 6)
       } else {
-        // Full shelf: spines on a background
+        // Full shelf: spines on a background with uniform border
         ZStack(alignment: .bottom) {
           // Shelf background
           shelfBackColor
@@ -196,10 +196,9 @@ struct BookshelfWidgetView: View {
             }
             Spacer(minLength: 0)
           }
-          .padding(.horizontal, 3)
-          .padding(.bottom, 1)
+          .padding(.horizontal, shelfThickness)
         }
-        .frame(height: spineHeight + 6)
+        .frame(height: spineHeight + shelfThickness)
       }
 
       // Shelf ledge

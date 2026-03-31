@@ -109,12 +109,12 @@ function SpineRow({
           {spines}
         </HStack>
       ) : (
-        /* Full shelf: spines on a background */
+        /* Full shelf: spines on a background with uniform border */
         <HStack
           modifiers={[
             background(shelfBackColor),
             cornerRadius(2),
-            padding({ horizontal: 3, bottom: 1 }),
+            padding({ horizontal: 8 }),
           ]}
         >
           {spines}
@@ -152,7 +152,7 @@ const BookshelfWidget = (
   const visibleBooks = books.slice(0, maxBooks);
 
   const spineWidth = 36;
-  const spineHeight = family === 'systemMedium' ? 136 : 124;
+  const spineHeight = family === 'systemMedium' ? 108 : 124;
   const shelfColor = coverColor || '#8B4513';
   const shelfBackColor = '#654321';
 
@@ -197,7 +197,7 @@ const BookshelfWidget = (
     <VStack
       modifiers={[
         padding({ all: 0 }),
-        background('#f8fafc'),
+        background('#fbf6ec'),
       ]}
     >
       {/* First row of spines with shelf */}
