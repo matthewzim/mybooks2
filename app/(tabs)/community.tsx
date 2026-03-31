@@ -86,7 +86,7 @@ export default function CommunityScreen() {
       setIsSearchingUsers(false);
     };
 
-    const timeoutId = setTimeout(searchUsers, 300);
+    const timeoutId = setTimeout(searchUsers, 500);
     return () => clearTimeout(timeoutId);
   }, [userSearchQuery]);
 
