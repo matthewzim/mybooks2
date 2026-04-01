@@ -1,6 +1,8 @@
 import type { Book } from '@/types';
 
 const PLACEHOLDER_VARIATION_SCALE = 0.4;
+const IMAGE_SPINE_MIN_HEIGHT_FACTOR = 0.68;
+const IMAGE_SPINE_MAX_HEIGHT_FACTOR = 1;
 
 function seededNormalized(book: Book, salt: string): number {
   const source = `${book.id}-${book.title}-${salt}`;
@@ -11,6 +13,12 @@ function seededNormalized(book: Book, salt: string): number {
   }
 
   return Math.abs(hash % 1000) / 1000;
+}
+
+export function getImageSpineHeightFactor(book: Book): number {
+  const normalizedHeight = seededNormalized(book, 'image-height');
+  return IMAGE_SPINE_MIN_HEIGHT_FACTOR
+    + normalizedHeight * (IMAGE_SPINE_MAX_HEIGHT_FACTOR - IMAGE_SPINE_MIN_HEIGHT_FACTOR);
 }
 
 export function getPlaceholderSpineFactors(book: Book): { widthFactor: number; heightFactor: number } {

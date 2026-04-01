@@ -225,13 +225,16 @@ struct BookshelfWidgetView: View {
   private func spineView(book: [String: Any], width: CGFloat, height: CGFloat) -> some View {
     let bookId = book["id"] as? String ?? ""
     let title = book["title"] as? String ?? ""
+    let heightFactor = imageHeightFactor(bookId: bookId, title: title)
+    let scaledHeight = max(height * 0.68, height * heightFactor)
+    let scaledWidth = max(width * 0.5, width * heightFactor)
 
     if let imageData = entry.bookImages[bookId],
        let uiImage = UIImage(data: imageData) {
       Image(uiImage: uiImage)
         .resizable()
         .aspectRatio(contentMode: .fit)
-        .frame(height: height)
+        .frame(width: scaledWidth, height: scaledHeight)
         .clipped()
         .cornerRadius(1)
     } else {
@@ -251,6 +254,23 @@ struct BookshelfWidgetView: View {
     for ch in title.unicodeScalars { hash += Int(ch.value) }
     let hue = Double(hash % 360) / 360.0
     return Color(hue: hue, saturation: 0.5, brightness: 0.55)
+  }
+
+  private func imageHeightFactor(bookId: String, title: String) -> CGFloat {
+    let minFactor: CGFloat = 0.68
+    let maxFactor: CGFloat = 1.0
+    let normalized = seededNormalized(bookId: bookId, title: title, salt: "image-height")
+    return minFactor + (maxFactor - minFactor) * normalized
+  }
+
+  private func seededNormalized(bookId: String, title: String, salt: String) -> CGFloat {
+    let source = "\(bookId)-\(title)-\(salt)"
+    var hash = 0
+    for scalar in source.unicodeScalars {
+      hash = Int(scalar.value) + ((hash << 5) - hash)
+    }
+
+    return CGFloat(abs(hash % 1000)) / 1000.0
   }
 }
 

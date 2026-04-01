@@ -21,7 +21,7 @@ import {
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { getShelfColors } from '@/utils/shelfColors';
-import { getPlaceholderSpineSize } from '@/utils/placeholderSpine';
+import { getPlaceholderSpineSize, getImageSpineHeightFactor } from '@/utils/placeholderSpine';
 import { getSpineImageUrl } from '@/services/storage';
 import type { Bookshelf, Book } from '@/types';
 
@@ -204,6 +204,7 @@ interface BookPreviewSpineProps {
 function BookPreviewSpine({ book, dimensions, minDisplayHeight }: BookPreviewSpineProps) {
   const spineImageUrl = useSpineImageUrl(book.image_url);
   const hasImage = !!spineImageUrl;
+  const imageHeightFactor = getImageSpineHeightFactor(book);
 
   const getBookColor = (title: string): string => {
     const palette = ['#6b7280', '#64748b', '#7c3aed', '#0f766e', '#92400e', '#1f2937'];
@@ -232,11 +233,12 @@ function BookPreviewSpine({ book, dimensions, minDisplayHeight }: BookPreviewSpi
     }
   }
 
-  const computedWidth = dimensions && computedHeight
-    ? Math.max(PREVIEW_MIN_BOOK_WIDTH, Math.min(PREVIEW_MAX_BOOK_WIDTH, Math.round((dimensions.width / dimensions.height) * computedHeight)))
+  const imageHeight = hasImage ? (computedHeight || PREVIEW_BOOK_HEIGHT) : undefined;
+  const scaledImageHeight = imageHeight ? Math.max(minDisplayHeight, Math.round(imageHeight * imageHeightFactor)) : undefined;
+  const spineHeight = hasImage ? (scaledImageHeight || PREVIEW_BOOK_HEIGHT) : placeholderSize.height;
+  const computedWidth = dimensions
+    ? Math.max(PREVIEW_MIN_BOOK_WIDTH, Math.min(PREVIEW_MAX_BOOK_WIDTH, Math.round((dimensions.width / dimensions.height) * spineHeight)))
     : undefined;
-
-  const spineHeight = hasImage ? (computedHeight || PREVIEW_BOOK_HEIGHT) : placeholderSize.height;
   const spineWidth = hasImage ? (computedWidth || PREVIEW_DEFAULT_BOOK_WIDTH) : placeholderSize.width;
 
   return (

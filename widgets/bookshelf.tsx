@@ -45,6 +45,23 @@ function stableHue(title: string): string {
   return `hsl(${hue}, 50%, 55%)`;
 }
 
+function seededNormalized(bookId: string, title: string, salt: string): number {
+  const source = `${bookId}-${title}-${salt}`;
+  let hash = 0;
+
+  for (let i = 0; i < source.length; i += 1) {
+    hash = source.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  return Math.abs(hash % 1000) / 1000;
+}
+
+function imageHeightFactor(bookId: string, title: string): number {
+  const min = 0.68;
+  const max = 1;
+  return min + seededNormalized(bookId, title, 'image-height') * (max - min);
+}
+
 /**
  * Returns the max number of book spines to show for a given widget family.
  * Medium = 1 row (7 books), Large = 2 rows (14 books).
@@ -76,18 +93,23 @@ function SpineRow({
   shelfColor: string;
   shelfStyle: 'full' | 'bottom';
 }) {
-  const spines = books.map((book) => (
+  const spines = books.map((book) => {
+    const scale = imageHeightFactor(book.id, book.title);
+    const scaledHeight = Math.round(spineHeight * scale);
+    const scaledWidth = Math.max(18, Math.round(spineWidth * scale));
+
+    return (
     <Section key={book.id}>
       <VStack
         modifiers={[
-          frame({ width: spineWidth, height: spineHeight }),
+          frame({ width: scaledWidth, height: scaledHeight }),
           cornerRadius(1),
           background(stableHue(book.title)),
         ]}
       >
         <Text
           modifiers={[
-            font({ weight: 'bold', size: Math.round(spineWidth * 0.38) }),
+            font({ weight: 'bold', size: Math.round(scaledWidth * 0.38) }),
             foregroundStyle('#FFFFFF'),
           ]}
         >
@@ -95,7 +117,8 @@ function SpineRow({
         </Text>
       </VStack>
     </Section>
-  ));
+    );
+  });
 
   return (
     <VStack>
