@@ -147,32 +147,28 @@ struct BookshelfWidgetView: View {
     let bottomRow = family == .systemLarge ? Array(visible.dropFirst(booksPerRow).prefix(booksPerRow)) : []
 
     GeometryReader { geo in
-      let availableWidth = geo.size.width - 16
+      let margin: CGFloat = 8
+      let availableWidth = geo.size.width - 2 * margin
       let spineWidth = min(42, max(28, availableWidth / CGFloat(booksPerRow)))
 
-      // Compute spine height so shelves fill the widget with equal margins
-      let margin: CGFloat = 8
+      // Compute spine height so shelves fill the widget with equal margins on all sides
       let shelfFrameExtra: CGFloat = isBottomStyle ? 6 : shelfThickness
       let perShelfOverhead = shelfFrameExtra + shelfThickness
       let shelfCount: CGFloat = family == .systemLarge ? 2 : 1
-      let marginCount: CGFloat = family == .systemLarge ? 3 : 2
-      let rowSpineHeight: CGFloat = (geo.size.height - marginCount * margin - shelfCount * perShelfOverhead) / shelfCount
+      // Large widget: no middle margin; full-style shares one border between shelves
+      let sharedBorderSaving: CGFloat = (family == .systemLarge && !isBottomStyle) ? shelfThickness : 0
+      let rowSpineHeight: CGFloat = (geo.size.height - 2 * margin - shelfCount * perShelfOverhead + sharedBorderSaving) / shelfCount
 
       VStack(alignment: .leading, spacing: 0) {
-        Spacer().frame(height: margin)
-
-        // First shelf row
-        shelfRow(books: topRow, spineWidth: spineWidth, rowSpineHeight: rowSpineHeight)
+        // First shelf row (large full-style: no ledge, bottom shelf top border serves as shared border)
+        shelfRow(books: topRow, spineWidth: spineWidth, rowSpineHeight: rowSpineHeight, showLedge: family != .systemLarge || isBottomStyle)
 
         if family == .systemLarge {
-          Spacer().frame(height: margin)
-
           // Second shelf row
-          shelfRow(books: bottomRow, spineWidth: spineWidth, rowSpineHeight: rowSpineHeight)
+          shelfRow(books: bottomRow, spineWidth: spineWidth, rowSpineHeight: rowSpineHeight, showLedge: true)
         }
-
-        Spacer().frame(height: margin)
       }
+      .padding(margin)
     }
   }
 
@@ -180,7 +176,7 @@ struct BookshelfWidgetView: View {
     entry.shelfStyle == "bottom"
   }
 
-  private func shelfRow(books: [[String: Any]], spineWidth: CGFloat, rowSpineHeight: CGFloat) -> some View {
+  private func shelfRow(books: [[String: Any]], spineWidth: CGFloat, rowSpineHeight: CGFloat, showLedge: Bool) -> some View {
     VStack(spacing: 0) {
       if isBottomStyle {
         // Bottom line shelf: no background, just spines sitting on a ledge
@@ -216,10 +212,12 @@ struct BookshelfWidgetView: View {
         .frame(height: rowSpineHeight + shelfThickness)
       }
 
-      // Shelf ledge
-      shelfColor
-        .frame(height: shelfThickness)
-        .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 2)
+      // Shelf ledge (hidden on top shelf in large full-style mode — bottom shelf top border is the shared border)
+      if showLedge {
+        shelfColor
+          .frame(height: shelfThickness)
+          .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 2)
+      }
     }
   }
 
