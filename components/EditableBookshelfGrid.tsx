@@ -39,7 +39,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { getSpineImageUrl } from '@/services/storage';
 import { getShelfColors } from '@/utils/shelfColors';
-import { getPlaceholderSpineSize } from '@/utils/placeholderSpine';
+import { getPlaceholderSpineSize, getImageSpineHeightFactor } from '@/utils/placeholderSpine';
 import type { Book, ShelfStyle } from '@/types';
 
 interface EditableBookshelfGridProps {
@@ -153,29 +153,32 @@ export function EditableBookshelfGrid({
   );
 
   const placeholderHeightRange = useMemo(() => {
-    const minHeight = Math.max(BookSpineConstants.minHeight, Math.round(shelfHeight * 0.68));
+    const minHeight = Math.max(BookSpineConstants.minHeight, Math.round(shelfHeight * 0.75));
     return {
       min: Math.min(minHeight, shelfHeight),
       max: shelfHeight,
     };
   }, [shelfHeight]);
 
-  // Compute display height for a single book using absolute clamping.
-  // Images taller than shelfHeight are scaled down; images shorter than 60% of
-  // shelfHeight are scaled up; everything in between is left unchanged.
+  // Compute display height for a single book.
+  // First clamp to shelf bounds, then apply deterministic height variability
+  // so each spine sits at a slightly different height (matching the preview).
   const minDisplayHeight = Math.round(shelfHeight * 0.6);
 
   const getBookDisplayHeight = useCallback(
     (book: Book): number => {
+      const heightFactor = getImageSpineHeightFactor(book);
       const dims = imageDimensions[book.id];
       if (dims) {
+        let clamped: number;
         if (dims.height >= shelfHeight) {
-          return shelfHeight;
+          clamped = shelfHeight;
+        } else if (dims.height < minDisplayHeight) {
+          clamped = minDisplayHeight;
+        } else {
+          clamped = dims.height;
         }
-        if (dims.height < minDisplayHeight) {
-          return minDisplayHeight;
-        }
-        return dims.height;
+        return Math.max(minDisplayHeight, Math.round(clamped * heightFactor));
       }
       return getPlaceholderSpineSize(
         book,

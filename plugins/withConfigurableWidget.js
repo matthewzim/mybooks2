@@ -36,11 +36,25 @@ private enum WidgetDataStore {
   static let timelineKey = "__expo_widgets_BookshelfWidget_timeline"
 
   static func getTimeline() -> [[String: Any]] {
-    guard let defaults = UserDefaults(suiteName: suiteName),
-          let arr = defaults.array(forKey: timelineKey) as? [[String: Any]] else {
-      return []
+    guard let defaults = UserDefaults(suiteName: suiteName) else { return [] }
+
+    // expo-widgets may store data as an array of timeline entries or a single snapshot.
+    if let arr = defaults.array(forKey: timelineKey) as? [[String: Any]] {
+      return arr
     }
-    return arr
+    if let dict = defaults.dictionary(forKey: timelineKey) {
+      return [dict]
+    }
+
+    // Fallback: try standard UserDefaults (some expo-widgets versions write here)
+    if let arr = UserDefaults.standard.array(forKey: timelineKey) as? [[String: Any]] {
+      return arr
+    }
+    if let dict = UserDefaults.standard.dictionary(forKey: timelineKey) {
+      return [dict]
+    }
+
+    return []
   }
 }
 
@@ -226,7 +240,7 @@ struct BookshelfWidgetView: View {
     let bookId = book["id"] as? String ?? ""
     let title = book["title"] as? String ?? ""
     let heightFactor = imageHeightFactor(bookId: bookId, title: title)
-    let scaledHeight = max(height * 0.68, height * heightFactor)
+    let scaledHeight = max(height * 0.75, height * heightFactor)
     let scaledWidth = max(width * 0.5, width * heightFactor)
 
     if let imageData = entry.bookImages[bookId],
@@ -257,8 +271,8 @@ struct BookshelfWidgetView: View {
   }
 
   private func imageHeightFactor(bookId: String, title: String) -> CGFloat {
-    let minFactor: CGFloat = 0.68
-    let maxFactor: CGFloat = 1.0
+    let minFactor: CGFloat = 0.75
+    let maxFactor: CGFloat = 0.9
     let normalized = seededNormalized(bookId: bookId, title: title, salt: "image-height")
     return minFactor + (maxFactor - minFactor) * normalized
   }
@@ -307,9 +321,9 @@ struct BookshelfEntityQuery: EntityQuery {
 
   private func loadShelves() -> [BookshelfEntity] {
     let timeline = WidgetDataStore.getTimeline()
-    guard let firstEntry = timeline.first,
-          let props = firstEntry["props"] as? [String: Any],
-          let shelves = props["bookshelves"] as? [[String: Any]] else {
+    guard let firstEntry = timeline.first else { return [] }
+    let props = (firstEntry["props"] as? [String: Any]) ?? firstEntry
+    guard let shelves = props["bookshelves"] as? [[String: Any]] else {
       return []
     }
 
@@ -336,10 +350,12 @@ struct SelectBookshelfIntent: WidgetConfigurationIntent {
 
 private func buildBookshelfEntry(selectedId: String?) -> BookshelfEntry {
   let timeline = WidgetDataStore.getTimeline()
-  guard let firstEntry = timeline.first,
-        let allProps = firstEntry["props"] as? [String: Any] else {
+  guard let firstEntry = timeline.first else {
     return BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, coverColor: nil, shelfStyle: "full", books: [], bookImages: [:])
   }
+
+  // Props may be nested under "props" key or at the top level depending on expo-widgets version
+  let allProps = (firstEntry["props"] as? [String: Any]) ?? firstEntry
 
   let isPremium = allProps["isPremium"] as? Bool ?? false
 

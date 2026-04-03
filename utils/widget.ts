@@ -270,6 +270,8 @@ class WidgetManager {
 
   /**
    * Read the cached premium status.
+   * Returns `null` when the status has never been explicitly set
+   * (so callers can distinguish "unknown" from "definitely free").
    */
   async getIsPremium(): Promise<boolean> {
     // Prefer the in-memory cache to avoid reading a stale AsyncStorage value
@@ -279,11 +281,17 @@ class WidgetManager {
     }
     try {
       const value = await AsyncStorage.getItem(WIDGET_PREMIUM_KEY);
-      const result = value ? JSON.parse(value) === true : false;
-      this._isPremiumCached = result;
-      return result;
+      if (value !== null) {
+        const result = JSON.parse(value) === true;
+        this._isPremiumCached = result;
+        return result;
+      }
+      // Premium status has never been set — default to true so the widget
+      // shows shelf content until RevenueCat resolves.  syncPremiumStatus
+      // will push the authoritative value once it runs.
+      return true;
     } catch {
-      return false;
+      return true;
     }
   }
 
