@@ -33,6 +33,7 @@ import {
   BookshelfDimensions,
 } from '@/constants/theme';
 import { getSpineImageUrl } from '@/services/storage';
+import { getImageSpineHeightFactor } from '@/utils/placeholderSpine';
 import type { Book, ShelfStyle } from '@/types';
 
 interface BookshelfGridProps {
@@ -106,24 +107,27 @@ export function BookshelfGrid({
     };
   }, [books]);
 
-  // Compute display height for a single book using absolute clamping.
-  // Images taller than bookHeight are scaled down; images shorter than 60% of
-  // bookHeight are scaled up; everything in between is left unchanged.
+  // Compute display height for a single book.
+  // First clamp to shelf bounds, then apply deterministic height variability
+  // so each spine sits at a slightly different height (matching the preview).
   const minDisplayHeight = Math.round(bookHeight * 0.6);
 
   const getBookDisplayHeight = useCallback(
     (book: Book): number => {
+      const heightFactor = getImageSpineHeightFactor(book);
       const dims = imageDimensions[book.id];
       if (dims) {
+        let clamped: number;
         if (dims.height >= bookHeight) {
-          return bookHeight;
+          clamped = bookHeight;
+        } else if (dims.height < minDisplayHeight) {
+          clamped = minDisplayHeight;
+        } else {
+          clamped = dims.height;
         }
-        if (dims.height < minDisplayHeight) {
-          return minDisplayHeight;
-        }
-        return dims.height;
+        return Math.max(minDisplayHeight, Math.round(clamped * heightFactor));
       }
-      return bookHeight; // default for books without image dimensions
+      return Math.round(bookHeight * heightFactor);
     },
     [imageDimensions, bookHeight, minDisplayHeight]
   );
