@@ -16,6 +16,22 @@ import type { Book, ApiResponse } from '@/types';
 const GOOGLE_BOOKS_API = 'https://www.googleapis.com/books/v1/volumes';
 const GOOGLE_BOOKS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY || '';
 
+/** Maximum number of retries when the API returns 429 (rate-limited). */
+const MAX_RETRIES = 3;
+
+/** Base delay in ms for exponential back-off on 429 responses. */
+const BACKOFF_BASE_MS = 1500;
+
+/** Minimum delay between sequential API requests (ms). */
+const REQUEST_GAP_MS = 350;
+
+/** Timestamp of the last Google Books API request (for rate-limiting). */
+let lastRequestTime = 0;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 interface GoogleBooksVolume {
   id: string;
   volumeInfo: {
@@ -52,22 +68,47 @@ class GoogleBooksService {
   private async searchQuery(query: string): Promise<string | null> {
     const keyParam = GOOGLE_BOOKS_API_KEY ? `&key=${GOOGLE_BOOKS_API_KEY}` : '';
     const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=5${keyParam}`;
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.warn(`Google Books API error: ${response.status} ${response.statusText}`);
-      return null;
-    }
 
-    const data: GoogleBooksResponse = await response.json();
-    if (!data.items || data.items.length === 0) return null;
-
-    for (const item of data.items) {
-      const imageLinks = item.volumeInfo?.imageLinks;
-      if (imageLinks?.thumbnail || imageLinks?.smallThumbnail) {
-        let imageUrl = imageLinks.thumbnail || imageLinks.smallThumbnail || '';
-        imageUrl = imageUrl.replace('http://', 'https://');
-        return imageUrl;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      // Throttle: ensure a minimum gap between requests
+      const now = Date.now();
+      const elapsed = now - lastRequestTime;
+      if (elapsed < REQUEST_GAP_MS) {
+        await sleep(REQUEST_GAP_MS - elapsed);
       }
+      lastRequestTime = Date.now();
+
+      const response = await fetch(url);
+
+      if (response.status === 429) {
+        if (attempt < MAX_RETRIES) {
+          const delay = BACKOFF_BASE_MS * Math.pow(2, attempt);
+          console.warn(`Google Books API rate-limited (429). Retrying in ${delay}ms…`);
+          await sleep(delay);
+          continue;
+        }
+        console.warn('Google Books API rate-limited (429). Max retries exceeded.');
+        return null;
+      }
+
+      if (!response.ok) {
+        console.warn(`Google Books API error: ${response.status} ${response.statusText}`);
+        return null;
+      }
+
+      const data: GoogleBooksResponse = await response.json();
+      if (!data.items || data.items.length === 0) return null;
+
+      for (const item of data.items) {
+        const imageLinks = item.volumeInfo?.imageLinks;
+        if (imageLinks?.thumbnail || imageLinks?.smallThumbnail) {
+          let imageUrl = imageLinks.thumbnail || imageLinks.smallThumbnail || '';
+          imageUrl = imageUrl.replace('http://', 'https://');
+          return imageUrl;
+        }
+      }
+
+      return null;
     }
 
     return null;
@@ -185,8 +226,10 @@ class GoogleBooksService {
     const uncached = books.filter((b) => !b.cover_image_url);
     if (uncached.length === 0) return;
 
-    // Process sequentially to avoid hammering the Google Books API
-    for (const book of uncached) {
+    // Process sequentially with a gap between books to avoid hammering the API
+    for (let i = 0; i < uncached.length; i++) {
+      const book = uncached[i];
+      if (i > 0) await sleep(REQUEST_GAP_MS);
       try {
         const result = await this.fetchAndCacheCover({
           book_id: book.book_id,

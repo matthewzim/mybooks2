@@ -57,8 +57,8 @@ function seededNormalized(bookId: string, title: string, salt: string): number {
 }
 
 function imageHeightFactor(bookId: string, title: string): number {
-  const min = 0.75;
-  const max = 0.9;
+  const min = 0.8;
+  const max = 0.95;
   return min + seededNormalized(bookId, title, 'image-height') * (max - min);
 }
 

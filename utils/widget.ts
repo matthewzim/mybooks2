@@ -12,7 +12,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import type { WidgetData, WidgetBookshelf, WidgetBook, Bookshelf, Book } from '@/types';
-import { getSpineImageUrl } from '@/services/storage';
+import { getSpinePublicUrl } from '@/services/storage';
 
 const WIDGET_DATA_KEY = '@virtual_library_widget_data';
 const WIDGET_SELECTED_SHELF_KEY = '@virtual_library_widget_shelf';
@@ -80,18 +80,16 @@ class WidgetManager {
    * Transform a bookshelf to widget-compatible format.
    * Resolves spine image URLs so the native widget can download them.
    */
-  async transformBookshelfForWidget(
+  transformBookshelfForWidget(
     bookshelf: Bookshelf,
     books: Book[]
-  ): Promise<WidgetBookshelf> {
+  ): WidgetBookshelf {
     const sorted = books
       .slice()
       .sort((a, b) => a.position - b.position)
       .slice(0, 18);
 
-    const widgetBooks = await Promise.all(
-      sorted.map((b) => this.transformBookForWidget(b))
-    );
+    const widgetBooks = sorted.map((b) => this.transformBookForWidget(b));
 
     return {
       id: bookshelf.id,
@@ -104,15 +102,13 @@ class WidgetManager {
 
   /**
    * Transform a book to widget-compatible format.
-   * Resolves the spine image URL to a full URL for the native widget.
+   * Uses a public (non-expiring) URL so the widget can download images
+   * even after the timeline refreshes hours later.
    */
-  async transformBookForWidget(book: Book): Promise<WidgetBook> {
-    let resolvedUrl: string | null = null;
-    try {
-      resolvedUrl = await getSpineImageUrl(book.image_url);
-    } catch {
-      // leave as null – widget will show placeholder
-    }
+  transformBookForWidget(book: Book): WidgetBook {
+    // Use the public URL directly – signed URLs expire before the widget
+    // timeline refreshes, causing all image downloads to fail.
+    const resolvedUrl = getSpinePublicUrl(book.image_url);
     return {
       id: book.id,
       title: book.title,
@@ -150,10 +146,8 @@ class WidgetManager {
     shelves: (Bookshelf & { books: Book[] })[]
   ): Promise<void> {
     try {
-      const widgetShelves = await Promise.all(
-        shelves.map((shelf) =>
-          this.transformBookshelfForWidget(shelf, shelf.books)
-        )
+      const widgetShelves = shelves.map((shelf) =>
+        this.transformBookshelfForWidget(shelf, shelf.books)
       );
 
       const widgetData: WidgetData = {
@@ -222,7 +216,7 @@ class WidgetManager {
     bookshelf: Bookshelf,
     books: Book[]
   ): Promise<void> {
-    const widgetBookshelf = await this.transformBookshelfForWidget(bookshelf, books);
+    const widgetBookshelf = this.transformBookshelfForWidget(bookshelf, books);
     // Re-save with this shelf included (merge with existing data)
     const existing = await this.getWidgetData();
     const bookshelves = existing?.bookshelves ?? [];

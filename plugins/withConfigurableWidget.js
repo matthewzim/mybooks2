@@ -271,8 +271,8 @@ struct BookshelfWidgetView: View {
   }
 
   private func imageHeightFactor(bookId: String, title: String) -> CGFloat {
-    let minFactor: CGFloat = 0.75
-    let maxFactor: CGFloat = 0.9
+    let minFactor: CGFloat = 0.8
+    let maxFactor: CGFloat = 0.95
     let normalized = seededNormalized(bookId: bookId, title: title, salt: "image-height")
     return minFactor + (maxFactor - minFactor) * normalized
   }
@@ -382,9 +382,15 @@ private func buildBookshelfEntry(selectedId: String?) -> BookshelfEntry {
 }
 
 /// Downloads book spine images for display in the widget.
+/// Uses a per-image timeout so one slow download doesn't block the whole widget.
 private func downloadBookImages(for books: [[String: Any]], limit: Int) async -> [String: Data] {
   var result: [String: Data] = [:]
   let booksToFetch = Array(books.prefix(limit))
+  let config = URLSessionConfiguration.default
+  config.timeoutIntervalForRequest = 8
+  config.timeoutIntervalForResource = 12
+  let session = URLSession(configuration: config)
+
   await withTaskGroup(of: (String, Data?).self) { group in
     for book in booksToFetch {
       guard let id = book["id"] as? String,
@@ -393,7 +399,7 @@ private func downloadBookImages(for books: [[String: Any]], limit: Int) async ->
             let url = URL(string: urlString) else { continue }
       group.addTask {
         do {
-          let (data, response) = try await URLSession.shared.data(from: url)
+          let (data, response) = try await session.data(from: url)
           if let httpResponse = response as? HTTPURLResponse,
              httpResponse.statusCode == 200 {
             return (id, data)

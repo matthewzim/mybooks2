@@ -1,8 +1,8 @@
 import type { Book } from '@/types';
 
 const PLACEHOLDER_VARIATION_SCALE = 0.4;
-const IMAGE_SPINE_MIN_HEIGHT_FACTOR = 0.75;
-const IMAGE_SPINE_MAX_HEIGHT_FACTOR = 0.9;
+const IMAGE_SPINE_MIN_HEIGHT_FACTOR = 0.8;
+const IMAGE_SPINE_MAX_HEIGHT_FACTOR = 0.95;
 
 function seededNormalized(book: Book, salt: string): number {
   const source = `${book.id}-${book.title}-${salt}`;
