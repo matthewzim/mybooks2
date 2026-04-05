@@ -376,6 +376,25 @@ class StorageService {
 // Export a singleton instance
 export const storageService = new StorageService();
 
+// ---------------------------------------------------------------------------
+// In-memory URL resolution cache
+// Avoids repeated Supabase `createSignedUrl` network calls when reopening a
+// bookshelf. Entries are kept for 50 minutes (signed URLs expire in 60).
+// ---------------------------------------------------------------------------
+const URL_CACHE_TTL_MS = 50 * 60 * 1000;
+const urlCache = new Map<string, { url: string; expiry: number }>();
+
+function getCachedUrl(key: string): string | null {
+  const entry = urlCache.get(key);
+  if (entry && Date.now() < entry.expiry) return entry.url;
+  if (entry) urlCache.delete(key);
+  return null;
+}
+
+function setCachedUrl(key: string, url: string): void {
+  urlCache.set(key, { url, expiry: Date.now() + URL_CACHE_TTL_MS });
+}
+
 /**
  * Get the public URL for a book spine image from the book-spines bucket
  * Handles both full URLs and relative paths within the bucket
@@ -413,6 +432,9 @@ export async function getCoverImageUrl(
     return null;
   }
 
+  const cached = getCachedUrl(`cover:${imageUrlOrPath}`);
+  if (cached) return cached;
+
   const isFullUrl =
     imageUrlOrPath.startsWith('http://') || imageUrlOrPath.startsWith('https://');
 
@@ -431,6 +453,7 @@ export async function getCoverImageUrl(
       .createSignedUrl(extractedPath, 3600);
 
     if (!error && data?.signedUrl) {
+      setCachedUrl(`cover:${imageUrlOrPath}`, data.signedUrl);
       return data.signedUrl;
     }
 
@@ -442,6 +465,7 @@ export async function getCoverImageUrl(
     .createSignedUrl(imageUrlOrPath, 3600);
 
   if (!signedError && signedData?.signedUrl) {
+    setCachedUrl(`cover:${imageUrlOrPath}`, signedData.signedUrl);
     return signedData.signedUrl;
   }
 
@@ -460,6 +484,9 @@ export async function getSpineImageUrl(
   if (!imageUrlOrPath) {
     return null;
   }
+
+  const cached = getCachedUrl(`spine:${imageUrlOrPath}`);
+  if (cached) return cached;
 
   const isFullUrl =
     imageUrlOrPath.startsWith('http://') || imageUrlOrPath.startsWith('https://');
@@ -481,6 +508,7 @@ export async function getSpineImageUrl(
       .createSignedUrl(extractedPath, 3600);
 
     if (!error && data?.signedUrl) {
+      setCachedUrl(`spine:${imageUrlOrPath}`, data.signedUrl);
       return data.signedUrl;
     }
 
@@ -494,6 +522,7 @@ export async function getSpineImageUrl(
     .createSignedUrl(imageUrlOrPath, 3600);
 
   if (!signedError && signedData?.signedUrl) {
+    setCachedUrl(`spine:${imageUrlOrPath}`, signedData.signedUrl);
     return signedData.signedUrl;
   }
 
@@ -503,6 +532,46 @@ export async function getSpineImageUrl(
     .from(STORAGE_BUCKETS.BOOK_SPINES)
     .getPublicUrl(imageUrlOrPath);
 
+  return publicUrl;
+}
+
+/**
+ * Get a public (non-expiring) URL for a spine image.
+ * Used by widget data sync where signed URLs would expire before the widget
+ * timeline refreshes.
+ */
+export function getSpinePublicUrl(
+  imageUrlOrPath: string | null | undefined
+): string | null {
+  if (!imageUrlOrPath) return null;
+
+  const isFullUrl =
+    imageUrlOrPath.startsWith('http://') || imageUrlOrPath.startsWith('https://');
+
+  if (isFullUrl) {
+    const extractedPath = extractStoragePathFromUrl(
+      imageUrlOrPath,
+      STORAGE_BUCKETS.BOOK_SPINES
+    );
+    if (!extractedPath) {
+      // External URL – use as-is
+      return imageUrlOrPath;
+    }
+    // Re-derive the public URL (no signing, no expiry)
+    const {
+      data: { publicUrl },
+    } = supabase.storage
+      .from(STORAGE_BUCKETS.BOOK_SPINES)
+      .getPublicUrl(extractedPath);
+    return publicUrl;
+  }
+
+  // Relative path → public URL
+  const {
+    data: { publicUrl },
+  } = supabase.storage
+    .from(STORAGE_BUCKETS.BOOK_SPINES)
+    .getPublicUrl(imageUrlOrPath);
   return publicUrl;
 }
 
