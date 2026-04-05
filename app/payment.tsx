@@ -7,12 +7,11 @@
  * - Customer Center for managing subscriptions
  */
 
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Alert,
   Pressable,
 } from 'react-native';
 import { router, Stack } from 'expo-router';
@@ -23,6 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRevenueCat } from '@/contexts/RevenueCatContext';
 import { PREMIUM_FEATURES } from '@/services/revenuecat';
 import { Button } from '@/components/ui';
+import { ConfettiOverlay } from '@/components/ConfettiOverlay';
 import {
   Colors,
   Spacing,
@@ -33,6 +33,12 @@ import {
 export default function PaymentScreen() {
   const { refreshUser } = useAuth();
   const { isPro, refresh } = useRevenueCat();
+  const [showConfetti, setShowConfetti] = useState(false);
+
+  const handleConfettiComplete = useCallback(() => {
+    setShowConfetti(false);
+    router.back();
+  }, []);
 
   /**
    * Navigate to the Customer Center screen for subscription management.
@@ -119,24 +125,17 @@ export default function PaymentScreen() {
           onPurchaseCompleted={async () => {
             await refreshUser();
             await refresh();
-            Alert.alert(
-              'Welcome to Premium!',
-              'Thank you for your purchase. You now have access to all premium features.',
-              [{ text: 'OK', onPress: () => router.back() }]
-            );
+            setShowConfetti(true);
           }}
           onRestoreCompleted={async () => {
             await refreshUser();
             await refresh();
-            Alert.alert(
-              'Purchases Restored',
-              'Your premium subscription has been restored.',
-              [{ text: 'OK', onPress: () => router.back() }]
-            );
+            setShowConfetti(true);
           }}
           onDismiss={() => router.back()}
           style={styles.paywall}
         />
+        <ConfettiOverlay visible={showConfetti} onComplete={handleConfettiComplete} />
       </View>
     </>
   );

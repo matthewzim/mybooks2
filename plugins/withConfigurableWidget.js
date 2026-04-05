@@ -33,25 +33,51 @@ import AppIntents
 
 private enum WidgetDataStore {
   static let suiteName = "${groupIdentifier}"
-  static let timelineKey = "__expo_widgets_BookshelfWidget_timeline"
+  // expo-widgets may use different key formats across versions
+  static let timelineKeys = [
+    "__expo_widgets_BookshelfWidget_timeline",
+    "BookshelfWidget_timeline",
+    "__expo_widgets_BookshelfWidget"
+  ]
 
   static func getTimeline() -> [[String: Any]] {
-    guard let defaults = UserDefaults(suiteName: suiteName) else { return [] }
+    let allDefaults: [UserDefaults] = {
+      var list: [UserDefaults] = []
+      if let grouped = UserDefaults(suiteName: suiteName) { list.append(grouped) }
+      list.append(.standard)
+      return list
+    }()
 
-    // expo-widgets may store data as an array of timeline entries or a single snapshot.
-    if let arr = defaults.array(forKey: timelineKey) as? [[String: Any]] {
-      return arr
-    }
-    if let dict = defaults.dictionary(forKey: timelineKey) {
-      return [dict]
-    }
-
-    // Fallback: try standard UserDefaults (some expo-widgets versions write here)
-    if let arr = UserDefaults.standard.array(forKey: timelineKey) as? [[String: Any]] {
-      return arr
-    }
-    if let dict = UserDefaults.standard.dictionary(forKey: timelineKey) {
-      return [dict]
+    for defaults in allDefaults {
+      for key in timelineKeys {
+        // 1. Native array of dictionaries
+        if let arr = defaults.array(forKey: key) as? [[String: Any]] {
+          return arr
+        }
+        // 2. Native dictionary (single snapshot)
+        if let dict = defaults.dictionary(forKey: key) {
+          return [dict]
+        }
+        // 3. JSON-encoded string (expo-widgets may serialize props as JSON)
+        if let jsonString = defaults.string(forKey: key),
+           let jsonData = jsonString.data(using: .utf8) {
+          if let arr = try? JSONSerialization.jsonObject(with: jsonData) as? [[String: Any]] {
+            return arr
+          }
+          if let dict = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+            return [dict]
+          }
+        }
+        // 4. Raw Data blob (another possible serialization format)
+        if let rawData = defaults.data(forKey: key) {
+          if let arr = try? JSONSerialization.jsonObject(with: rawData) as? [[String: Any]] {
+            return arr
+          }
+          if let dict = try? JSONSerialization.jsonObject(with: rawData) as? [String: Any] {
+            return [dict]
+          }
+        }
+      }
     }
 
     return []
@@ -348,16 +374,30 @@ struct SelectBookshelfIntent: WidgetConfigurationIntent {
 
 // MARK: - Helper to build a BookshelfEntry from stored data
 
+/// Attempt to read a Bool from a dictionary value that might be Bool, NSNumber, or Int.
+private func readBool(_ dict: [String: Any], key: String, fallback: Bool = false) -> Bool {
+  if let b = dict[key] as? Bool { return b }
+  if let n = dict[key] as? NSNumber { return n.boolValue }
+  if let n = dict[key] as? Int { return n != 0 }
+  return fallback
+}
+
 private func buildBookshelfEntry(selectedId: String?) -> BookshelfEntry {
   let timeline = WidgetDataStore.getTimeline()
   guard let firstEntry = timeline.first else {
     return BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, coverColor: nil, shelfStyle: "full", books: [], bookImages: [:])
   }
 
-  // Props may be nested under "props" key or at the top level depending on expo-widgets version
-  let allProps = (firstEntry["props"] as? [String: Any]) ?? firstEntry
+  // Props may be nested under "props" key or at the top level depending on expo-widgets version.
+  // Also try "snapshot" or "data" nesting that some versions use.
+  let allProps: [String: Any] = {
+    for key in ["props", "snapshot", "data"] {
+      if let nested = firstEntry[key] as? [String: Any] { return nested }
+    }
+    return firstEntry
+  }()
 
-  let isPremium = allProps["isPremium"] as? Bool ?? false
+  let isPremium = readBool(allProps, key: "isPremium", fallback: false)
 
   guard let bookshelves = allProps["bookshelves"] as? [[String: Any]] else {
     return BookshelfEntry(date: Date(), isPremium: isPremium, bookshelfName: nil, bookshelfId: nil, coverColor: nil, shelfStyle: "full", books: [], bookImages: [:])
