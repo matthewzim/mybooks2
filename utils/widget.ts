@@ -10,7 +10,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import { Platform, Settings } from 'react-native';
 import type { WidgetData, WidgetBookshelf, WidgetBook, Bookshelf, Book } from '@/types';
 import { getSpinePublicUrl } from '@/services/storage';
 
@@ -46,7 +46,7 @@ function pushToWidget(widgetData: WidgetData, isPremium: boolean): void {
   const widget = getBookshelfWidget();
   if (!widget) return;
 
-  widget.updateSnapshot({
+  const payload = {
     isPremium,
     bookshelves: widgetData.bookshelves.map((shelf) => ({
       id: shelf.id,
@@ -61,7 +61,23 @@ function pushToWidget(widgetData: WidgetData, isPremium: boolean): void {
         resolvedImageUrl: b.resolved_image_url ?? '',
       })),
     })),
-  });
+  };
+
+  // Primary: expo-widgets updateSnapshot (writes to app group UserDefaults)
+  widget.updateSnapshot(payload);
+
+  // Fallback: also write directly to UserDefaults.standard so the widget
+  // can find the data even if the app group container isn't properly shared.
+  if (Platform.OS === 'ios') {
+    try {
+      Settings.set({
+        '__expo_widgets_BookshelfWidget_timeline': [payload],
+        'BookshelfWidget_timeline': [payload],
+      });
+    } catch {
+      // Settings module may not support nested objects on all RN versions
+    }
+  }
 }
 
 /**

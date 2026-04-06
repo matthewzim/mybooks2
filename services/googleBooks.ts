@@ -17,16 +17,22 @@ const GOOGLE_BOOKS_API = 'https://www.googleapis.com/books/v1/volumes';
 const GOOGLE_BOOKS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY || '';
 
 /** Maximum number of retries when the API returns 429 (rate-limited). */
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 2;
 
 /** Base delay in ms for exponential back-off on 429 responses. */
-const BACKOFF_BASE_MS = 1500;
+const BACKOFF_BASE_MS = 2000;
 
 /** Minimum delay between sequential API requests (ms). */
-const REQUEST_GAP_MS = 350;
+const REQUEST_GAP_MS = 1200;
+
+/** Cooldown period after receiving a 429 – skip all requests for this long. */
+const COOLDOWN_MS = 30_000;
 
 /** Timestamp of the last Google Books API request (for rate-limiting). */
 let lastRequestTime = 0;
+
+/** When set, all requests are skipped until this timestamp (global cooldown). */
+let cooldownUntil = 0;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -53,21 +59,24 @@ class GoogleBooksService {
   private buildSearchQueries(title: string, author: string): string[] {
     const cleanTitle = (title || '').trim();
     const cleanAuthor = (author || '').trim();
-    const normalizedTitle = cleanTitle.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
 
+    // Keep to at most 2 queries to stay within unauthenticated rate limits.
     const queries = [
-      `intitle:${cleanTitle} inauthor:${cleanAuthor}`,
-      `intitle:${normalizedTitle} inauthor:${cleanAuthor}`,
+      cleanAuthor
+        ? `intitle:${cleanTitle} inauthor:${cleanAuthor}`
+        : cleanTitle,
       `${cleanTitle} ${cleanAuthor}`.trim(),
-      cleanTitle,
     ];
 
     return [...new Set(queries.filter((query) => query.length > 0))];
   }
 
   private async searchQuery(query: string): Promise<string | null> {
+    // If we're in a global cooldown after a 429, skip immediately.
+    if (Date.now() < cooldownUntil) return null;
+
     const keyParam = GOOGLE_BOOKS_API_KEY ? `&key=${GOOGLE_BOOKS_API_KEY}` : '';
-    const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=5${keyParam}`;
+    const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=3${keyParam}`;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       // Throttle: ensure a minimum gap between requests
@@ -81,13 +90,16 @@ class GoogleBooksService {
       const response = await fetch(url);
 
       if (response.status === 429) {
+        // Activate global cooldown so other callers stop hammering too
+        cooldownUntil = Date.now() + COOLDOWN_MS;
+
         if (attempt < MAX_RETRIES) {
           const delay = BACKOFF_BASE_MS * Math.pow(2, attempt);
           console.warn(`Google Books API rate-limited (429). Retrying in ${delay}ms…`);
           await sleep(delay);
           continue;
         }
-        console.warn('Google Books API rate-limited (429). Max retries exceeded.');
+        console.warn('Google Books API rate-limited (429). Max retries exceeded; cooling down.');
         return null;
       }
 
@@ -125,6 +137,8 @@ class GoogleBooksService {
     try {
       const queries = this.buildSearchQueries(title, author);
       for (const query of queries) {
+        // If a previous request triggered cooldown, stop trying more queries
+        if (Date.now() < cooldownUntil) return null;
         const imageUrl = await this.searchQuery(query);
         if (imageUrl) return imageUrl;
       }
