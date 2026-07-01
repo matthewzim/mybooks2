@@ -281,7 +281,20 @@ export function useBooks(shelfId: string): UseBooksReturn {
   // Pre-fetch and cache Google Books covers in the background for books
   // that don't have a cover_image_url yet. Updates local state as each
   // cover is cached so the BookDetailModal can display them instantly.
+  //
+  // Cancellation lives in a ref flipped only on shelf change/unmount: an
+  // effect-scoped flag would be set by the cleanup that runs when `onCached`
+  // itself updates `books`, dropping every update after the first.
   const prefetchStartedRef = useRef<string | null>(null);
+  const prefetchCancelledRef = useRef(false);
+
+  useEffect(() => {
+    prefetchCancelledRef.current = false;
+    return () => {
+      prefetchCancelledRef.current = true;
+    };
+  }, [shelfId]);
+
   useEffect(() => {
     if (books.length === 0 || loadingState !== 'success') return;
     // Only run once per shelf load (avoid re-triggering when books state updates)
@@ -289,19 +302,14 @@ export function useBooks(shelfId: string): UseBooksReturn {
     if (prefetchStartedRef.current === key) return;
     prefetchStartedRef.current = key;
 
-    let cancelled = false;
     googleBooksService.prefetchCovers(books, (bookId, coverUrl) => {
-      if (cancelled) return;
+      if (prefetchCancelledRef.current) return;
       setBooks((prev) =>
         prev.map((b) =>
           b.book_id === bookId ? { ...b, cover_image_url: coverUrl } : b
         )
       );
     });
-
-    return () => {
-      cancelled = true;
-    };
   }, [books, shelfId, loadingState]);
 
   return {

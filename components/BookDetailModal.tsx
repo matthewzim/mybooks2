@@ -348,11 +348,16 @@ export function BookDetailModal({
     setIsCoverLoading(true);
 
     googleBooksService
-      .fetchAndCacheCover({
-        book_id: book.book_id,
-        title: book.title,
-        author: book.author,
-      })
+      .fetchAndCacheCover(
+        {
+          book_id: book.book_id,
+          title: book.title,
+          author: book.author,
+        },
+        // User is looking at this book right now — don't let a background
+        // prefetch's rate-limit cooldown block the fetch.
+        { bypassCooldown: true }
+      )
       .then(async (result) => {
         if (cancelled) return;
         if (result.data) {

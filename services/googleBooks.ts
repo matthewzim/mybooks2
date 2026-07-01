@@ -71,9 +71,15 @@ class GoogleBooksService {
     return [...new Set(queries.filter((query) => query.length > 0))];
   }
 
-  private async searchQuery(query: string): Promise<string | null> {
+  private async searchQuery(
+    query: string,
+    bypassCooldown = false
+  ): Promise<string | null> {
     // If we're in a global cooldown after a 429, skip immediately.
-    if (Date.now() < cooldownUntil) return null;
+    // On-demand requests (e.g. opening the book detail modal) bypass the
+    // cooldown so a background prefetch hitting 429 doesn't starve them;
+    // they still go through the throttle and per-request retry/backoff.
+    if (!bypassCooldown && Date.now() < cooldownUntil) return null;
 
     const keyParam = GOOGLE_BOOKS_API_KEY ? `&key=${GOOGLE_BOOKS_API_KEY}` : '';
     const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=3${keyParam}`;
@@ -132,14 +138,16 @@ class GoogleBooksService {
    */
   async searchCoverUrl(
     title: string,
-    author: string
+    author: string,
+    options?: { bypassCooldown?: boolean }
   ): Promise<string | null> {
+    const bypassCooldown = options?.bypassCooldown ?? false;
     try {
       const queries = this.buildSearchQueries(title, author);
       for (const query of queries) {
         // If a previous request triggered cooldown, stop trying more queries
-        if (Date.now() < cooldownUntil) return null;
-        const imageUrl = await this.searchQuery(query);
+        if (!bypassCooldown && Date.now() < cooldownUntil) return null;
+        const imageUrl = await this.searchQuery(query, bypassCooldown);
         if (imageUrl) return imageUrl;
       }
 
@@ -157,9 +165,13 @@ class GoogleBooksService {
    * no cover was found.
    *
    * @param book - The Book object (needs book_id, title, author)
+   * @param options.bypassCooldown - Set for on-demand (user-visible) fetches
+   *   so they aren't skipped while a background prefetch is cooling down
+   *   after a 429.
    */
   async fetchAndCacheCover(
-    book: Pick<Book, 'book_id' | 'title' | 'author'>
+    book: Pick<Book, 'book_id' | 'title' | 'author'>,
+    options?: { bypassCooldown?: boolean }
   ): Promise<ApiResponse<string>> {
     try {
       // 0. Re-check Supabase in case the caller has stale in-memory book data.
@@ -174,7 +186,11 @@ class GoogleBooksService {
       }
 
       // 1. Search Google Books for a cover image URL
-      const googleCoverUrl = await this.searchCoverUrl(book.title, book.author);
+      const googleCoverUrl = await this.searchCoverUrl(
+        book.title,
+        book.author,
+        options
+      );
 
       if (!googleCoverUrl) {
         return {
@@ -190,13 +206,21 @@ class GoogleBooksService {
           googleCoverUrl,
           book.book_id
         );
-      } catch {
+      } catch (uploadError) {
         // If caching fails, still use the direct Google image URL for display.
+        console.warn(
+          `Failed to cache cover for book ${book.book_id}:`,
+          uploadError instanceof Error ? uploadError.message : uploadError
+        );
         return { data: googleCoverUrl, error: null };
       }
 
       if (uploadResult.error || !uploadResult.data) {
         // If caching fails, still use the direct Google image URL for display.
+        console.warn(
+          `Failed to cache cover for book ${book.book_id}:`,
+          uploadResult.error?.message ?? 'upload returned no URL'
+        );
         return { data: googleCoverUrl, error: null };
       }
 
@@ -244,6 +268,12 @@ class GoogleBooksService {
     for (let i = 0; i < uncached.length; i++) {
       const book = uncached[i];
       if (i > 0) await sleep(REQUEST_GAP_MS);
+
+      // If a 429 put us in a global cooldown, wait it out instead of
+      // burning through the remaining books as guaranteed no-ops.
+      const cooldownRemaining = cooldownUntil - Date.now();
+      if (cooldownRemaining > 0) await sleep(cooldownRemaining);
+
       try {
         const result = await this.fetchAndCacheCover({
           book_id: book.book_id,
