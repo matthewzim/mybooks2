@@ -10,33 +10,33 @@ A React Native + Expo iOS app for creating and managing virtual bookshelves. Use
 - **Community Library**: Browse and add book spines uploaded by other users
 - **Reviews & Ratings**: Add personal reviews and ratings to your books
 - **iOS Widget**: Display a bookshelf on your iPhone home screen
-- **Premium Subscription**: Unlock unlimited bookshelves and community access via Stripe
+- **Premium Subscription**: Unlock unlimited bookshelves and the home screen widget via RevenueCat in-app purchases
 
 ## Tech Stack
 
-- **Frontend**: React Native, Expo SDK 51, TypeScript
+- **Frontend**: React Native, Expo SDK 55, TypeScript
 - **Navigation**: Expo Router (file-based routing)
 - **Backend**: Supabase (PostgreSQL, Auth, Storage)
-- **Payments**: Stripe
+- **Payments**: RevenueCat (native in-app purchases, paywall, and customer center)
 - **State Management**: React Context + Custom Hooks
 
 ## Project Structure
 
 ```
 ├── app/                    # Expo Router screens
-│   ├── (auth)/            # Authentication screens
-│   │   ├── login.tsx
-│   │   └── register.tsx
 │   ├── (tabs)/            # Main tab navigation
 │   │   ├── index.tsx      # Home (My Library)
 │   │   ├── community.tsx  # Community browsing
 │   │   └── settings.tsx   # User settings
-│   ├── bookshelf/[id].tsx # Bookshelf detail
+│   ├── bookshelf/         # Bookshelf detail (nested stack)
 │   ├── book/[id].tsx      # Book detail
+│   ├── user/[id].tsx      # Public user profile
+│   ├── onboarding.tsx     # First-launch onboarding flow
 │   ├── scan.tsx           # Camera scanner
 │   ├── add-book.tsx       # Manual book entry
 │   ├── create-bookshelf.tsx
-│   ├── payment.tsx        # Premium subscription
+│   ├── payment.tsx        # RevenueCat paywall / premium status
+│   ├── customer-center.tsx # RevenueCat customer center
 │   └── _layout.tsx        # Root layout
 ├── components/            # Reusable components
 │   ├── ui/               # Basic UI components
@@ -60,7 +60,7 @@ A React Native + Expo iOS app for creating and managing virtual bookshelves. Use
 │   ├── bookshelves.ts    # Bookshelf CRUD
 │   ├── books.ts          # Book CRUD
 │   ├── storage.ts        # File uploads
-│   └── stripe.ts         # Payments
+│   └── revenuecat.ts     # In-app purchases & entitlements
 ├── types/                 # TypeScript definitions
 │   ├── index.ts
 │   └── supabase.ts
@@ -79,7 +79,7 @@ A React Native + Expo iOS app for creating and managing virtual bookshelves. Use
 - Expo CLI (`npm install -g expo-cli`)
 - iOS Simulator or physical iOS device
 - Supabase account
-- Stripe account (for payments)
+- RevenueCat account (for in-app purchases)
 
 ### Installation
 
@@ -103,7 +103,7 @@ A React Native + Expo iOS app for creating and managing virtual bookshelves. Use
    ```env
    EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
    EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-   EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your-key
+   EXPO_PUBLIC_REVENUECAT_IOS_API_KEY=appl_your-key
    ```
 
 4. **Start the development server**
@@ -251,46 +251,30 @@ In Supabase Auth settings, enable:
 - Email/Password authentication
 - (Optional) OAuth providers like Google, Apple
 
-## Stripe Setup
+## RevenueCat Setup
 
-### 1. Create Stripe Account
+### 1. Create a RevenueCat project
 
-Go to [stripe.com](https://stripe.com) and create an account.
+Go to [revenuecat.com](https://www.revenuecat.com) and create a project with an iOS app.
 
-### 2. Get API Keys
+### 2. Configure products and entitlement
 
-Copy your publishable key from the Stripe dashboard and add it to `.env`:
+In the RevenueCat dashboard:
+
+1. Create `monthly` and `yearly` subscription products (linked to App Store Connect).
+2. Create an entitlement named **`Virtual Library Pro`** (must match `ENTITLEMENT_ID` in `services/revenuecat.ts`).
+3. Attach both products to the entitlement and add them to the default offering.
+4. Configure a Paywall and the Customer Center for the default offering (the app renders both with `react-native-purchases-ui`).
+
+### 3. Add the public SDK key
+
+Copy the App Store public SDK key (`appl_...`) from Project Settings → API Keys into `.env`:
+
 ```env
-EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+EXPO_PUBLIC_REVENUECAT_IOS_API_KEY=appl_...
 ```
 
-### 3. Backend API (Required)
-
-**Important**: For security, you need a backend server to create payment intents. The client should never have access to your Stripe secret key.
-
-Create an API endpoint (e.g., using Vercel, AWS Lambda, or your own server):
-
-```javascript
-// Example: /api/create-payment-intent
-import Stripe from 'stripe';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
-export default async function handler(req, res) {
-  const { amount, currency, userId } = req.body;
-
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount,
-    currency,
-    metadata: { userId },
-    automatic_payment_methods: { enabled: true },
-  });
-
-  res.json({ clientSecret: paymentIntent.client_secret });
-}
-```
-
-Update `services/stripe.ts` with your API URL.
+Without this variable the app falls back to a RevenueCat **test-store key** that cannot process real purchases — fine for development, a blocker for release.
 
 ## iOS Widget Setup (expo-widgets)
 
@@ -370,7 +354,9 @@ npm test
 |----------|-------------|
 | `EXPO_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key |
-| `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
+| `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` | RevenueCat public SDK key for iOS (`appl_...`) |
+| `EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY` | Optional Google Books key for cover lookups |
+| `EXPO_PUBLIC_GOOGLE_CLOUD_VISION_API_KEY` | Optional Vision key for spine OCR auto-fill |
 
 ## API Services
 

@@ -30,7 +30,17 @@ import { supabase } from './supabase';
 // Constants
 // ============================================
 
-const REVENUECAT_API_KEY = 'test_JICfTmnFPOhNQTrUxXCLhXNIqTO';
+/**
+ * RevenueCat public SDK key.
+ *
+ * Read from the environment so production builds can ship a real store key
+ * (`appl_...` for the App Store) without a code change. The checked-in
+ * fallback is a RevenueCat *test store* key and will not process real
+ * purchases — it exists only so development builds work out of the box.
+ */
+const REVENUECAT_API_KEY =
+  process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ||
+  'test_JICfTmnFPOhNQTrUxXCLhXNIqTO';
 
 /** The entitlement identifier configured in RevenueCat dashboard */
 export const ENTITLEMENT_ID = 'Virtual Library Pro';
@@ -77,6 +87,18 @@ class RevenueCatService {
    */
   async initialize(appUserID?: string): Promise<void> {
     if (this.isInitialized) return;
+
+    // react-native-purchases only supports native platforms.
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+      console.warn('RevenueCat is not supported on this platform; skipping initialization.');
+      return;
+    }
+
+    if (!REVENUECAT_API_KEY.startsWith('appl_') && !__DEV__) {
+      console.warn(
+        'RevenueCat is using a test store API key. Set EXPO_PUBLIC_REVENUECAT_IOS_API_KEY to your production key before release.'
+      );
+    }
 
     try {
       if (__DEV__) {

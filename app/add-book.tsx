@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -69,6 +70,11 @@ export default function AddBookScreen() {
     if (!GOOGLE_VISION_API_KEY || !asset.uri) return;
 
     try {
+      // Vision can't fetch local file:// URIs, so send the image content inline.
+      const base64Image = await FileSystem.readAsStringAsync(asset.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
       const response = await fetch(
         `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
         {
@@ -77,7 +83,7 @@ export default function AddBookScreen() {
           body: JSON.stringify({
             requests: [
               {
-                image: { source: { imageUri: asset.uri } },
+                image: { content: base64Image },
                 features: [{ type: 'TEXT_DETECTION', maxResults: 1 }],
               },
             ],

@@ -168,8 +168,19 @@ struct BookshelfWidgetView: View {
         .padding(12)
       } else {
         bookshelfContent
+          .widgetURL(deepLinkURL)
       }
     }
+  }
+
+  /// Deep link into the selected shelf when the widget is tapped.
+  /// expo-router resolves virtuallibrary://bookshelf?id=<id> to the
+  /// bookshelf detail screen automatically.
+  private var deepLinkURL: URL? {
+    guard let shelfId = entry.bookshelfId,
+          var components = URLComponents(string: "virtuallibrary://bookshelf") else { return nil }
+    components.queryItems = [URLQueryItem(name: "id", value: shelfId)]
+    return components.url
   }
 
   private var booksPerRow: Int { 7 }

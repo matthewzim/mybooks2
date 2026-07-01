@@ -51,6 +51,9 @@ export default function PaymentScreen() {
 
   // If user is already premium, show status + Customer Center
   // Use isPro (RevenueCat) as the source of truth, not the cached Supabase value
+  // NOTE: a successful purchase flips isPro before the confetti finishes, so
+  // this branch must also render the ConfettiOverlay or the celebration (and
+  // its auto-dismiss) would never run.
   if (isPro) {
     return (
       <>
@@ -98,6 +101,7 @@ export default function PaymentScreen() {
               style={styles.manageButton}
             />
           </View>
+          <ConfettiOverlay visible={showConfetti} onComplete={handleConfettiComplete} />
         </SafeAreaView>
       </>
     );

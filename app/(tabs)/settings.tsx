@@ -18,7 +18,6 @@ import {
   ScrollView,
   Pressable,
   Alert,
-  Switch,
   Modal,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -132,7 +131,6 @@ export default function SettingsScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSavingUsername, setIsSavingUsername] = useState(false);
   const [usernameError, setUsernameError] = useState<string | null>(null);
-  const [notifications, setNotifications] = useState(true);
   const [showGoodreadsImportModal, setShowGoodreadsImportModal] = useState(false);
   const [isImportingGoodreads, setIsImportingGoodreads] = useState(false);
   const [isResettingData, setIsResettingData] = useState(false);
@@ -708,29 +706,6 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Preferences Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Preferences</Text>
-          <View style={[styles.card, { backgroundColor: colors.card }]}>
-            <SettingsRow
-              icon="notifications-outline"
-              title="Push Notifications"
-              subtitle="Receive updates about your library"
-              colors={colors}
-              trailing={
-                <Switch
-                  value={notifications}
-                  onValueChange={setNotifications}
-                  trackColor={{
-                    false: colors.border,
-                    true: colors.primary,
-                  }}
-                />
-              }
-            />
-          </View>
-        </View>
-
         {/* Subscription Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Subscription</Text>
@@ -776,18 +751,6 @@ export default function SettingsScreen() {
               title="App Version"
               subtitle="1.0.0"
               colors={colors}
-            />
-            <SettingsRow
-              icon="document-text-outline"
-              title="Terms of Service"
-              colors={colors}
-              onPress={() => {}}
-            />
-            <SettingsRow
-              icon="shield-outline"
-              title="Privacy Policy"
-              colors={colors}
-              onPress={() => {}}
             />
           </View>
         </View>

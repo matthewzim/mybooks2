@@ -166,11 +166,11 @@ export const DarkTheme: ThemeColors = {
   accent: '#ba541f',
   accentLight: '#d4723f',
 
-  // Background colors
-  background: '#fbf6ec',
-  backgroundDark: '#f5eddf',
-  card: '#fbf6ec',
-  cardDark: '#f5eddf',
+  // Background colors (dark — matches the widget's dark appearance #0b1220)
+  background: '#0b1220',
+  backgroundDark: '#0f172a',
+  card: '#111a2e',
+  cardDark: '#0f172a',
 
   // Text colors
   text: '#f1f5f9',
@@ -184,13 +184,13 @@ export const DarkTheme: ThemeColors = {
   bookshelfLight: '#a16207',
 
   // Book appearance colors
-  bookBase: '#f5eddf',
+  bookBase: '#1e293b',
   bookPageLines: '#334155',
-  bookPageContent: '#fbf6ec',
+  bookPageContent: '#0f172a',
   bookCoverEdge: 'rgba(0, 0, 0, 0.5)',
 
   // Input colors
-  inputBackground: '#fbf6ec',
+  inputBackground: '#111a2e',
   inputBorder: '#334155',
 
   // Status colors

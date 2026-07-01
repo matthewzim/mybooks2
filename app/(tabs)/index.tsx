@@ -2,7 +2,7 @@
  * Home Screen (My Library)
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,11 +12,12 @@ import {
   Pressable,
   Alert,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBookshelves } from '@/hooks/useBookshelves';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRevenueCat } from '@/contexts/RevenueCatContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { BookshelfPreview } from '@/components/BookshelfPreview';
 import { LoadingView, EmptyState } from '@/components/ui';
@@ -26,6 +27,7 @@ import type { Bookshelf } from '@/types';
 
 export default function HomeScreen() {
   const { user } = useAuth();
+  const { isPro } = useRevenueCat();
   const { colors } = useTheme();
   const {
     bookshelves,
@@ -35,6 +37,21 @@ export default function HomeScreen() {
     bookshelfCount,
   } = useBookshelves();
   const [refreshing, setRefreshing] = useState(false);
+
+  // Refetch when the screen regains focus so shelves created or modified on
+  // other screens (create-bookshelf, onboarding, bookshelf detail) appear
+  // without a manual pull-to-refresh. The hook already fetches on mount, so
+  // skip the first focus to avoid a duplicate request.
+  const hasFocusedRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasFocusedRef.current) {
+        hasFocusedRef.current = true;
+        return;
+      }
+      fetchBookshelves();
+    }, [fetchBookshelves])
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -54,7 +71,10 @@ export default function HomeScreen() {
   };
 
   const handleAddBookshelf = () => {
-    if (!user?.is_premium && bookshelfCount >= FREE_TIER_LIMITS.MAX_BOOKSHELVES) {
+    // RevenueCat entitlement is the source of truth; the Supabase flag is a
+    // synced cache that can lag behind (e.g. right after a purchase).
+    const isPremium = isPro || user?.is_premium;
+    if (!isPremium && bookshelfCount >= FREE_TIER_LIMITS.MAX_BOOKSHELVES) {
       Alert.alert(
         'Bookshelf Limit Reached',
         `Free accounts can have up to ${FREE_TIER_LIMITS.MAX_BOOKSHELVES} bookshelves. Upgrade to Premium for unlimited bookshelves.`,
