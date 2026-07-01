@@ -319,51 +319,9 @@ class WidgetManager {
     }
   }
 
-  /**
-   * Handle deep link from widget tap
-   */
-  handleWidgetDeepLink(url: string): {
-    route: string;
-    params?: Record<string, string>;
-  } | null {
-    try {
-      const urlObj = new URL(url);
-
-      const bookshelfPath = `${urlObj.hostname}${urlObj.pathname}`;
-
-      if (bookshelfPath.includes('bookshelf')) {
-        const shelfId =
-          urlObj.searchParams.get('id') ??
-          bookshelfPath.split('/').filter(Boolean).at(-1) ??
-          null;
-        if (shelfId) {
-          return {
-            route: '/bookshelf',
-            params: { id: shelfId },
-          };
-        }
-      }
-
-      if (bookshelfPath.includes('book')) {
-        const bookId =
-          urlObj.searchParams.get('id') ??
-          bookshelfPath.split('/').filter(Boolean).at(-1) ??
-          null;
-        const shelfId = urlObj.searchParams.get('shelfId');
-        if (bookId) {
-          return {
-            route: '/book/[id]',
-            params: { id: bookId, shelfId: shelfId || '' },
-          };
-        }
-      }
-
-      return { route: '/(tabs)' };
-    } catch (error) {
-      console.error('Failed to parse widget deep link:', error);
-      return null;
-    }
-  }
+  // Widget taps deep-link via widgetURL (virtuallibrary://bookshelf?id=...),
+  // which expo-router resolves to the bookshelf detail screen automatically —
+  // no JS-side URL parsing is needed.
 }
 
 export const widgetManager = new WidgetManager();

@@ -11,7 +11,7 @@
  * - Dynamic expansion as books are added
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,7 @@ import {
   Alert,
   Pressable,
 } from 'react-native';
-import { useLocalSearchParams, router, Stack } from 'expo-router';
+import { useLocalSearchParams, router, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
@@ -71,6 +71,20 @@ export default function BookshelfDetailScreen() {
   useEffect(() => {
     loadBookshelf();
   }, [loadBookshelf]);
+
+  // Refetch books when the screen regains focus so books added via the
+  // scan and add-book screens appear immediately on return. useBooks already
+  // fetches on mount, so skip the first focus to avoid a duplicate request.
+  const hasFocusedRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasFocusedRef.current) {
+        hasFocusedRef.current = true;
+        return;
+      }
+      fetchBooks();
+    }, [fetchBooks])
+  );
 
   /**
    * Open book detail modal
