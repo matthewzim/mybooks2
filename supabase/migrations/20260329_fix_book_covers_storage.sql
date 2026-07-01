@@ -10,17 +10,21 @@ VALUES ('book-covers', 'book-covers', true)
 ON CONFLICT (id) DO UPDATE SET public = true;
 
 -- 2. Storage RLS policies for the book-covers bucket
+-- (drop-then-create so this migration is safe to re-run)
 -- Allow anyone to read covers (public bucket)
+DROP POLICY IF EXISTS "Anyone can read book covers" ON storage.objects;
 CREATE POLICY "Anyone can read book covers"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'book-covers');
 
 -- Allow authenticated users to upload covers
+DROP POLICY IF EXISTS "Authenticated users can upload book covers" ON storage.objects;
 CREATE POLICY "Authenticated users can upload book covers"
   ON storage.objects FOR INSERT
   WITH CHECK (bucket_id = 'book-covers' AND auth.role() = 'authenticated');
 
 -- Allow authenticated users to overwrite covers (for upsert)
+DROP POLICY IF EXISTS "Authenticated users can update book covers" ON storage.objects;
 CREATE POLICY "Authenticated users can update book covers"
   ON storage.objects FOR UPDATE
   USING (bucket_id = 'book-covers' AND auth.role() = 'authenticated');
