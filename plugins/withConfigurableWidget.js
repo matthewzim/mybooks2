@@ -28,6 +28,8 @@ const TARGET_NAME = "ExpoWidgetsTarget";
 const bookshelfWidgetSwift = (displayName, description, families, groupIdentifier) => `import WidgetKit
 import SwiftUI
 import AppIntents
+import UIKit
+import ImageIO
 
 // MARK: - Shared UserDefaults helper (replaces internal ExpoWidgets WidgetsStorage)
 
@@ -315,10 +317,15 @@ struct BookshelfWidgetView: View {
   }
 
   private func seededNormalized(bookId: String, title: String, salt: String) -> CGFloat {
-    let source = "\(bookId)-\(title)-\(salt)"
-    var hash = 0
-    for scalar in source.unicodeScalars {
-      hash = Int(scalar.value) + ((hash << 5) - hash)
+    let source = "\\(bookId)-\\(title)-\\(salt)"
+    // Mirrors the JS hash in utils/placeholderSpine.ts. In JS, "hash << 5"
+    // wraps to Int32 and the additions never trap; Swift's default +/-
+    // crash on overflow, so wrap the shift to Int32 and keep the running
+    // value in Int64 (bounded, so the +/- below can never overflow).
+    var hash: Int64 = 0
+    for unit in source.utf16 {
+      let shifted = Int64(Int32(truncatingIfNeeded: hash) << 5)
+      hash = Int64(unit) + (shifted - hash)
     }
 
     return CGFloat(abs(hash % 1000)) / 1000.0
@@ -432,8 +439,28 @@ private func buildBookshelfEntry(selectedId: String?) -> BookshelfEntry {
   )
 }
 
+/// Downsamples image data so decoded bitmaps stay small.  The widget
+/// extension has a hard memory ceiling around 30MB; full-resolution spine
+/// photos (multi-MB JPEGs that decode to tens of MB of bitmap) get the
+/// process killed by the system, leaving the widget stuck on its redacted
+/// placeholder.  Spines render at most ~42pt wide, so 400px is plenty.
+private func downsampledImageData(_ data: Data, maxPixelSize: CGFloat) -> Data? {
+  let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+  guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else { return nil }
+  let thumbnailOptions = [
+    kCGImageSourceCreateThumbnailFromImageAlways: true,
+    kCGImageSourceCreateThumbnailWithTransform: true,
+    kCGImageSourceShouldCacheImmediately: true,
+    kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+  ] as CFDictionary
+  guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions) else { return nil }
+  return UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.85)
+}
+
 /// Downloads book spine images for display in the widget.
 /// Uses a per-image timeout so one slow download doesn't block the whole widget.
+/// Fetches in small batches and downsamples each image as soon as it arrives
+/// so only a few full-size payloads are ever in memory at once.
 private func downloadBookImages(for books: [[String: Any]], limit: Int) async -> [String: Data] {
   var result: [String: Data] = [:]
   let booksToFetch = Array(books.prefix(limit))
@@ -442,28 +469,34 @@ private func downloadBookImages(for books: [[String: Any]], limit: Int) async ->
   config.timeoutIntervalForResource = 12
   let session = URLSession(configuration: config)
 
-  await withTaskGroup(of: (String, Data?).self) { group in
-    for book in booksToFetch {
-      guard let id = book["id"] as? String,
-            let urlString = book["resolvedImageUrl"] as? String,
-            !urlString.isEmpty,
-            let url = URL(string: urlString) else { continue }
-      group.addTask {
-        do {
-          let (data, response) = try await session.data(from: url)
-          if let httpResponse = response as? HTTPURLResponse,
-             httpResponse.statusCode == 200 {
-            return (id, data)
-          }
-        } catch {}
-        return (id, nil)
+  let batchSize = 4
+  var index = 0
+  while index < booksToFetch.count {
+    let batch = booksToFetch[index..<min(index + batchSize, booksToFetch.count)]
+    await withTaskGroup(of: (String, Data?).self) { group in
+      for book in batch {
+        guard let id = book["id"] as? String,
+              let urlString = book["resolvedImageUrl"] as? String,
+              !urlString.isEmpty,
+              let url = URL(string: urlString) else { continue }
+        group.addTask {
+          do {
+            let (data, response) = try await session.data(from: url)
+            if let httpResponse = response as? HTTPURLResponse,
+               httpResponse.statusCode == 200 {
+              return (id, downsampledImageData(data, maxPixelSize: 400))
+            }
+          } catch {}
+          return (id, nil)
+        }
+      }
+      for await (id, data) in group {
+        if let data = data {
+          result[id] = data
+        }
       }
     }
-    for await (id, data) in group {
-      if let data = data {
-        result[id] = data
-      }
-    }
+    index += batchSize
   }
   return result
 }
@@ -476,7 +509,9 @@ struct BookshelfConfigurableProvider: AppIntentTimelineProvider {
   typealias Intent = SelectBookshelfIntent
 
   func placeholder(in context: Context) -> BookshelfEntry {
-    BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, coverColor: nil, shelfStyle: "full", books: [], bookImages: [:])
+    // Rendered (redacted) while the first timeline loads — show an empty
+    // shelf instead of gated/empty-state text so it reads as a bookshelf.
+    BookshelfEntry(date: Date(), isPremium: true, bookshelfName: "My Shelf", bookshelfId: "placeholder", coverColor: nil, shelfStyle: "full", books: [], bookImages: [:])
   }
 
   func snapshot(for configuration: SelectBookshelfIntent, in context: Context) async -> BookshelfEntry {
@@ -492,7 +527,11 @@ struct BookshelfConfigurableProvider: AppIntentTimelineProvider {
     let maxImages = context.family == .systemMedium ? 7 : 14
     let images = await downloadBookImages(for: entry.books, limit: maxImages)
     entry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, shelfStyle: entry.shelfStyle, books: entry.books, bookImages: images)
-    return Timeline(entries: [entry], policy: .atEnd)
+    // The app reloads the widget whenever data changes (expo-widgets
+    // updateSnapshot); with a single entry, .atEnd would make WidgetKit
+    // re-request the timeline (and re-download images) as often as the
+    // refresh budget allows.
+    return Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(6 * 60 * 60)))
   }
 }
 
@@ -502,7 +541,7 @@ struct BookshelfStaticProvider: TimelineProvider {
   typealias Entry = BookshelfEntry
 
   func placeholder(in context: Context) -> BookshelfEntry {
-    BookshelfEntry(date: Date(), isPremium: false, bookshelfName: nil, bookshelfId: nil, coverColor: nil, shelfStyle: "full", books: [], bookImages: [:])
+    BookshelfEntry(date: Date(), isPremium: true, bookshelfName: "My Shelf", bookshelfId: "placeholder", coverColor: nil, shelfStyle: "full", books: [], bookImages: [:])
   }
 
   func getSnapshot(in context: Context, completion: @escaping (BookshelfEntry) -> Void) {
@@ -521,7 +560,7 @@ struct BookshelfStaticProvider: TimelineProvider {
     Task {
       let images = await downloadBookImages(for: entry.books, limit: maxImages)
       let finalEntry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, shelfStyle: entry.shelfStyle, books: entry.books, bookImages: images)
-      completion(Timeline(entries: [finalEntry], policy: .atEnd))
+      completion(Timeline(entries: [finalEntry], policy: .after(Date().addingTimeInterval(6 * 60 * 60))))
     }
   }
 }
