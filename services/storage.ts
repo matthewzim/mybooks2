@@ -575,4 +575,74 @@ export function getSpinePublicUrl(
   return publicUrl;
 }
 
+/**
+ * Signed-URL lifetime for widget spine images. The widget timeline refreshes
+ * every 6 hours and the app re-pushes fresh URLs on every data sync, so 30
+ * days gives plenty of headroom even if the app isn't opened for a while.
+ */
+const WIDGET_SIGNED_URL_EXPIRY_SECONDS = 60 * 60 * 24 * 30;
+
+/**
+ * Resolve spine image URLs for the home-screen widget.
+ *
+ * The book-spines bucket is private, so the public URLs previously pushed to
+ * the widget returned 400 and every spine rendered as a lettered placeholder.
+ * Signed URLs work for private and public buckets alike; all paths are signed
+ * in a single batched request. External (non-Supabase) URLs pass through
+ * unchanged, and any path that fails to sign falls back to its public URL.
+ *
+ * @returns One resolved URL (or null) per input, in the same order.
+ */
+export async function getSpineWidgetUrls(
+  imageUrlsOrPaths: (string | null | undefined)[]
+): Promise<(string | null)[]> {
+  type Resolved =
+    | { kind: 'none' }
+    | { kind: 'external'; url: string }
+    | { kind: 'path'; path: string };
+
+  const resolved: Resolved[] = imageUrlsOrPaths.map((input) => {
+    if (!input) return { kind: 'none' };
+
+    const isFullUrl = input.startsWith('http://') || input.startsWith('https://');
+    if (isFullUrl) {
+      const path = extractStoragePathFromUrl(input, STORAGE_BUCKETS.BOOK_SPINES);
+      return path ? { kind: 'path', path } : { kind: 'external', url: input };
+    }
+
+    return { kind: 'path', path: input };
+  });
+
+  const paths = [
+    ...new Set(
+      resolved.flatMap((r) => (r.kind === 'path' ? [r.path] : []))
+    ),
+  ];
+
+  const signedByPath = new Map<string, string>();
+  if (paths.length > 0) {
+    try {
+      const { data, error } = await supabase.storage
+        .from(STORAGE_BUCKETS.BOOK_SPINES)
+        .createSignedUrls(paths, WIDGET_SIGNED_URL_EXPIRY_SECONDS);
+
+      if (!error && data) {
+        for (const item of data) {
+          if (item.path && item.signedUrl && !item.error) {
+            signedByPath.set(item.path, item.signedUrl);
+          }
+        }
+      }
+    } catch {
+      // Fall back to public URLs below.
+    }
+  }
+
+  return resolved.map((r) => {
+    if (r.kind === 'none') return null;
+    if (r.kind === 'external') return r.url;
+    return signedByPath.get(r.path) ?? getSpinePublicUrl(r.path);
+  });
+}
+
 export default storageService;

@@ -202,7 +202,13 @@ struct BookshelfWidgetView: View {
     GeometryReader { geo in
       let margin: CGFloat = 8
       let availableWidth = geo.size.width - 2 * margin
-      let spineWidth = min(42, max(28, availableWidth / CGFloat(booksPerRow)))
+      // A row also spends width on the shelf's side padding and the 1pt gaps
+      // between spines; without subtracting those, a full row of max-width
+      // spines overflows the shelf past the widget's right margin.
+      let rowSidePadding: CGFloat = isBottomStyle ? 3 : shelfThickness
+      let spineSpacing: CGFloat = 1
+      let rowContentWidth = availableWidth - 2 * rowSidePadding - spineSpacing * CGFloat(booksPerRow - 1)
+      let spineWidth = min(42, max(20, rowContentWidth / CGFloat(booksPerRow)))
 
       // Compute spine height so shelves fill the widget with equal margins on all sides
       let shelfFrameExtra: CGFloat = isBottomStyle ? 6 : shelfThickness

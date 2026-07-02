@@ -11,8 +11,8 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, Settings } from 'react-native';
-import type { WidgetData, WidgetBookshelf, WidgetBook, Bookshelf, Book } from '@/types';
-import { getSpinePublicUrl } from '@/services/storage';
+import type { WidgetData, WidgetBookshelf, Bookshelf, Book } from '@/types';
+import { getSpineWidgetUrls } from '@/services/storage';
 
 const WIDGET_DATA_KEY = '@virtual_library_widget_data';
 const WIDGET_SELECTED_SHELF_KEY = '@virtual_library_widget_shelf';
@@ -95,17 +95,30 @@ class WidgetManager {
   /**
    * Transform a bookshelf to widget-compatible format.
    * Resolves spine image URLs so the native widget can download them.
+   *
+   * The book-spines bucket is private, so the widget needs long-lived signed
+   * URLs — plain public URLs return 400 and every spine falls back to a
+   * lettered placeholder. All spine paths for the shelf are signed in one
+   * batched request.
    */
-  transformBookshelfForWidget(
+  async transformBookshelfForWidget(
     bookshelf: Bookshelf,
     books: Book[]
-  ): WidgetBookshelf {
+  ): Promise<WidgetBookshelf> {
     const sorted = books
       .slice()
       .sort((a, b) => a.position - b.position)
       .slice(0, 18);
 
-    const widgetBooks = sorted.map((b) => this.transformBookForWidget(b));
+    const resolvedUrls = await getSpineWidgetUrls(sorted.map((b) => b.image_url));
+
+    const widgetBooks = sorted.map((b, i) => ({
+      id: b.id,
+      title: b.title,
+      author: b.author,
+      image_url: b.image_url,
+      resolved_image_url: resolvedUrls[i],
+    }));
 
     return {
       id: bookshelf.id,
@@ -113,24 +126,6 @@ class WidgetManager {
       cover_color: bookshelf.cover_color,
       shelf_style: bookshelf.shelf_style,
       books: widgetBooks,
-    };
-  }
-
-  /**
-   * Transform a book to widget-compatible format.
-   * Uses a public (non-expiring) URL so the widget can download images
-   * even after the timeline refreshes hours later.
-   */
-  transformBookForWidget(book: Book): WidgetBook {
-    // Use the public URL directly – signed URLs expire before the widget
-    // timeline refreshes, causing all image downloads to fail.
-    const resolvedUrl = getSpinePublicUrl(book.image_url);
-    return {
-      id: book.id,
-      title: book.title,
-      author: book.author,
-      image_url: book.image_url,
-      resolved_image_url: resolvedUrl,
     };
   }
 
@@ -162,8 +157,10 @@ class WidgetManager {
     shelves: (Bookshelf & { books: Book[] })[]
   ): Promise<void> {
     try {
-      const widgetShelves = shelves.map((shelf) =>
-        this.transformBookshelfForWidget(shelf, shelf.books)
+      const widgetShelves = await Promise.all(
+        shelves.map((shelf) =>
+          this.transformBookshelfForWidget(shelf, shelf.books)
+        )
       );
 
       const widgetData: WidgetData = {
@@ -232,7 +229,7 @@ class WidgetManager {
     bookshelf: Bookshelf,
     books: Book[]
   ): Promise<void> {
-    const widgetBookshelf = this.transformBookshelfForWidget(bookshelf, books);
+    const widgetBookshelf = await this.transformBookshelfForWidget(bookshelf, books);
     // Re-save with this shelf included (merge with existing data)
     const existing = await this.getWidgetData();
     const bookshelves = existing?.bookshelves ?? [];
