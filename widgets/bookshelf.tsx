@@ -120,11 +120,21 @@ function SpineRow({
     );
   });
 
+  /*
+   * NOTE: matching the in-app bookshelf, spines are laid out with zero
+   * spacing and bottom alignment so adjacent spines touch and every spine
+   * rests on the shelf ledge. The native Swift widget additionally derives
+   * each spine's width from its image's natural aspect ratio (clamped, and
+   * scaled down proportionally if a row would overflow) so images fill
+   * their frames exactly with no letterboxing gaps.
+   */
   return (
     <VStack>
       {shelfStyle === 'bottom' ? (
         /* Bottom line shelf: no background, just spines */
         <HStack
+          spacing={0}
+          alignment="bottom"
           modifiers={[
             padding({ horizontal: 3 }),
           ]}
@@ -134,6 +144,8 @@ function SpineRow({
       ) : (
         /* Full shelf: spines on a background with uniform border */
         <HStack
+          spacing={0}
+          alignment="bottom"
           modifiers={[
             background(shelfBackColor),
             cornerRadius(2),

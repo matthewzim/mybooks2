@@ -202,13 +202,12 @@ struct BookshelfWidgetView: View {
     GeometryReader { geo in
       let margin: CGFloat = 8
       let availableWidth = geo.size.width - 2 * margin
-      // A row also spends width on the shelf's side padding and the 1pt gaps
-      // between spines; without subtracting those, a full row of max-width
-      // spines overflows the shelf past the widget's right margin.
+      // A row also spends width on the shelf's side padding; without
+      // subtracting it, a full row of max-width spines overflows the shelf
+      // past the widget's right margin.
       let rowSidePadding: CGFloat = isBottomStyle ? 3 : shelfThickness
-      let spineSpacing: CGFloat = 1
-      let rowContentWidth = availableWidth - 2 * rowSidePadding - spineSpacing * CGFloat(booksPerRow - 1)
-      let spineWidth = min(42, max(20, rowContentWidth / CGFloat(booksPerRow)))
+      let rowContentWidth = availableWidth - 2 * rowSidePadding
+      let baseSpineWidth = min(42, max(20, rowContentWidth / CGFloat(booksPerRow)))
 
       // Compute spine height so shelves fill the widget with equal margins on all sides
       let shelfFrameExtra: CGFloat = isBottomStyle ? 6 : shelfThickness
@@ -220,11 +219,11 @@ struct BookshelfWidgetView: View {
 
       VStack(alignment: .leading, spacing: 0) {
         // First shelf row (large full-style: no ledge, bottom shelf top border serves as shared border)
-        shelfRow(books: topRow, spineWidth: spineWidth, rowSpineHeight: rowSpineHeight, showLedge: family != .systemLarge || isBottomStyle)
+        shelfRow(books: topRow, rowContentWidth: rowContentWidth, baseSpineWidth: baseSpineWidth, rowSpineHeight: rowSpineHeight, showLedge: family != .systemLarge || isBottomStyle)
 
         if family == .systemLarge {
           // Second shelf row
-          shelfRow(books: bottomRow, spineWidth: spineWidth, rowSpineHeight: rowSpineHeight, showLedge: true)
+          shelfRow(books: bottomRow, rowContentWidth: rowContentWidth, baseSpineWidth: baseSpineWidth, rowSpineHeight: rowSpineHeight, showLedge: true)
         }
       }
       .padding(margin)
@@ -235,18 +234,22 @@ struct BookshelfWidgetView: View {
     entry.shelfStyle == "bottom"
   }
 
-  private func shelfRow(books: [[String: Any]], spineWidth: CGFloat, rowSpineHeight: CGFloat, showLedge: Bool) -> some View {
-    VStack(spacing: 0) {
+  private func shelfRow(books: [[String: Any]], rowContentWidth: CGFloat, baseSpineWidth: CGFloat, rowSpineHeight: CGFloat, showLedge: Bool) -> some View {
+    // Like the in-app bookshelf: spines sit flush against each other
+    // (spacing 0) and rest on the shelf (bottom alignment).
+    let layouts = spineLayouts(for: books, rowContentWidth: rowContentWidth, baseSpineWidth: baseSpineWidth, rowSpineHeight: rowSpineHeight)
+
+    return VStack(spacing: 0) {
       if isBottomStyle {
         // Bottom line shelf: no background, just spines sitting on a ledge
-        HStack(spacing: 1) {
-          ForEach(Array(books.enumerated()), id: \\.offset) { _, book in
-            spineView(book: book, width: spineWidth, height: rowSpineHeight)
+        HStack(alignment: .bottom, spacing: 0) {
+          ForEach(Array(layouts.enumerated()), id: \\.offset) { _, layout in
+            spineView(layout: layout)
           }
           Spacer(minLength: 0)
         }
         .padding(.horizontal, 3)
-        .frame(height: rowSpineHeight + 6)
+        .frame(height: rowSpineHeight + 6, alignment: .bottom)
       } else {
         // Full shelf: spines on a background with shelf-colored frame
         ZStack(alignment: .bottom) {
@@ -260,9 +263,9 @@ struct BookshelfWidgetView: View {
             .padding(.top, shelfThickness)
 
           // Book spines aligned to bottom
-          HStack(spacing: 1) {
-            ForEach(Array(books.enumerated()), id: \\.offset) { _, book in
-              spineView(book: book, width: spineWidth, height: rowSpineHeight)
+          HStack(alignment: .bottom, spacing: 0) {
+            ForEach(Array(layouts.enumerated()), id: \\.offset) { _, layout in
+              spineView(layout: layout)
             }
             Spacer(minLength: 0)
           }
@@ -280,29 +283,65 @@ struct BookshelfWidgetView: View {
     }
   }
 
-  @ViewBuilder
-  private func spineView(book: [String: Any], width: CGFloat, height: CGFloat) -> some View {
-    let bookId = book["id"] as? String ?? ""
-    let title = book["title"] as? String ?? ""
-    let heightFactor = imageHeightFactor(bookId: bookId, title: title)
-    let scaledHeight = max(height * 0.75, height * heightFactor)
-    let scaledWidth = max(width * 0.5, width * heightFactor)
+  private struct SpineLayout {
+    let title: String
+    let width: CGFloat
+    let height: CGFloat
+    let image: UIImage?
+  }
 
-    if let imageData = entry.bookImages[bookId],
-       let uiImage = UIImage(data: imageData) {
+  /// Computes each spine's frame like the in-app bookshelf grid: the width
+  /// follows the image's natural aspect ratio at the spine's display height,
+  /// so the image fills its frame exactly and adjacent spines touch with no
+  /// letterboxing gaps. If a full row would overflow the shelf, all widths
+  /// are scaled down proportionally so the row still fits edge to edge.
+  private func spineLayouts(for books: [[String: Any]], rowContentWidth: CGFloat, baseSpineWidth: CGFloat, rowSpineHeight: CGFloat) -> [SpineLayout] {
+    let minSpineWidth: CGFloat = 12
+    let maxSpineWidth: CGFloat = 42
+
+    var layouts: [SpineLayout] = books.map { book in
+      let bookId = book["id"] as? String ?? ""
+      let title = book["title"] as? String ?? ""
+      let heightFactor = imageHeightFactor(bookId: bookId, title: title)
+      let height = rowSpineHeight * heightFactor
+
+      if let imageData = entry.bookImages[bookId],
+         let uiImage = UIImage(data: imageData),
+         uiImage.size.height > 0 {
+        let aspect = uiImage.size.width / uiImage.size.height
+        let width = min(maxSpineWidth, max(minSpineWidth, height * aspect))
+        return SpineLayout(title: title, width: width, height: height, image: uiImage)
+      }
+
+      return SpineLayout(title: title, width: baseSpineWidth, height: height, image: nil)
+    }
+
+    let totalWidth = layouts.reduce(CGFloat(0)) { $0 + $1.width }
+    if totalWidth > rowContentWidth && totalWidth > 0 {
+      let scale = rowContentWidth / totalWidth
+      layouts = layouts.map { SpineLayout(title: $0.title, width: $0.width * scale, height: $0.height, image: $0.image) }
+    }
+
+    return layouts
+  }
+
+  @ViewBuilder
+  private func spineView(layout: SpineLayout) -> some View {
+    if let uiImage = layout.image {
+      // The frame already matches the image's aspect ratio (barring width
+      // clamping), so .fill renders edge to edge with no letterbox gaps.
       Image(uiImage: uiImage)
         .resizable()
-        .aspectRatio(contentMode: .fit)
-        .frame(width: scaledWidth, height: scaledHeight)
+        .aspectRatio(contentMode: .fill)
+        .frame(width: layout.width, height: layout.height)
         .clipped()
-        .cornerRadius(1)
     } else {
-      RoundedRectangle(cornerRadius: 1)
-        .fill(stableColor(for: title))
-        .frame(width: width, height: height)
+      Rectangle()
+        .fill(stableColor(for: layout.title))
+        .frame(width: layout.width, height: layout.height)
         .overlay(
-          Text(String(title.prefix(1)))
-            .font(.system(size: round(width * 0.38), weight: .bold))
+          Text(String(layout.title.prefix(1)))
+            .font(.system(size: round(layout.width * 0.38), weight: .bold))
             .foregroundColor(.white)
         )
     }
