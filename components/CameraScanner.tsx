@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -31,7 +32,7 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
-import { SpineCropper } from './SpineCropper';
+import { SpineCropper, CropRect } from './SpineCropper';
 import { SpineFramer } from './SpineFramer';
 
 interface CameraScannerProps {
@@ -39,6 +40,14 @@ interface CameraScannerProps {
   onCancel: () => void;
   isUploading?: boolean;
 }
+
+// Guide frame shown over the camera preview. The captured photo is cropped
+// to this region (plus margin) so the next step matches what the user framed.
+const GUIDE_FRAME_WIDTH = 100;
+const GUIDE_FRAME_HEIGHT = 300;
+// Extra context kept around the guide frame, as a fraction of its size,
+// so the framing step has room to fine-tune
+const GUIDE_CROP_MARGIN = 0.35;
 
 export function CameraScanner({
   onCapture,
@@ -51,6 +60,8 @@ export function CameraScanner({
   const [rawCapturedImage, setRawCapturedImage] = useState<string | null>(null);
   const [framedImage, setFramedImage] = useState<string | null>(null);
   const [croppedImage, setCroppedImage] = useState<string | null>(null);
+  const [cropRect, setCropRect] = useState<CropRect | null>(null);
+  const [previewSize, setPreviewSize] = useState({ width: 0, height: 0 });
   const cameraRef = useRef<CameraView>(null);
 
   // Request permissions on mount
@@ -59,6 +70,95 @@ export function CameraScanner({
       requestPermission();
     }
   }, [permission, requestPermission]);
+
+  /**
+   * Crop a captured photo to the on-screen guide frame.
+   *
+   * The camera preview fills the screen (cover fit), so the photo extends
+   * beyond what the preview showed. This maps the guide frame rectangle
+   * through the cover-fit transform into photo pixel coordinates and crops
+   * to it (plus margin), so the framing step shows the region the user
+   * actually positioned the spine in. Falls back to the full photo if the
+   * mapping isn't possible.
+   */
+  const cropToGuideFrame = async (photo: {
+    uri: string;
+    width?: number;
+    height?: number;
+  }): Promise<string> => {
+    const { width: previewWidth, height: previewHeight } = previewSize;
+    let photoWidth = photo.width ?? 0;
+    let photoHeight = photo.height ?? 0;
+
+    if (!previewWidth || !previewHeight || !photoWidth || !photoHeight) {
+      return photo.uri;
+    }
+
+    // Some platforms report pre-rotation dimensions for photos with EXIF
+    // orientation; if the aspect disagrees with the preview, swap them
+    if (
+      (previewWidth < previewHeight && photoWidth > photoHeight) ||
+      (previewWidth > previewHeight && photoWidth < photoHeight)
+    ) {
+      [photoWidth, photoHeight] = [photoHeight, photoWidth];
+    }
+
+    try {
+      // Cover fit: photo scaled to fill the preview, centered, edges cropped
+      const scale = Math.max(
+        previewWidth / photoWidth,
+        previewHeight / photoHeight
+      );
+      const offsetX = (photoWidth * scale - previewWidth) / 2;
+      const offsetY = (photoHeight * scale - previewHeight) / 2;
+
+      // Guide frame is centered in the preview; expand it by the margin
+      const marginX = GUIDE_FRAME_WIDTH * GUIDE_CROP_MARGIN;
+      const marginY = GUIDE_FRAME_HEIGHT * GUIDE_CROP_MARGIN;
+      const frameLeft = (previewWidth - GUIDE_FRAME_WIDTH) / 2 - marginX;
+      const frameTop = (previewHeight - GUIDE_FRAME_HEIGHT) / 2 - marginY;
+      const frameRight = (previewWidth + GUIDE_FRAME_WIDTH) / 2 + marginX;
+      const frameBottom = (previewHeight + GUIDE_FRAME_HEIGHT) / 2 + marginY;
+
+      // Map preview coordinates to photo pixels and clamp to bounds
+      const cropX = Math.max(0, Math.floor((frameLeft + offsetX) / scale));
+      const cropY = Math.max(0, Math.floor((frameTop + offsetY) / scale));
+      const cropRight = Math.min(
+        photoWidth,
+        Math.ceil((frameRight + offsetX) / scale)
+      );
+      const cropBottom = Math.min(
+        photoHeight,
+        Math.ceil((frameBottom + offsetY) / scale)
+      );
+      const cropWidth = cropRight - cropX;
+      const cropHeight = cropBottom - cropY;
+
+      if (cropWidth < 1 || cropHeight < 1) {
+        return photo.uri;
+      }
+
+      const result = await ImageManipulator.manipulateAsync(
+        photo.uri,
+        [
+          {
+            crop: {
+              originX: cropX,
+              originY: cropY,
+              width: cropWidth,
+              height: cropHeight,
+            },
+          },
+        ],
+        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      return result.uri;
+    } catch (error) {
+      console.error('Failed to crop to guide frame:', error);
+      return photo.uri;
+    }
+  };
 
   /**
    * Take a photo with the camera
@@ -73,8 +173,9 @@ export function CameraScanner({
       });
 
       if (photo?.uri) {
-        // Show cropper first
-        setRawCapturedImage(photo.uri);
+        const framedUri = await cropToGuideFrame(photo);
+        setCropRect(null);
+        setRawCapturedImage(framedUri);
       }
     } catch (error) {
       console.error('Failed to take picture:', error);
@@ -94,7 +195,9 @@ export function CameraScanner({
       });
 
       if (!result.canceled && result.assets[0]) {
-        // Show cropper first
+        // Gallery images weren't taken through the guide frame; show them
+        // whole and let the framing step do the positioning
+        setCropRect(null);
         setRawCapturedImage(result.assets[0].uri);
       }
     } catch (error) {
@@ -107,6 +210,8 @@ export function CameraScanner({
    * Handle frame completion - proceed to corner cropper with zoomed-in image
    */
   const handleFrameComplete = (framedUri: string) => {
+    // A newly framed image invalidates any previously chosen corner positions
+    setCropRect(null);
     setFramedImage(framedUri);
   };
 
@@ -118,9 +223,11 @@ export function CameraScanner({
   };
 
   /**
-   * Handle crop completion
+   * Handle crop completion - remember the crop region so "Adjust Crop"
+   * reopens the cropper with the corners where the user left them
    */
-  const handleCropComplete = (croppedUri: string) => {
+  const handleCropComplete = (croppedUri: string, rect: CropRect) => {
+    setCropRect(rect);
     setCroppedImage(croppedUri);
   };
 
@@ -153,6 +260,7 @@ export function CameraScanner({
     setRawCapturedImage(null);
     setFramedImage(null);
     setCroppedImage(null);
+    setCropRect(null);
   };
 
   /**
@@ -210,6 +318,7 @@ export function CameraScanner({
     return (
       <SpineCropper
         imageUri={framedImage}
+        initialCrop={cropRect ?? undefined}
         onCropComplete={handleCropComplete}
         onCancel={handleCropCancel}
       />
@@ -270,6 +379,7 @@ export function CameraScanner({
         ref={cameraRef}
         style={styles.camera}
         facing={facing}
+        onLayout={(event) => setPreviewSize(event.nativeEvent.layout)}
       >
         {/* Guide overlay */}
         <View style={styles.guideOverlay}>
@@ -357,8 +467,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   guideBox: {
-    width: 100,
-    height: 300,
+    width: GUIDE_FRAME_WIDTH,
+    height: GUIDE_FRAME_HEIGHT,
     borderWidth: 2,
     borderRadius: BorderRadius.sm,
     justifyContent: 'flex-end',

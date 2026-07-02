@@ -1,14 +1,15 @@
 /**
  * SpineCropper Component
  *
- * Allows users to adjust a 4-corner crop region on a captured image.
- * Designed for cropping book spines from photos.
+ * Allows users to adjust a rectangular crop region on a captured image
+ * via 4 corner handles. Designed for cropping book spines from photos.
  *
  * Features:
  * - Displays captured image
- * - 4 draggable corner handles
- * - Visual crop boundary
- * - Auto-detects spine area (centered rectangle)
+ * - 4 draggable corner handles, constrained to a rectangle so the drawn
+ *   boundary matches the applied crop exactly
+ * - Visual crop boundary with darkened surroundings
+ * - Defaults to a centered spine-shaped rectangle
  * - Applies crop with expo-image-manipulator
  */
 
@@ -33,16 +34,26 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
-import Svg, { Polygon, Circle, Line } from 'react-native-svg';
+import Svg, { Polygon, Circle, Line, Path } from 'react-native-svg';
 
 interface Point {
   x: number;
   y: number;
 }
 
+/** Crop rectangle normalized to 0..1 relative to the image dimensions */
+export interface CropRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 interface SpineCropperProps {
   imageUri: string;
-  onCropComplete: (croppedUri: string) => void;
+  /** Restores a previously chosen crop region (e.g. when re-adjusting) */
+  initialCrop?: CropRect;
+  onCropComplete: (croppedUri: string, cropRect: CropRect) => void;
   onCancel: () => void;
 }
 
@@ -55,15 +66,13 @@ const ZOOM_BUBBLE_SIZE = 120;
 const ZOOM_MAGNIFICATION = 2.5;
 const ZOOM_BUBBLE_OFFSET_Y = 80; // Distance above the finger
 
-// Dampening factor for less sensitive corner dragging (lower = less sensitive)
-const DRAG_DAMPENING = 0.6;
-
 // Calculate display dimensions for the image preview
 const IMAGE_CONTAINER_WIDTH = SCREEN_WIDTH - Spacing.lg * 2;
 const IMAGE_CONTAINER_HEIGHT = SCREEN_HEIGHT * 0.6;
 
 export function SpineCropper({
   imageUri,
+  initialCrop,
   onCropComplete,
   onCancel,
 }: SpineCropperProps) {
@@ -108,27 +117,47 @@ export function SpineCropper({
 
       setDisplaySize({ width: displayWidth, height: displayHeight });
 
-      // Initialize crop region as centered vertical rectangle
-      // Typical book spine aspect ratio is about 1:3 to 1:4
-      const spineWidth = displayWidth * 0.3;
-      const spineHeight = displayHeight * 0.85;
-      const centerX = displayWidth / 2;
-      const centerY = displayHeight / 2;
+      let left: number;
+      let top: number;
+      let right: number;
+      let bottom: number;
+
+      if (initialCrop) {
+        // Restore the previously chosen crop region
+        left = Math.max(0, initialCrop.x * displayWidth);
+        top = Math.max(0, initialCrop.y * displayHeight);
+        right = Math.min(displayWidth, (initialCrop.x + initialCrop.width) * displayWidth);
+        bottom = Math.min(displayHeight, (initialCrop.y + initialCrop.height) * displayHeight);
+      } else {
+        // Initialize crop region as centered vertical rectangle
+        // Typical book spine aspect ratio is about 1:3 to 1:4
+        const spineWidth = displayWidth * 0.3;
+        const spineHeight = displayHeight * 0.85;
+        left = (displayWidth - spineWidth) / 2;
+        top = (displayHeight - spineHeight) / 2;
+        right = left + spineWidth;
+        bottom = top + spineHeight;
+      }
 
       const initialCorners: Point[] = [
-        { x: centerX - spineWidth / 2, y: centerY - spineHeight / 2 }, // top-left
-        { x: centerX + spineWidth / 2, y: centerY - spineHeight / 2 }, // top-right
-        { x: centerX + spineWidth / 2, y: centerY + spineHeight / 2 }, // bottom-right
-        { x: centerX - spineWidth / 2, y: centerY + spineHeight / 2 }, // bottom-left
+        { x: left, y: top }, // top-left
+        { x: right, y: top }, // top-right
+        { x: right, y: bottom }, // bottom-right
+        { x: left, y: bottom }, // bottom-left
       ];
 
       setCorners(initialCorners);
       setIsInitialized(true);
     }
-  }, []);
+  }, [initialCrop]);
 
   /**
-   * Handle corner drag with dampening for less sensitivity
+   * Handle corner drag.
+   *
+   * The crop is applied as a rectangle, so the handles are constrained to
+   * stay rectangular: dragging a corner moves its two adjacent corners along
+   * the shared edges. This keeps the drawn boundary identical to the region
+   * that actually gets cropped.
    */
   const createPanResponder = useCallback((cornerIndex: number) => {
     let initialCornerPosition: Point | null = null;
@@ -148,10 +177,6 @@ export function SpineCropper({
       ) => {
         if (!initialCornerPosition) return;
 
-        // Apply dampening factor for less sensitive movement
-        const dampenedDx = gestureState.dx * DRAG_DAMPENING;
-        const dampenedDy = gestureState.dy * DRAG_DAMPENING;
-
         // Capture position values before async setCorners to avoid race condition
         // where onPanResponderRelease sets initialCornerPosition to null
         const initialX = initialCornerPosition.x;
@@ -159,9 +184,14 @@ export function SpineCropper({
 
         setCorners((prev) => {
           const newCorners = [...prev];
-          const newX = Math.max(0, Math.min(displaySize.width, initialX + dampenedDx));
-          const newY = Math.max(0, Math.min(displaySize.height, initialY + dampenedDy));
+          const newX = Math.max(0, Math.min(displaySize.width, initialX + gestureState.dx));
+          const newY = Math.max(0, Math.min(displaySize.height, initialY + gestureState.dy));
           newCorners[cornerIndex] = { x: newX, y: newY };
+          // Corners 0/1 and 2/3 share a horizontal edge; 0/3 and 1/2 a vertical one
+          const horizontalPartner = cornerIndex ^ 1;
+          const verticalPartner = 3 - cornerIndex;
+          newCorners[horizontalPartner] = { ...prev[horizontalPartner], y: newY };
+          newCorners[verticalPartner] = { ...prev[verticalPartner], x: newX };
           return newCorners;
         });
       },
@@ -190,7 +220,7 @@ export function SpineCropper({
       const scaleX = imageSize.width / displaySize.width;
       const scaleY = imageSize.height / displaySize.height;
 
-      // Find bounding box of the quadrilateral
+      // The corners form a rectangle; take its extent
       const xs = corners.map((c) => c.x * scaleX);
       const ys = corners.map((c) => c.y * scaleY);
 
@@ -201,6 +231,11 @@ export function SpineCropper({
 
       const cropWidth = maxX - minX;
       const cropHeight = maxY - minY;
+
+      if (cropWidth < 1 || cropHeight < 1) {
+        setIsProcessing(false);
+        return;
+      }
 
       // Crop the image
       const result = await ImageManipulator.manipulateAsync(
@@ -218,7 +253,12 @@ export function SpineCropper({
         { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
       );
 
-      onCropComplete(result.uri);
+      onCropComplete(result.uri, {
+        x: minX / imageSize.width,
+        y: minY / imageSize.height,
+        width: cropWidth / imageSize.width,
+        height: cropHeight / imageSize.height,
+      });
     } catch (error) {
       console.error('Failed to crop image:', error);
     } finally {
@@ -233,6 +273,23 @@ export function SpineCropper({
     if (!isInitialized) return '';
     return corners.map((c) => `${c.x},${c.y}`).join(' ');
   }, [corners, isInitialized]);
+
+  /**
+   * Even-odd path that darkens everything outside the crop rectangle
+   */
+  const outsideOverlayPath = useMemo(() => {
+    if (!isInitialized || !displaySize.width || !displaySize.height) return '';
+    const xs = corners.map((c) => c.x);
+    const ys = corners.map((c) => c.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    return (
+      `M0 0H${displaySize.width}V${displaySize.height}H0Z ` +
+      `M${minX} ${minY}H${maxX}V${maxY}H${minX}Z`
+    );
+  }, [corners, displaySize, isInitialized]);
 
   /**
    * Calculate zoom bubble position and clipping for the magnified view
@@ -301,17 +358,16 @@ export function SpineCropper({
             <View style={StyleSheet.absoluteFill}>
               <Svg width={displaySize.width} height={displaySize.height}>
                 {/* Darkened overlay outside crop area */}
-                <Polygon
-                  points={`0,0 ${displaySize.width},0 ${displaySize.width},${displaySize.height} 0,${displaySize.height}`}
+                <Path
+                  d={outsideOverlayPath}
                   fill={colors.overlay}
-                  clipRule="evenodd"
-                  clipPath="url(#clip)"
+                  fillRule="evenodd"
                 />
 
-                {/* Crop region (semi-transparent) */}
+                {/* Crop region boundary */}
                 <Polygon
                   points={polygonPoints}
-                  fill={colors.overlayLight}
+                  fill="none"
                   stroke={colors.accent}
                   strokeWidth={2}
                 />
