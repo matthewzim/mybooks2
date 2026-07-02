@@ -51,8 +51,11 @@ function pushToWidget(widgetData: WidgetData, isPremium: boolean): void {
     bookshelves: widgetData.bookshelves.map((shelf) => ({
       id: shelf.id,
       name: shelf.name,
-      coverColor: shelf.cover_color,
-      shelfStyle: shelf.shelf_style,
+      // Never pass null/undefined: NSNull is not a valid property-list type,
+      // so a single null field would make the native UserDefaults write throw
+      // and the widget would receive no data at all.
+      coverColor: shelf.cover_color || '#8B4513',
+      shelfStyle: shelf.shelf_style || 'full',
       books: shelf.books.map((b) => ({
         id: b.id,
         title: b.title,
