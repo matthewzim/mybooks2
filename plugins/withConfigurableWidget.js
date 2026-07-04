@@ -257,13 +257,13 @@ struct BookshelfWidgetView: View {
       let baseSpineWidth = min(42, max(20, rowContentWidth / 7))
 
       // Compute spine height so shelves fill the widget with equal margins
-      // on all sides. Each full-style row carries a frame strip on top and a
-      // plank underneath (like the in-app cabinet rows); bottom-style rows
-      // just add a little headroom plus the plank.
-      let shelfFrameExtra: CGFloat = isBottomStyle ? 6 : shelfThickness
-      let perShelfOverhead = shelfFrameExtra + shelfThickness
+      // on all sides. Each full-style row carries a frame strip on top (like
+      // the in-app cabinet rows) and the cabinet adds one frame strip at the
+      // bottom; bottom-style rows add a little headroom plus the plank.
+      let perShelfOverhead: CGFloat = isBottomStyle ? 6 + shelfThickness : shelfThickness
+      let cabinetBottomExtra: CGFloat = isBottomStyle ? 0 : shelfThickness
       let shelfCount: CGFloat = family == .systemLarge ? 2 : 1
-      let rowSpineHeight: CGFloat = (geo.size.height - 2 * margin - shelfCount * perShelfOverhead) / shelfCount
+      let rowSpineHeight: CGFloat = (geo.size.height - 2 * margin - shelfCount * perShelfOverhead - cabinetBottomExtra) / shelfCount
 
       // Rows fill by actual spine width, not a fixed count: a book only
       // moves to the second shelf once the first shelf has no room left.
@@ -291,6 +291,7 @@ struct BookshelfWidgetView: View {
               cabinetRow(layouts: rows[1], rowSpineHeight: rowSpineHeight)
             }
           }
+          .padding(.bottom, shelfThickness)
           .background(
             LinearGradient(
               colors: [palette.frameTop, palette.frameBottom],
@@ -315,35 +316,29 @@ struct BookshelfWidgetView: View {
 
   /// One row inside the cabinet: the warm lit back panel behind
   /// bottom-aligned spines, framed by the cabinet gradient showing through
-  /// the top/side insets, with a plank underneath — mirroring the in-app
-  /// cabinet rows.
+  /// the top/side insets — mirroring the in-app cabinet rows. Books rest
+  /// directly on the frame strip below the row (no plank).
   private func cabinetRow(layouts: [SpineLayout], rowSpineHeight: CGFloat) -> some View {
     // Like the in-app bookshelf: spines sit flush against each other
     // (spacing 0) and rest on the shelf (bottom alignment).
-    VStack(spacing: 0) {
-      ZStack(alignment: .bottom) {
-        // Warm lit back panel behind the books (Wood.backTop → backBottom)
-        LinearGradient(
-          colors: [palette.backTop, palette.backBottom],
-          startPoint: .top,
-          endPoint: .bottom
-        )
+    ZStack(alignment: .bottom) {
+      // Warm lit back panel behind the books (Wood.backTop → backBottom)
+      LinearGradient(
+        colors: [palette.backTop, palette.backBottom],
+        startPoint: .top,
+        endPoint: .bottom
+      )
 
-        HStack(alignment: .bottom, spacing: 0) {
-          ForEach(Array(layouts.enumerated()), id: \\.offset) { _, layout in
-            spineView(layout: layout)
-          }
-          Spacer(minLength: 0)
+      HStack(alignment: .bottom, spacing: 0) {
+        ForEach(Array(layouts.enumerated()), id: \\.offset) { _, layout in
+          spineView(layout: layout)
         }
+        Spacer(minLength: 0)
       }
-      .frame(height: rowSpineHeight)
-      .padding(.top, shelfThickness)
-      .padding(.horizontal, shelfThickness)
-
-      // Plank inset by the frame width, like the in-app cabinet
-      shelfPlank
-        .padding(.horizontal, shelfThickness)
     }
+    .frame(height: rowSpineHeight)
+    .padding(.top, shelfThickness)
+    .padding(.horizontal, shelfThickness)
   }
 
   /// One open-shelf row: spines sitting on a full-width floating plank.

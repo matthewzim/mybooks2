@@ -38,6 +38,8 @@ const PREVIEW_MAX_BOOK_WIDTH = 32;
 const PREVIEW_SHELF_THICKNESS = BookshelfDimensions.shelfThickness;
 // Match the frame thickness used on the actual bookshelf page
 const PREVIEW_BORDER_WIDTH = BookshelfDimensions.shelfThickness;
+// The cabinet also strokes a 1px frame edge around the wood frame
+const PREVIEW_FRAME_EDGE_WIDTH = 1;
 
 interface BookshelfOwner {
   name: string | null;
@@ -62,16 +64,72 @@ export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, ow
   const shelfColors = getShelfColors(bookshelf.cover_color);
 
   const cardInnerWidth = screenWidth - Spacing.md * 4;
-  const shelfInnerWidth = shelfStyle === 'full' ? cardInnerWidth - PREVIEW_BORDER_WIDTH * 2 : cardInnerWidth;
-  const booksPerRow = Math.max(1, Math.floor(shelfInnerWidth / PREVIEW_DEFAULT_BOOK_WIDTH));
-  const firstRowBooks = books.slice(0, booksPerRow);
+  const shelfInnerWidth =
+    shelfStyle === 'full'
+      ? cardInnerWidth - (PREVIEW_BORDER_WIDTH + PREVIEW_FRAME_EDGE_WIDTH) * 2
+      : cardInnerWidth;
 
   const [imageDimensions, setImageDimensions] = useState<Record<string, { width: number; height: number }>>({});
+
+  const PREVIEW_MIN_DISPLAY_HEIGHT = Math.round(PREVIEW_BOOK_HEIGHT * 0.6);
+
+  const getSpineSize = (book: Book): { width: number; height: number } => {
+    if (!book.image_url) {
+      return getPlaceholderSpineSize(
+        book,
+        { min: PREVIEW_MIN_BOOK_WIDTH, max: PREVIEW_MAX_BOOK_WIDTH },
+        { min: PREVIEW_MIN_BOOK_HEIGHT, max: PREVIEW_BOOK_HEIGHT }
+      );
+    }
+
+    const dimensions = imageDimensions[book.id];
+    const imageHeightFactor = getImageSpineHeightFactor(book);
+
+    // Absolute clamping: cap at PREVIEW_BOOK_HEIGHT, floor at min display height
+    let computedHeight: number | undefined;
+    if (dimensions) {
+      if (dimensions.height >= PREVIEW_BOOK_HEIGHT) {
+        computedHeight = PREVIEW_BOOK_HEIGHT;
+      } else if (dimensions.height < PREVIEW_MIN_DISPLAY_HEIGHT) {
+        computedHeight = PREVIEW_MIN_DISPLAY_HEIGHT;
+      } else {
+        computedHeight = dimensions.height;
+      }
+    }
+
+    const imageHeight = computedHeight || PREVIEW_BOOK_HEIGHT;
+    const spineHeight = Math.max(PREVIEW_MIN_DISPLAY_HEIGHT, Math.round(imageHeight * imageHeightFactor));
+    const spineWidth = dimensions
+      ? Math.max(
+          PREVIEW_MIN_BOOK_WIDTH,
+          Math.min(PREVIEW_MAX_BOOK_WIDTH, Math.round((dimensions.width / dimensions.height) * spineHeight))
+        )
+      : PREVIEW_DEFAULT_BOOK_WIDTH;
+
+    return { width: spineWidth, height: spineHeight };
+  };
+
+  // Fill the row by accumulated spine width so books never spill past the
+  // right shelf border.
+  const firstRowBooks = useMemo(() => {
+    const row: { book: Book; width: number; height: number }[] = [];
+    let usedWidth = 0;
+
+    for (const book of books) {
+      const size = getSpineSize(book);
+      if (usedWidth + size.width > shelfInnerWidth && row.length > 0) break;
+      row.push({ book, ...size });
+      usedWidth += size.width;
+    }
+
+    return row;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [books, imageDimensions, shelfInnerWidth]);
 
   useEffect(() => {
     let cancelled = false;
 
-    firstRowBooks.forEach((book) => {
+    firstRowBooks.forEach(({ book }) => {
       if (!book.image_url || imageDimensions[book.id]) return;
 
       getSpineImageUrl(book.image_url).then((url) => {
@@ -97,8 +155,6 @@ export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, ow
       cancelled = true;
     };
   }, [firstRowBooks, imageDimensions]);
-
-  const PREVIEW_MIN_DISPLAY_HEIGHT = Math.round(PREVIEW_BOOK_HEIGHT * 0.6);
 
   const animateScale = (toValue: number) => {
     Animated.timing(scale, {
@@ -153,50 +209,60 @@ export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, ow
           style={[
             styles.shelfRow,
             shelfStyle === 'full' && {
-              borderTopWidth: PREVIEW_BORDER_WIDTH,
-              borderLeftWidth: PREVIEW_BORDER_WIDTH,
-              borderRightWidth: PREVIEW_BORDER_WIDTH,
+              padding: PREVIEW_BORDER_WIDTH,
+              borderWidth: PREVIEW_FRAME_EDGE_WIDTH,
               borderColor: shelfColors.frameEdge,
             },
           ]}
         >
+          {/* Wood frame around the row, matching the bookshelf page cabinet */}
           {shelfStyle === 'full' && (
             <LinearGradient
-              colors={[...shelfColors.backGradient]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={styles.shelfBack}
-            />
-          )}
-
-          <View style={[styles.booksRow, { minHeight: PREVIEW_BOOK_HEIGHT }]}>
-            {firstRowBooks.length > 0 ? (
-              firstRowBooks.map((book) => (
-                <BookPreviewSpine
-                  key={book.id}
-                  book={book}
-                  dimensions={imageDimensions[book.id]}
-                  minDisplayHeight={PREVIEW_MIN_DISPLAY_HEIGHT}
-                />
-              ))
-            ) : (
-              <View style={styles.emptyShelf}>
-                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                  No books yet
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.plank}>
-            <LinearGradient
-              colors={[...shelfColors.plankGradient]}
+              colors={[...shelfColors.frameGradient]}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
               style={StyleSheet.absoluteFill}
             />
-            <View style={styles.plankHighlight} />
+          )}
+
+          <View style={styles.shelfInterior}>
+            {shelfStyle === 'full' && (
+              <LinearGradient
+                colors={[...shelfColors.backGradient]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+            )}
+
+            <View style={[styles.booksRow, { minHeight: PREVIEW_BOOK_HEIGHT }]}>
+              {firstRowBooks.length > 0 ? (
+                firstRowBooks.map(({ book, width, height }) => (
+                  <BookPreviewSpine key={book.id} book={book} width={width} height={height} />
+                ))
+              ) : (
+                <View style={styles.emptyShelf}>
+                  <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                    No books yet
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
+
+          {/* Floating plank only for the open 'bottom' style; the full style
+              rests books on the frame border below them */}
+          {shelfStyle !== 'full' && (
+            <View style={styles.plank}>
+              <LinearGradient
+                colors={[...shelfColors.plankGradient]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+              <View style={styles.plankHighlight} />
+            </View>
+          )}
         </View>
 
         {owner && (
@@ -216,47 +282,17 @@ export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, ow
 
 interface BookPreviewSpineProps {
   book: Book;
-  dimensions?: {
-    width: number;
-    height: number;
-  };
-  minDisplayHeight: number;
+  width: number;
+  height: number;
 }
 
-function BookPreviewSpine({ book, dimensions, minDisplayHeight }: BookPreviewSpineProps) {
+function BookPreviewSpine({ book, width, height }: BookPreviewSpineProps) {
   const spineImageUrl = useSpineImageUrl(book.image_url);
   const hasImage = !!spineImageUrl;
-  const imageHeightFactor = getImageSpineHeightFactor(book);
   const cloth = getSpineCloth(book.title);
 
-  const placeholderSize = getPlaceholderSpineSize(
-    book,
-    { min: PREVIEW_MIN_BOOK_WIDTH, max: PREVIEW_MAX_BOOK_WIDTH },
-    { min: PREVIEW_MIN_BOOK_HEIGHT, max: PREVIEW_BOOK_HEIGHT }
-  );
-
-  // Absolute clamping: cap at PREVIEW_BOOK_HEIGHT, floor at minDisplayHeight
-  let computedHeight: number | undefined;
-  if (dimensions) {
-    if (dimensions.height >= PREVIEW_BOOK_HEIGHT) {
-      computedHeight = PREVIEW_BOOK_HEIGHT;
-    } else if (dimensions.height < minDisplayHeight) {
-      computedHeight = minDisplayHeight;
-    } else {
-      computedHeight = dimensions.height;
-    }
-  }
-
-  const imageHeight = hasImage ? (computedHeight || PREVIEW_BOOK_HEIGHT) : undefined;
-  const scaledImageHeight = imageHeight ? Math.max(minDisplayHeight, Math.round(imageHeight * imageHeightFactor)) : undefined;
-  const spineHeight = hasImage ? (scaledImageHeight || PREVIEW_BOOK_HEIGHT) : placeholderSize.height;
-  const computedWidth = dimensions
-    ? Math.max(PREVIEW_MIN_BOOK_WIDTH, Math.min(PREVIEW_MAX_BOOK_WIDTH, Math.round((dimensions.width / dimensions.height) * spineHeight)))
-    : undefined;
-  const spineWidth = hasImage ? (computedWidth || PREVIEW_DEFAULT_BOOK_WIDTH) : placeholderSize.width;
-
   return (
-    <View style={[styles.bookSpineShadow, { width: spineWidth, height: spineHeight }]}>
+    <View style={[styles.bookSpineShadow, { width, height }]}>
       <View style={styles.bookSpine}>
         {hasImage ? (
           <Image source={{ uri: spineImageUrl }} style={styles.bookImage} contentFit="contain" transition={220} />
@@ -275,7 +311,7 @@ function BookPreviewSpine({ book, dimensions, minDisplayHeight }: BookPreviewSpi
             <Text
               style={[
                 styles.previewPlaceholderTitle,
-                { color: cloth.titleColor, width: Math.max(30, spineHeight - 26) },
+                { color: cloth.titleColor, width: Math.max(30, height - 26) },
               ]}
               numberOfLines={1}
               ellipsizeMode="tail"
@@ -345,12 +381,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderRadius: BorderRadius.md,
   },
-  shelfBack: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
+  shelfInterior: {
+    overflow: 'hidden',
   },
   booksRow: {
     flexDirection: 'row',
