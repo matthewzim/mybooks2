@@ -26,6 +26,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -39,6 +40,8 @@ import {
   Typography,
   Shadows,
   ThemeColors,
+  getFontFamily,
+  getSerifFontFamily,
 } from '@/constants/theme';
 import { FREE_TIER_LIMITS } from '@/services/revenuecat';
 import { bookshelvesService } from '@/services/bookshelves';
@@ -538,14 +541,20 @@ export default function SettingsScreen() {
           <View style={[styles.card, { backgroundColor: colors.card }]}>
             {/* Avatar */}
             <View style={styles.avatarContainer}>
-              <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+              <View style={styles.avatar}>
+                <LinearGradient
+                  colors={['#c8642a', '#a24417']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0.85, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
                 <Text style={[styles.avatarText, { color: colors.textInverse }]}>
                   {(user?.name || 'U')[0].toUpperCase()}
                 </Text>
               </View>
               {isPro && (
-                <View style={[styles.premiumBadge, { backgroundColor: colors.primary, borderColor: colors.card }]}>
-                  <Ionicons name="star" size={12} color={colors.starFilled} />
+                <View style={[styles.premiumBadge, { backgroundColor: colors.gilt, borderColor: colors.card }]}>
+                  <Ionicons name="star" size={12} color="#ffffff" />
                 </View>
               )}
             </View>
@@ -583,12 +592,15 @@ export default function SettingsScreen() {
             ) : (
               <View style={styles.profileInfo}>
                 <Text style={[styles.userName, { color: colors.text }]}>{user?.name || 'No name set'}</Text>
+                {user?.public_username && (
+                  <Text style={[styles.userHandle, { color: colors.textLight }]}>@{user.public_username}</Text>
+                )}
                 <Pressable
-                  style={styles.editButton}
+                  style={[styles.editButton, { backgroundColor: colors.pill }]}
                   onPress={() => setIsEditing(true)}
                 >
-                  <Ionicons name="pencil" size={16} color={colors.primary} />
-                  <Text style={[styles.editButtonText, { color: colors.primary }]}>Edit Profile</Text>
+                  <Ionicons name="pencil" size={13} color={colors.primary} />
+                  <Text style={[styles.editButtonText, { color: colors.primary }]}>Edit</Text>
                 </Pressable>
               </View>
             )}
@@ -710,21 +722,27 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Subscription</Text>
           <Pressable
-            style={[styles.card, styles.premiumCard, { backgroundColor: colors.card }]}
+            style={({ pressed }) => [styles.card, styles.premiumCard, pressed && { opacity: 0.94 }]}
             onPress={handleUpgrade}
           >
+            <LinearGradient
+              colors={['#3a2418', '#6e4324']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0.9, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
             <View style={styles.premiumContent}>
               <View style={styles.premiumHeader}>
                 <Ionicons
-                  name={isPro ? 'star' : 'star-outline'}
-                  size={28}
-                  color={isPro ? colors.starFilled : colors.primary}
+                  name="star"
+                  size={26}
+                  color="#e6b866"
                 />
                 <View style={styles.premiumText}>
-                  <Text style={[styles.premiumTitle, { color: colors.text }]}>
+                  <Text style={styles.premiumTitle}>
                     {isPro ? 'Premium Member' : 'Go Premium'}
                   </Text>
-                  <Text style={[styles.premiumDescription, { color: colors.textSecondary }]}>
+                  <Text style={styles.premiumDescription}>
                     {isPro
                       ? 'Thank you for your support!'
                       : 'Unlock unlimited bookshelves and home screen widget'}
@@ -732,11 +750,9 @@ export default function SettingsScreen() {
                 </View>
               </View>
               {!isPro && (
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={colors.textSecondary}
-                />
+                <View style={styles.premiumChevron}>
+                  <Ionicons name="chevron-forward" size={16} color="#f7efe0" />
+                </View>
               )}
             </View>
           </Pressable>
@@ -756,11 +772,11 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Danger Zone</Text>
+          <Text style={[styles.sectionTitle, { color: '#b06a5c' }]}>Danger Zone</Text>
           <View style={styles.dangerActions}>
             <Button
               title={isDeletingAccount ? 'Deleting Account...' : 'Account Deletion'}
-              variant="outline"
+              variant="danger"
               onPress={handleDeleteAccount}
               disabled={isDeletingAccount || isResettingData}
               loading={isDeletingAccount}
@@ -769,7 +785,7 @@ export default function SettingsScreen() {
             />
             <Button
               title={isResettingData ? 'Resetting Data...' : 'Reset Data'}
-              variant="outline"
+              variant="danger"
               onPress={handleResetData}
               disabled={isResettingData || isDeletingAccount}
               loading={isResettingData}
@@ -848,7 +864,9 @@ function SettingsRow({
   const content = (
     <View style={styles.rowContainer}>
       <View style={styles.rowLeft}>
-        <Ionicons name={icon} size={22} color={colors.primary} />
+        <View style={[styles.rowIconChip, { backgroundColor: colors.pill }]}>
+          <Ionicons name={icon} size={18} color={colors.primary} />
+        </View>
         <View style={styles.rowText}>
           <Text style={[styles.rowTitle, { color: colors.text }]}>{title}</Text>
           {subtitle && <Text style={[styles.rowSubtitle, { color: colors.textSecondary }]}>{subtitle}</Text>}
@@ -858,8 +876,8 @@ function SettingsRow({
         (onPress && (
           <Ionicons
             name="chevron-forward"
-            size={20}
-            color={colors.textSecondary}
+            size={18}
+            color={colors.textLight}
           />
         ))}
     </View>
@@ -870,7 +888,7 @@ function SettingsRow({
       <Pressable
         style={({ pressed }) => [
           styles.row,
-          { borderBottomColor: colors.border },
+          { borderBottomColor: colors.borderLight },
           pressed && { backgroundColor: colors.backgroundDark },
         ]}
         onPress={onPress}
@@ -880,7 +898,7 @@ function SettingsRow({
     );
   }
 
-  return <View style={[styles.row, { borderBottomColor: colors.border }]}>{content}</View>;
+  return <View style={[styles.row, { borderBottomColor: colors.borderLight }]}>{content}</View>;
 }
 
 const styles = StyleSheet.create({
@@ -902,13 +920,14 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: Typography.sizes.sm,
-    fontWeight: Typography.weights.semibold,
+    fontFamily: getFontFamily('semibold'),
     textTransform: 'uppercase',
+    letterSpacing: 1.2,
     marginBottom: Spacing.sm,
     marginLeft: Spacing.sm,
   },
   card: {
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.xxl,
     overflow: 'hidden',
     ...Shadows.sm,
   },
@@ -918,20 +937,21 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   avatarText: {
-    fontSize: Typography.sizes.xxxl,
-    fontWeight: Typography.weights.bold,
+    fontSize: 26,
+    fontFamily: getSerifFontFamily('medium'),
   },
   premiumBadge: {
     position: 'absolute',
     bottom: 0,
-    right: '35%',
+    right: '38%',
     borderRadius: 12,
     padding: 4,
     borderWidth: 2,
@@ -939,19 +959,28 @@ const styles = StyleSheet.create({
   profileInfo: {
     alignItems: 'center',
     padding: Spacing.lg,
+    gap: Spacing.xs,
   },
   userName: {
-    fontSize: Typography.sizes.xl,
-    fontWeight: Typography.weights.semibold,
-    marginBottom: 4,
+    fontSize: 22,
+    fontFamily: getSerifFontFamily('medium'),
+  },
+  userHandle: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: getFontFamily('regular'),
   },
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    paddingVertical: 6,
+    paddingHorizontal: Spacing.md,
+    marginTop: Spacing.xxs,
   },
   editButtonText: {
-    fontSize: Typography.sizes.md,
+    fontSize: Typography.sizes.sm,
+    fontFamily: getFontFamily('semibold'),
   },
   editForm: {
     padding: Spacing.lg,
@@ -963,6 +992,7 @@ const styles = StyleSheet.create({
   },
   premiumCard: {
     padding: Spacing.md,
+    borderRadius: BorderRadius.xxl,
   },
   premiumContent: {
     flexDirection: 'row',
@@ -979,12 +1009,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   premiumTitle: {
-    fontSize: Typography.sizes.lg,
-    fontWeight: Typography.weights.semibold,
+    fontSize: 20,
+    fontFamily: getSerifFontFamily('medium'),
+    color: '#f7efe0',
   },
   premiumDescription: {
     fontSize: Typography.sizes.sm,
     marginTop: 2,
+    color: 'rgba(247, 239, 224, 0.72)',
+  },
+  premiumChevron: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // Theme selection styles
   themeOption: {
@@ -1037,11 +1077,19 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
     flex: 1,
   },
+  rowIconChip: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   rowText: {
     flex: 1,
   },
   rowTitle: {
     fontSize: Typography.sizes.md,
+    fontFamily: getFontFamily('medium'),
   },
   rowSubtitle: {
     fontSize: Typography.sizes.sm,
@@ -1081,10 +1129,12 @@ const styles = StyleSheet.create({
     height: 40,
   },
   dangerActions: {
-    gap: Spacing.md,
+    flexDirection: 'row',
+    gap: Spacing.sm,
   },
   dangerButton: {
-    width: '100%',
+    flex: 1,
+    minWidth: 0,
   },
   modalOverlay: {
     flex: 1,

@@ -1,29 +1,39 @@
 /**
  * WelcomeStep - Full-screen hook page
  *
- * "Create your dream bookshelf in 30 seconds"
- * with a Get Started button and visual placeholder.
+ * "Build your dream shelf in thirty seconds"
+ * with a Get Started button and a decorative hero shelf of bound spines.
  */
 
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Spacing, Typography, BorderRadius, getFontFamily, BookSpine as BookSpineConstants } from '@/constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Spacing, Typography, BorderRadius, Wood, getFontFamily, getSerifFontFamily } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useOnboarding } from './OnboardingContext';
 
+// Warm literary cloth palette (mirrors the placeholder spine set)
 const HERO_BOOKS = [
-  { color: '#8B0000', height: 80 },
-  { color: '#00008B', height: 95 },
-  { color: '#006400', height: 70 },
-  { color: '#4B0082', height: 88 },
-  { color: '#8B4513', height: 75 },
-  { color: '#2F4F4F', height: 92 },
-  { color: '#483D8B', height: 68 },
-  { color: '#556B2F', height: 85 },
-  { color: '#800000', height: 78 },
-  { color: '#191970', height: 90 },
+  { color: '#7c3b2e', height: 80 },
+  { color: '#2d3a54', height: 95 },
+  { color: '#c08a2d', height: 70 },
+  { color: '#3f5641', height: 88 },
+  { color: '#33261f', height: 75 },
+  { color: '#d9c9a8', height: 92 },
+  { color: '#4a2f45', height: 68 },
+  { color: '#6b2f2a', height: 85 },
+  { color: '#37514f', height: 78 },
+  { color: '#5c3a1f', height: 90 },
 ];
+
+const HERO_SHEEN_COLORS = [
+  'rgba(255, 255, 255, 0.16)',
+  'rgba(0, 0, 0, 0)',
+  'rgba(0, 0, 0, 0.16)',
+  'rgba(0, 0, 0, 0.34)',
+] as const;
+const HERO_SHEEN_LOCATIONS = [0, 0.24, 0.72, 1] as const;
 
 export function WelcomeStep() {
   const { colors } = useTheme();
@@ -67,7 +77,13 @@ export function WelcomeStep() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={styles.container}>
+      <LinearGradient
+        colors={['#f6efe1', '#efe3cf']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
       <Animated.View
         style={[
           styles.content,
@@ -77,7 +93,7 @@ export function WelcomeStep() {
           },
         ]}
       >
-        {/* Visual placeholder - decorative mini shelf */}
+        {/* Decorative hero shelf: bound spines on a plank inside a warm frame */}
         <Animated.View
           style={[
             styles.heroShelf,
@@ -89,15 +105,19 @@ export function WelcomeStep() {
           ]}
         >
           <View style={styles.heroShelfInner}>
-            <View style={styles.heroBack} />
+            <LinearGradient
+              colors={[Wood.backTop, Wood.backBottom]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={styles.heroBack}
+            />
             <View style={styles.heroBooks}>
               {HERO_BOOKS.map((book, i) => (
                 <Animated.View
                   key={i}
                   style={[
-                    styles.heroSpine,
+                    styles.heroSpineShadow,
                     {
-                      backgroundColor: book.color,
                       height: book.height,
                       opacity: shelfAnim,
                       transform: [{
@@ -108,19 +128,39 @@ export function WelcomeStep() {
                       }],
                     },
                   ]}
-                />
+                >
+                  <View style={[styles.heroSpine, { backgroundColor: book.color }]}>
+                    <LinearGradient
+                      colors={HERO_SHEEN_COLORS}
+                      locations={HERO_SHEEN_LOCATIONS}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={StyleSheet.absoluteFill}
+                    />
+                    <View style={[styles.heroGiltBand, { top: 7 }]} />
+                    <View style={[styles.heroGiltBand, { bottom: 8 }]} />
+                  </View>
+                </Animated.View>
               ))}
             </View>
-            <View style={styles.heroShelfBar} />
+            <View style={styles.heroPlank}>
+              <LinearGradient
+                colors={[Wood.plankTop, Wood.plankBottom]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+              <View style={styles.heroPlankHighlight} />
+            </View>
           </View>
         </Animated.View>
 
         <View style={styles.textContainer}>
-          <Text style={[styles.eyebrow, { color: colors.accent }]}>
+          <Text style={[styles.eyebrow, { color: colors.primary }]}>
             VIRTUAL LIBRARY
           </Text>
           <Text style={[styles.title, { color: colors.text }]}>
-            Create your dream{'\n'}bookshelf in 30 seconds
+            Build your dream shelf{'\n'}in thirty seconds
           </Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             No forms. No typing. Just tap your way to a beautiful, personalized shelf.
@@ -130,12 +170,12 @@ export function WelcomeStep() {
         <View style={styles.buttonContainer}>
           <Animated.View style={{ transform: [{ scale: buttonScale }], width: '100%' }}>
             <Pressable
-              style={[styles.getStartedButton, { backgroundColor: colors.accent }]}
+              style={[styles.getStartedButton, { backgroundColor: colors.primary }]}
               onPress={handleGetStarted}
               onPressIn={() => Animated.spring(buttonScale, { toValue: 0.96, useNativeDriver: true }).start()}
               onPressOut={() => Animated.spring(buttonScale, { toValue: 1, useNativeDriver: true }).start()}
             >
-              <Text style={styles.getStartedText}>Get Started</Text>
+              <Text style={styles.getStartedText}>Get started</Text>
               <Ionicons name="arrow-forward" size={20} color="#fff" />
             </Pressable>
           </Animated.View>
@@ -169,13 +209,13 @@ const styles = StyleSheet.create({
   },
   heroShelf: {
     width: '100%',
-    borderRadius: BorderRadius.xl,
+    borderRadius: BorderRadius.xxl,
     padding: Spacing.md,
     borderWidth: 1,
   },
   heroShelfInner: {
     borderWidth: 4,
-    borderColor: '#8B4513',
+    borderColor: Wood.frameEdge,
     borderRadius: BorderRadius.md,
     overflow: 'hidden',
   },
@@ -185,7 +225,6 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: '#654321',
   },
   heroBooks: {
     flexDirection: 'row',
@@ -194,14 +233,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     minHeight: 100,
   },
-  heroSpine: {
+  heroSpineShadow: {
     width: 24,
-    borderRadius: 1,
+    shadowColor: '#32190a',
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
   },
-  heroShelfBar: {
-    height: 6,
-    backgroundColor: '#8B4513',
+  heroSpine: {
+    flex: 1,
+    overflow: 'hidden',
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 3,
+    borderBottomLeftRadius: 1,
+    borderBottomRightRadius: 1,
+  },
+  heroGiltBand: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(201, 162, 90, 0.55)',
+  },
+  heroPlank: {
+    height: 8,
     marginTop: -1,
+    overflow: 'hidden',
+  },
+  heroPlankHighlight: {
+    height: 1.5,
+    backgroundColor: Wood.plankHighlight,
   },
   textContainer: {
     alignItems: 'center',
@@ -210,13 +272,13 @@ const styles = StyleSheet.create({
   eyebrow: {
     fontSize: Typography.sizes.sm,
     fontFamily: getFontFamily('semibold'),
-    letterSpacing: 2,
+    letterSpacing: 2.5,
   },
   title: {
-    fontSize: 28,
-    fontFamily: getFontFamily('bold'),
+    fontSize: 31,
+    fontFamily: getSerifFontFamily('medium'),
     textAlign: 'center',
-    lineHeight: 36,
+    lineHeight: 38,
   },
   subtitle: {
     fontSize: Typography.sizes.lg,
@@ -236,8 +298,13 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.xl,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.xl,
     width: '100%',
+    shadowColor: '#4a2f19',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 6,
   },
   getStartedText: {
     color: '#fff',

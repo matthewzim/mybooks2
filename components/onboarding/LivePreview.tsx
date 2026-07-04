@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     height: SHELF_THICKNESS,
     borderRadius: BorderRadius.sm,
     marginTop: -1,
-    shadowColor: '#000',
+    shadowColor: '#4a2f19',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.18,
     shadowRadius: 8,

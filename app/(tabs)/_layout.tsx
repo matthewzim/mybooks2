@@ -8,7 +8,7 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
-import { BorderRadius, Spacing, Typography, getFontFamily } from '@/constants/theme';
+import { BorderRadius, Spacing, Typography, getFontFamily, getSerifFontFamily } from '@/constants/theme';
 
 export default function TabsLayout() {
   const { colors } = useTheme();
@@ -17,7 +17,7 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarInactiveTintColor: colors.textLight,
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
@@ -33,7 +33,7 @@ export default function TabsLayout() {
           borderRadius: BorderRadius.lg,
         },
         tabBarLabelStyle: {
-          fontFamily: getFontFamily('medium'),
+          fontFamily: getFontFamily('semibold'),
           fontSize: Typography.sizes.xs,
         },
         headerStyle: {
@@ -42,7 +42,9 @@ export default function TabsLayout() {
         headerTintColor: colors.text,
         headerShadowVisible: false,
         headerTitleStyle: {
-          fontFamily: getFontFamily('semibold'),
+          fontFamily: getSerifFontFamily('medium'),
+          fontSize: 22,
+          color: colors.text,
         },
       }}
     >

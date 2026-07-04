@@ -25,6 +25,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { booksService } from '@/services/books';
@@ -35,14 +36,16 @@ import {
   BorderRadius,
   Spacing,
   Typography,
-  BookSpine as BookSpineConstants,
+  getFontFamily,
+  getSerifFontFamily,
+  serifItalicStyle,
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
+import { getClothColor } from '@/utils/spineCloth';
 import type { Book, CommunityBookSpine } from '@/types';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const CARD_WIDTH = Math.min(SCREEN_WIDTH * 0.9, 420);
-const CARD_MAX_HEIGHT = Math.min(SCREEN_HEIGHT * 0.85, 680);
+const SHEET_MAX_HEIGHT = Math.min(SCREEN_HEIGHT * 0.88, 720);
 
 interface BookDetailModalProps {
   visible: boolean;
@@ -53,15 +56,7 @@ interface BookDetailModalProps {
   readOnly?: boolean;
 }
 
-function getBookColor(title?: string | null): string {
-  const colors = BookSpineConstants.colors;
-  const safeTitle = title?.trim() || 'Untitled';
-  let hash = 0;
-  for (let i = 0; i < safeTitle.length; i++) {
-    hash = safeTitle.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
-}
+const getBookColor = getClothColor;
 
 function AlternateSpineOption({
   option,
@@ -688,26 +683,26 @@ export function BookDetailModal({
             style={[
               styles.card,
               {
-                backgroundColor: colors.card,
-                borderColor: colors.inputBorder,
+                backgroundColor: colors.background,
                 opacity: cardOpacity,
                 transform: [{ translateY: cardTranslateY }, { scale: cardScale }],
               },
             ]}
           >
-            <View style={[styles.headerRow, { borderBottomColor: colors.inputBorder }]}>
-              <Text style={[styles.pageTitle, { color: colors.text }]}>{isEditing ? 'Edit Book' : 'Book Details'}</Text>
-              <View style={styles.headerButtons}>
-                {!isEditing && !readOnly && (
-                  <Pressable onPress={handleDelete} style={styles.iconButton} hitSlop={8}>
-                    <Ionicons name="trash-outline" size={20} color={colors.error} />
-                  </Pressable>
-                )}
+            <View style={styles.grabber} />
+
+            {isEditing ? (
+              <View style={[styles.headerRow, { borderBottomColor: colors.borderLight }]}>
+                <Text style={[styles.pageTitle, { color: colors.text }]}>Edit Book</Text>
                 <Pressable onPress={handleClose} style={styles.iconButton} hitSlop={8}>
                   <Ionicons name="close" size={24} color={colors.text} />
                 </Pressable>
               </View>
-            </View>
+            ) : (
+              <Pressable onPress={handleClose} style={styles.floatingClose} hitSlop={8}>
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              </Pressable>
+            )}
 
             <ScrollView
               style={styles.scrollView}
@@ -861,48 +856,61 @@ export function BookDetailModal({
               ) : (
                 <>
                   <View style={styles.topSection}>
-                    <View style={[styles.coverShell, { backgroundColor: colors.bookBase }]}>
-                      {coverImageUrl ? (
-                        <Image
-                          source={{ uri: coverImageUrl }}
-                          style={styles.coverImage}
-                          contentFit="cover"
-                          transition={200}
-                          onError={() => setCoverImageUrl(null)}
+                    <View style={styles.coverShadow}>
+                      <View style={styles.coverShell}>
+                        {coverImageUrl ? (
+                          <Image
+                            source={{ uri: coverImageUrl }}
+                            style={styles.coverImage}
+                            contentFit="cover"
+                            transition={200}
+                            onError={() => setCoverImageUrl(null)}
+                          />
+                        ) : isCoverLoading ? (
+                          <View style={[styles.coverImage, styles.thumbnailPlaceholder, { backgroundColor: bookColor }]}>
+                            <Text style={[styles.coverLoadingText, { color: colors.textOnDark }]}>Loading cover…</Text>
+                          </View>
+                        ) : (
+                          <View style={[styles.coverImage, styles.thumbnailPlaceholder, { backgroundColor: bookColor }]}>
+                            <Text style={[styles.placeholderInitial, { color: colors.textOnDark }]}>
+                              {displayTitle.charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                        <LinearGradient
+                          colors={[
+                            'rgba(0, 0, 0, 0.28)',
+                            'rgba(255, 255, 255, 0.14)',
+                            'rgba(0, 0, 0, 0.16)',
+                          ]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={styles.spineEdge}
+                          pointerEvents="none"
                         />
-                      ) : isCoverLoading ? (
-                        <View style={[styles.coverImage, styles.thumbnailPlaceholder, { backgroundColor: bookColor }]}>
-                          <Text style={[styles.coverLoadingText, { color: colors.textOnDark }]}>Loading cover…</Text>
-                        </View>
-                      ) : (
-                        <View style={[styles.coverImage, styles.thumbnailPlaceholder, { backgroundColor: bookColor }]}>
-                          <Text style={[styles.placeholderInitial, { color: colors.textOnDark }]}>
-                            {displayTitle.charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
-                      )}
+                      </View>
                     </View>
                     <Text style={[styles.bookTitle, { color: colors.text }]}>{displayTitle}</Text>
                     <Text style={[styles.bookAuthor, { color: colors.textSecondary }]}>by {displayAuthor}</Text>
                   </View>
 
-                  <View style={[styles.sectionCard, { backgroundColor: colors.cardDark }]}>
-                    <Rating value={book.rating || 0} readonly size={20} />
+                  <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <Rating value={book.rating || 0} readonly size={20} colors={colors} />
                     <Text style={[styles.ratingText, { color: colors.textSecondary }]}>
-                      {book.rating ? 'Your rating' : 'Not rated yet'}
+                      {book.rating ? `Your rating · ${book.rating.toFixed(1)}` : 'Not rated yet'}
                     </Text>
                   </View>
 
-                  <View style={[styles.sectionCard, { backgroundColor: colors.bookBase }]}>
+                  <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <Text style={[styles.reviewLabel, { color: colors.textSecondary }]}>Review</Text>
                     {book.review ? (
-                      <Text style={[styles.reviewText, { color: colors.text }]}>{book.review}</Text>
+                      <Text style={styles.reviewText}>&ldquo;{book.review}&rdquo;</Text>
                     ) : (
                       <Text style={[styles.reviewText, { color: colors.textSecondary }]}>No review yet.</Text>
                     )}
                   </View>
 
-                  <View style={[styles.metadata, { borderTopColor: colors.inputBorder }]}>
+                  <View style={[styles.metadata, { borderTopColor: colors.borderLight }]}>
                     {book.isbn && (
                       <Text style={[styles.metadataText, { color: colors.textSecondary }]}>ISBN: {book.isbn}</Text>
                     )}
@@ -912,7 +920,31 @@ export function BookDetailModal({
                   </View>
 
                   {!readOnly && (
-                    <Button title="Edit Book" variant="outline" onPress={() => setIsEditing(true)} fullWidth />
+                    <View style={styles.actionsRow}>
+                      <Button
+                        title="Edit book"
+                        onPress={() => setIsEditing(true)}
+                        style={{
+                          ...styles.editBookButton,
+                          backgroundColor: colors.primary,
+                          borderColor: colors.primary,
+                        }}
+                        textStyle={{ color: colors.textInverse }}
+                        colors={colors}
+                      />
+                      <Pressable
+                        onPress={handleDelete}
+                        style={({ pressed }) => [
+                          styles.deleteButton,
+                          { backgroundColor: colors.card, borderColor: colors.dangerBorder },
+                          pressed && { backgroundColor: colors.dangerBg },
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Delete book"
+                      >
+                        <Ionicons name="trash-outline" size={22} color={colors.error} />
+                      </Pressable>
+                    </View>
                   )}
                 </>
               )}
@@ -935,25 +967,38 @@ export function BookDetailModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   backdropPress: {
     ...StyleSheet.absoluteFillObject,
   },
   keyboardView: {
-    flex: 1,
     width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Spacing.md,
+    justifyContent: 'flex-end',
   },
   card: {
-    width: CARD_WIDTH,
-    maxHeight: CARD_MAX_HEIGHT,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    width: '100%',
+    maxHeight: SHEET_MAX_HEIGHT,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
     overflow: 'hidden',
+    paddingTop: Spacing.xs,
+  },
+  grabber: {
+    width: 38,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#d8ccb6',
+    alignSelf: 'center',
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.xs,
+  },
+  floatingClose: {
+    position: 'absolute',
+    top: Spacing.md,
+    right: Spacing.md,
+    zIndex: 2,
+    padding: Spacing.xs,
   },
   headerRow: {
     flexDirection: 'row',
@@ -964,13 +1009,8 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
   },
   pageTitle: {
-    fontSize: Typography.sizes.lg,
-    fontWeight: Typography.weights.semibold,
-  },
-  headerButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
+    fontSize: 20,
+    fontFamily: getSerifFontFamily('medium'),
   },
   iconButton: {
     padding: Spacing.xs,
@@ -980,21 +1020,37 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: Spacing.md,
-    paddingBottom: Spacing.lg,
+    paddingBottom: Spacing.xl,
   },
   topSection: {
     alignItems: 'center',
     marginBottom: Spacing.md,
   },
-  coverShell: {
-    borderRadius: BorderRadius.md,
+  coverShadow: {
     marginBottom: Spacing.md,
+    shadowColor: 'rgba(40, 20, 8, 0.7)',
+    shadowOffset: { width: 0, height: 26 },
+    shadowOpacity: 1,
+    shadowRadius: 40,
+    elevation: 12,
+  },
+  coverShell: {
+    borderTopLeftRadius: 6,
+    borderTopRightRadius: 10,
+    borderBottomRightRadius: 10,
+    borderBottomLeftRadius: 6,
     overflow: 'hidden',
   },
   coverImage: {
-    width: 128,
-    height: 192,
-    borderRadius: BorderRadius.md,
+    width: 150,
+    height: 224,
+  },
+  spineEdge: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 9,
   },
   coverLoadingText: {
     fontSize: Typography.sizes.xs,
@@ -1006,36 +1062,41 @@ const styles = StyleSheet.create({
   },
   placeholderInitial: {
     fontSize: Typography.sizes.xxxl,
-    fontWeight: Typography.weights.bold,
+    fontFamily: getSerifFontFamily('medium'),
   },
   bookTitle: {
-    fontSize: Typography.sizes.xl,
-    fontWeight: Typography.weights.bold,
+    fontSize: 24,
+    fontFamily: getSerifFontFamily('medium'),
     textAlign: 'center',
     marginBottom: Spacing.xs,
   },
   bookAuthor: {
-    fontSize: Typography.sizes.md,
+    fontSize: Typography.sizes.lg,
+    ...serifItalicStyle,
     textAlign: 'center',
   },
   sectionCard: {
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
     padding: Spacing.md,
     marginBottom: Spacing.md,
     gap: Spacing.xs,
   },
   ratingText: {
     fontSize: Typography.sizes.sm,
+    fontFamily: getFontFamily('medium'),
   },
   reviewLabel: {
     fontSize: Typography.sizes.xs,
-    fontWeight: Typography.weights.semibold,
+    fontFamily: getFontFamily('semibold'),
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   reviewText: {
-    fontSize: Typography.sizes.md,
-    lineHeight: 20,
+    fontSize: 15.5,
+    lineHeight: 23,
+    color: '#3a322b',
+    ...serifItalicStyle,
   },
   metadata: {
     borderTopWidth: 1,
@@ -1045,6 +1106,28 @@ const styles = StyleSheet.create({
   metadataText: {
     fontSize: Typography.sizes.xs,
     marginBottom: Spacing.xs,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: Spacing.sm,
+  },
+  editBookButton: {
+    flex: 1,
+    borderRadius: 14,
+    shadowColor: '#4a2f19',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+  deleteButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   field: {
     marginBottom: Spacing.md,

@@ -222,11 +222,11 @@ export default function CreateBookshelfScreen() {
                         )}
                         <View style={styles.miniBooks}>
                           {[
-                            { color: '#8B0000', h: 42 },
-                            { color: '#00008B', h: 50 },
-                            { color: '#006400', h: 38 },
-                            { color: '#4B0082', h: 46 },
-                            { color: '#8B4513', h: 44 },
+                            { color: '#7c3b2e', h: 42 },
+                            { color: '#2d3a54', h: 50 },
+                            { color: '#3f5641', h: 38 },
+                            { color: '#4a2f45', h: 46 },
+                            { color: '#c08a2d', h: 44 },
                           ].map((b, i) => (
                             <View key={i} style={[styles.miniSpine, { backgroundColor: b.color, height: b.h }]} />
                           ))}

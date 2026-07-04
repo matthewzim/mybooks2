@@ -78,7 +78,7 @@ export function Button({
       case 'ghost':
         return { backgroundColor: 'transparent' };
       case 'danger':
-        return { backgroundColor: themeColors.background, borderWidth: 1, borderColor: themeColors.error };
+        return { backgroundColor: themeColors.dangerBg, borderWidth: 1, borderColor: themeColors.dangerBorder };
       default:
         return { backgroundColor: themeColors.background, borderWidth: 1, borderColor: themeColors.primary };
     }

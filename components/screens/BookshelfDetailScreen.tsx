@@ -30,7 +30,7 @@ import { BookDetailModal } from '@/components/BookDetailModal';
 import { BookshelfEditModal } from '@/components/BookshelfEditModal';
 import { BrowseBooksModal } from '@/components/BrowseBooksModal';
 import { LoadingView, EmptyState } from '@/components/ui';
-import { Spacing, Typography, BorderRadius } from '@/constants/theme';
+import { Spacing, Typography, BorderRadius, Shadows, getFontFamily, getSerifFontFamily, serifItalicStyle } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { Book, Bookshelf, ShelfStyle, UpdateBookshelfInput } from '@/types';
 
@@ -262,11 +262,18 @@ export default function BookshelfDetailScreen() {
       <Stack.Screen
         options={{
           title: bookshelf.name,
+          headerTitleAlign: 'center',
+          headerTitleStyle: {
+            fontFamily: getSerifFontFamily('medium'),
+            fontSize: 18,
+            color: colors.text,
+          },
           headerLeft: () => (
             <Pressable
               onPress={() => router.back()}
               style={({ pressed }) => [
                 styles.headerButton,
+                { backgroundColor: colors.card, borderColor: colors.border },
                 pressed && { opacity: 0.8 },
               ]}
               hitSlop={8}
@@ -283,7 +290,8 @@ export default function BookshelfDetailScreen() {
                   onPress={toggleEditMode}
                   style={({ pressed }) => [
                     styles.headerButton,
-                    isEditMode && { opacity: 0.7 },
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                    isEditMode && { backgroundColor: colors.primary, borderColor: colors.primary },
                     pressed && { opacity: 0.8 },
                   ]}
                   hitSlop={8}
@@ -292,7 +300,7 @@ export default function BookshelfDetailScreen() {
                 >
                   <Ionicons
                     name={isEditMode ? 'checkmark' : 'swap-horizontal'}
-                    size={20}
+                    size={18}
                     color={isEditMode ? colors.textInverse : colors.text}
                   />
                 </Pressable>
@@ -300,13 +308,14 @@ export default function BookshelfDetailScreen() {
                   onPress={handleEditBookshelf}
                   style={({ pressed }) => [
                     styles.headerButton,
+                    { backgroundColor: colors.card, borderColor: colors.border },
                     pressed && { opacity: 0.8 },
                   ]}
                   hitSlop={8}
                   accessibilityRole="button"
                   accessibilityLabel="Edit bookshelf"
                 >
-                  <Ionicons name="pencil" size={18} color={colors.text} />
+                  <Ionicons name="pencil" size={16} color={colors.text} />
                 </Pressable>
               </View>
             ) : undefined,
@@ -315,10 +324,16 @@ export default function BookshelfDetailScreen() {
 
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right', 'bottom']}>
         {/* Bookshelf Stats */}
-        <View style={[styles.statsContainer, { borderBottomColor: colors.border }]}>
+        <View style={[styles.statsContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.stat}>
             <Text style={[styles.statValue, { color: colors.primary }]}>{books.length}</Text>
+            <Text style={[styles.statLabel, { color: colors.textLight }]}>
+              {books.length === 1 ? 'Book' : 'Books'}
+            </Text>
           </View>
+          {!isEditMode && Boolean(bookshelf.description) && (
+            <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+          )}
           {isEditMode ? (
             <View style={styles.editModeControls}>
               <View style={[styles.editModeIndicator, { backgroundColor: colors.backgroundDark }]}>
@@ -441,27 +456,48 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   headerButton: {
-    padding: Spacing.xs,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.sm,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: Spacing.sm,
+    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
+    ...Shadows.sm,
   },
   stat: {
     alignItems: 'center',
-    marginRight: Spacing.lg,
+    marginRight: Spacing.md,
   },
   statValue: {
-    fontSize: Typography.sizes.xxl,
-    fontWeight: Typography.weights.bold,
+    fontSize: 26,
+    fontFamily: getSerifFontFamily('medium'),
+  },
+  statLabel: {
+    fontSize: 10,
+    fontFamily: getFontFamily('semibold'),
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+  },
+  statDivider: {
+    width: 1,
+    alignSelf: 'stretch',
+    marginVertical: Spacing.xs,
+    marginRight: Spacing.md,
   },
   description: {
     flex: 1,
-    fontSize: Typography.sizes.md,
-    fontStyle: 'italic',
+    fontSize: 15,
+    ...serifItalicStyle,
   },
   editModeControls: {
     flex: 1,

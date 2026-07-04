@@ -16,14 +16,24 @@ import {
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { FREE_TIER_LIMITS, bookshelvesService } from '@/services';
 import { UserSearchResult } from '@/components/UserSearchResult';
 import { BookshelfPreview } from '@/components/BookshelfPreview';
 import { Input, EmptyState, Button } from '@/components/ui';
-import { Spacing, Typography, BorderRadius, getFontFamily } from '@/constants/theme';
+import { Spacing, Typography, BorderRadius, getFontFamily, getSerifFontFamily } from '@/constants/theme';
 import type { Bookshelf, Book } from '@/types';
+
+/** Decorative mini spines in the hero card, in warm cloth colors */
+const HERO_MINI_SPINES = [
+  { color: '#7c3b2e', height: 34 },
+  { color: '#c08a2d', height: 42 },
+  { color: '#3f5641', height: 30 },
+  { color: '#2d3a54', height: 38 },
+  { color: '#d9c9a8', height: 33 },
+];
 
 interface PublicBookshelfPreview extends Bookshelf {
   books: Book[];
@@ -149,9 +159,24 @@ export default function CommunityScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={[styles.heroSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.heroEyebrow, { color: colors.primary }]}>Community</Text>
-          <Text style={[styles.heroTitle, { color: colors.text }]}>Discover other shelves</Text>
+        <View style={styles.heroSection}>
+          <LinearGradient
+            colors={['#3a2418', '#5c3a22']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0.85, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.heroMiniSpines} pointerEvents="none">
+            {HERO_MINI_SPINES.map((spine, index) => (
+              <View
+                key={index}
+                style={[styles.heroMiniSpine, { backgroundColor: spine.color, height: spine.height }]}
+              />
+            ))}
+          </View>
+          <Text style={styles.heroEyebrow}>Community</Text>
+          <Text style={styles.heroTitle}>Discover other shelves</Text>
+          <Text style={styles.heroSubtitle}>Browse public libraries from readers around the world.</Text>
         </View>
 
         <View style={[styles.userSearchContainer, { backgroundColor: colors.background }]}>
@@ -223,6 +248,7 @@ export default function CommunityScreen() {
                 books={bookshelf.books}
                 onPress={() => handlePublicBookshelfPress(bookshelf)}
                 containerStyle={styles.previewCard}
+                owner={bookshelf.owner}
               />
             ))
           )}
@@ -247,24 +273,42 @@ const styles = StyleSheet.create({
   heroSection: {
     marginHorizontal: Spacing.md,
     padding: Spacing.lg,
-    borderWidth: 1,
-    borderRadius: BorderRadius.xl,
+    borderRadius: 22,
     gap: Spacing.xs,
+    overflow: 'hidden',
   },
   heroEyebrow: {
-    fontSize: Typography.sizes.sm,
+    fontSize: 11,
     fontFamily: getFontFamily('semibold'),
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: 2,
+    color: '#e0a562',
   },
   heroTitle: {
-    fontSize: Typography.sizes.xxl,
-    fontFamily: getFontFamily('bold'),
+    fontSize: 26,
+    fontFamily: getSerifFontFamily('medium'),
+    color: '#f7efe0',
   },
-  heroBody: {
+  heroSubtitle: {
     fontSize: Typography.sizes.md,
     fontFamily: getFontFamily('regular'),
     lineHeight: 20,
+    color: 'rgba(247, 239, 224, 0.72)',
+    maxWidth: '80%',
+  },
+  heroMiniSpines: {
+    position: 'absolute',
+    right: Spacing.md,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 2,
+    opacity: 0.5,
+  },
+  heroMiniSpine: {
+    width: 9,
+    borderTopLeftRadius: 2,
+    borderTopRightRadius: 2,
   },
   userSearchContainer: {
     paddingHorizontal: Spacing.md,

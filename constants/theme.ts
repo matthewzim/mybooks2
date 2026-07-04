@@ -67,6 +67,18 @@ export interface ThemeColors {
   starFilled: string;
   starEmpty: string;
 
+  // Danger surfaces (destructive buttons)
+  dangerBg: string;
+  dangerBorder: string;
+
+  // Decorative accents
+  walnut: string;
+  gilt: string;
+
+  // Count/badge pills
+  pill: string;
+  pillText: string;
+
   // Overlay colors
   overlay: string;
   overlayLight: string;
@@ -80,67 +92,79 @@ export interface ThemeColors {
 }
 
 /**
- * Light Mode Theme - Clean white with slate accents
+ * Light Mode Theme - Warm cream with rust accents
  */
 export const LightTheme: ThemeColors = {
   // Primary colors
-  primary: '#ba541f',
-  primaryLight: '#d4723f',
-  primaryDark: '#9a4419',
+  primary: '#b0501d',
+  primaryLight: '#c8642a',
+  primaryDark: '#8f3f14',
 
   // Secondary colors
-  secondary: '#ba541f',
-  secondaryLight: '#d4723f',
+  secondary: '#b0501d',
+  secondaryLight: '#c8642a',
 
   // Accent colors
-  accent: '#ba541f',
-  accentLight: '#d4723f',
+  accent: '#b0501d',
+  accentLight: '#c8642a',
 
   // Background colors
-  background: '#fbf6ec',
-  backgroundDark: '#f5eddf',
-  card: '#fbf6ec',
-  cardDark: '#f5eddf',
+  background: '#f6efe1',
+  backgroundDark: '#efe3cf',
+  card: '#fffdf8',
+  cardDark: '#f4ead6',
 
   // Text colors
-  text: '#1e293b',
-  textSecondary: '#64748b',
-  textLight: '#94a3b8',
+  text: '#2c2420',
+  textSecondary: '#857868',
+  textLight: '#a89d8c',
   textInverse: '#ffffff',
 
   // Bookshelf colors (wood tones)
-  bookshelfWood: '#8B4513',
-  bookshelfDark: '#654321',
+  bookshelfWood: '#7a4f2c',
+  bookshelfDark: '#5c3a1f',
   bookshelfLight: '#DEB887',
 
   // Book appearance colors
-  bookBase: '#f5eddf',
-  bookPageLines: '#cbd5e1',
-  bookPageContent: '#fbf6ec',
+  bookBase: '#f4ead6',
+  bookPageLines: '#e0d5bf',
+  bookPageContent: '#fffdf8',
   bookCoverEdge: 'rgba(0, 0, 0, 0.3)',
 
   // Input colors
-  inputBackground: '#fbf6ec',
-  inputBorder: '#e2e8f0',
+  inputBackground: '#fffdf8',
+  inputBorder: '#e3d7c1',
 
   // Status colors
   success: '#22c55e',
-  warning: '#f59e0b',
-  error: '#ef4444',
-  info: '#64748b',
+  warning: '#c9a25a',
+  error: '#b5402f',
+  info: '#857868',
 
   // Border colors
-  border: '#dbe3ef',
-  borderLight: '#eef2f7',
+  border: '#ece2cf',
+  borderLight: '#f0e7d6',
 
   // Rating star colors
-  starFilled: '#f59e0b',
-  starEmpty: '#e2e8f0',
+  starFilled: '#c9a25a',
+  starEmpty: '#e0d5bf',
+
+  // Danger surfaces
+  dangerBg: '#fdf3f0',
+  dangerBorder: '#e4c3bb',
+
+  // Decorative accents
+  walnut: '#6b4423',
+  gilt: '#c9a25a',
+
+  // Count/badge pills
+  pill: '#f4ead6',
+  pillText: '#96795a',
 
   // Overlay colors
-  overlay: 'rgba(0, 0, 0, 0.5)',
-  overlayLight: 'rgba(0, 0, 0, 0.2)',
-  overlayDark: 'rgba(0, 0, 0, 0.6)',
+  overlay: 'rgba(20, 12, 6, 0.55)',
+  overlayLight: 'rgba(20, 12, 6, 0.2)',
+  overlayDark: 'rgba(20, 12, 6, 0.65)',
   overlayWhite: 'rgba(255, 255, 255, 0.3)',
   overlayWhiteLight: 'rgba(255, 255, 255, 0.2)',
 
@@ -154,16 +178,16 @@ export const LightTheme: ThemeColors = {
  */
 export const DarkTheme: ThemeColors = {
   // Primary colors
-  primary: '#ba541f',
+  primary: '#c8642a',
   primaryLight: '#d4723f',
-  primaryDark: '#9a4419',
+  primaryDark: '#8f3f14',
 
   // Secondary colors
-  secondary: '#ba541f',
+  secondary: '#c8642a',
   secondaryLight: '#d4723f',
 
   // Accent colors
-  accent: '#ba541f',
+  accent: '#c8642a',
   accentLight: '#d4723f',
 
   // Background colors (dark — matches the widget's dark appearance #0b1220)
@@ -195,8 +219,8 @@ export const DarkTheme: ThemeColors = {
 
   // Status colors
   success: '#22c55e',
-  warning: '#f59e0b',
-  error: '#ef4444',
+  warning: '#c9a25a',
+  error: '#cf5a45',
   info: '#94a3b8',
 
   // Border colors
@@ -204,8 +228,20 @@ export const DarkTheme: ThemeColors = {
   borderLight: '#1a2639',
 
   // Rating star colors
-  starFilled: '#f59e0b',
+  starFilled: '#c9a25a',
   starEmpty: '#334155',
+
+  // Danger surfaces
+  dangerBg: '#2a1712',
+  dangerBorder: '#5c3128',
+
+  // Decorative accents
+  walnut: '#6b4423',
+  gilt: '#c9a25a',
+
+  // Count/badge pills
+  pill: '#1e293b',
+  pillText: '#a89d8c',
 
   // Overlay colors
   overlay: 'rgba(0, 0, 0, 0.7)',
@@ -224,58 +260,70 @@ export const DarkTheme: ThemeColors = {
  */
 export const StandardTheme: ThemeColors = {
   // Primary colors
-  primary: '#ba541f',
-  primaryLight: '#d4723f',
-  primaryDark: '#9a4419',
+  primary: '#b0501d',
+  primaryLight: '#c8642a',
+  primaryDark: '#8f3f14',
 
   // Secondary colors
-  secondary: '#ba541f',
-  secondaryLight: '#d4723f',
+  secondary: '#b0501d',
+  secondaryLight: '#c8642a',
 
   // Accent colors
-  accent: '#ba541f',
-  accentLight: '#d4723f',
+  accent: '#b0501d',
+  accentLight: '#c8642a',
 
   // Background colors
-  background: '#fbf6ec',
-  backgroundDark: '#f5eddf',
-  card: '#fbf6ec',
-  cardDark: '#f5eddf',
+  background: '#f6efe1',
+  backgroundDark: '#efe3cf',
+  card: '#fffdf8',
+  cardDark: '#f4ead6',
 
   // Text colors
-  text: '#292524',
-  textSecondary: '#57534e',
-  textLight: '#a8a29e',
+  text: '#2c2420',
+  textSecondary: '#857868',
+  textLight: '#a89d8c',
   textInverse: '#ffffff',
 
   // Bookshelf colors (wood tones)
-  bookshelfWood: '#8B4513',
-  bookshelfDark: '#654321',
+  bookshelfWood: '#7a4f2c',
+  bookshelfDark: '#5c3a1f',
   bookshelfLight: '#DEB887',
 
   // Book appearance colors
-  bookBase: '#f5eddf',
-  bookPageLines: '#d4cfc4',
-  bookPageContent: '#fbf6ec',
+  bookBase: '#f4ead6',
+  bookPageLines: '#e0d5bf',
+  bookPageContent: '#fffdf8',
   bookCoverEdge: 'rgba(0, 0, 0, 0.3)',
 
   // Input colors
-  inputBackground: '#fbf6ec',
-  inputBorder: '#d6d3d1',
+  inputBackground: '#fffdf8',
+  inputBorder: '#e3d7c1',
 
   // Status colors
   success: '#15803d',
-  warning: '#ca8a04',
-  error: '#dc2626',
-  info: '#0369a1',
+  warning: '#c9a25a',
+  error: '#b5402f',
+  info: '#857868',
 
   // Border colors
-  border: '#d6d3d1',
-  borderLight: '#e7e5e4',
+  border: '#ece2cf',
+  borderLight: '#f0e7d6',
 
   // Rating star colors
-  starFilled: '#f59e0b',
-  starEmpty: '#fde68a',
+  starFilled: '#c9a25a',
+  starEmpty: '#e0d5bf',
+
+  // Danger surfaces
+  dangerBg: '#fdf3f0',
+  dangerBorder: '#e4c3bb',
+
+  // Decorative accents
+  walnut: '#6b4423',
+  gilt: '#c9a25a',
+
+  // Count/badge pills
+  pill: '#f4ead6',
+  pillText: '#96795a',
 
   // Overlay colors
   overlay: 'rgba(69, 26, 3, 0.5)',
@@ -320,6 +368,7 @@ export const BorderRadius = {
   md: 8,
   lg: 12,
   xl: 16,
+  xxl: 20,
   full: 9999,
 } as const;
 
@@ -344,19 +393,39 @@ export const Typography = {
   fonts: {
     regular: Platform.select({
       web: '"Plus Jakarta Sans", "Inter", sans-serif',
-      default: 'System',
+      default: 'PlusJakartaSans_400Regular',
     }),
     medium: Platform.select({
       web: '"Plus Jakarta Sans", "Inter", sans-serif',
-      default: 'System',
+      default: 'PlusJakartaSans_500Medium',
     }),
     semibold: Platform.select({
       web: '"Plus Jakarta Sans", "Inter", sans-serif',
-      default: 'System',
+      default: 'PlusJakartaSans_600SemiBold',
     }),
     bold: Platform.select({
       web: '"Plus Jakarta Sans", "Inter", sans-serif',
-      default: 'System',
+      default: 'PlusJakartaSans_700Bold',
+    }),
+    serif: Platform.select({
+      web: '"Newsreader", "Georgia", serif',
+      default: 'Newsreader_500Medium',
+    }),
+    serifRegular: Platform.select({
+      web: '"Newsreader", "Georgia", serif',
+      default: 'Newsreader_400Regular',
+    }),
+    serifSemibold: Platform.select({
+      web: '"Newsreader", "Georgia", serif',
+      default: 'Newsreader_600SemiBold',
+    }),
+    serifItalic: Platform.select({
+      web: '"Newsreader", "Georgia", serif',
+      default: 'Newsreader_400Regular_Italic',
+    }),
+    serifMediumItalic: Platform.select({
+      web: '"Newsreader", "Georgia", serif',
+      default: 'Newsreader_500Medium_Italic',
     }),
   },
   // Line heights
@@ -371,28 +440,67 @@ export const getFontFamily = (
   weight: keyof typeof Typography.weights = 'regular'
 ): TextStyle['fontFamily'] => Typography.fonts[weight];
 
+export type SerifVariant = 'regular' | 'medium' | 'semibold' | 'italic' | 'mediumItalic';
+
+const serifFontMap: Record<SerifVariant, TextStyle['fontFamily']> = {
+  regular: Typography.fonts.serifRegular,
+  medium: Typography.fonts.serif,
+  semibold: Typography.fonts.serifSemibold,
+  italic: Typography.fonts.serifItalic,
+  mediumItalic: Typography.fonts.serifMediumItalic,
+};
+
+export const getSerifFontFamily = (
+  variant: SerifVariant = 'medium'
+): TextStyle['fontFamily'] => serifFontMap[variant];
+
+/**
+ * Style fragment for italic serif text. Native loads dedicated italic font
+ * files, while web relies on fontStyle to pick the italic face.
+ */
+export const serifItalicStyle: TextStyle = {
+  fontFamily: getSerifFontFamily('italic'),
+  ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}),
+};
+
 export const Shadows = {
   sm: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowColor: '#4a2f19',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
     elevation: 2,
   },
   md: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowColor: '#4a2f19',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 6,
   },
   lg: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowColor: '#4a2f19',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.22,
+    shadowRadius: 34,
+    elevation: 10,
   },
+} as const;
+
+/**
+ * Wood / shelf gradient tokens.
+ * Used everywhere a shelf renders: plank surfaces, cabinet frames, and the
+ * warm lit back panel behind books.
+ */
+export const Wood = {
+  plankTop: '#7a4f2c',
+  plankBottom: '#5c3a1f',
+  plankHighlight: 'rgba(255, 220, 170, 0.35)',
+  frameTop: '#8a5a30',
+  frameBottom: '#6e4324',
+  frameEdge: '#b98a52',
+  backTop: '#e9dcc2',
+  backBottom: '#f1e6cf',
 } as const;
 
 // Book spine dimensions
@@ -405,18 +513,18 @@ export const BookSpine = {
   minHeight: 120,
   maxHeight: 220,
 
-  // Spine colors (for books without images)
+  // Spine colors (for books without images) — warm literary cloth set
   colors: [
-    '#8B0000', // Dark Red
-    '#00008B', // Dark Blue
-    '#006400', // Dark Green
-    '#4B0082', // Indigo
-    '#8B4513', // Saddle Brown
-    '#2F4F4F', // Dark Slate Gray
-    '#483D8B', // Dark Slate Blue
-    '#556B2F', // Dark Olive Green
-    '#800000', // Maroon
-    '#191970', // Midnight Blue
+    '#7c3b2e', // Oxblood
+    '#2d3a54', // Navy
+    '#c08a2d', // Mustard (light cloth)
+    '#3f5641', // Forest
+    '#33261f', // Espresso
+    '#d9c9a8', // Cream (light cloth)
+    '#4a2f45', // Plum
+    '#6b2f2a', // Brick
+    '#37514f', // Teal
+    '#5c3a1f', // Walnut
   ] as const,
 } as const;
 
@@ -429,8 +537,8 @@ export const BookshelfDimensions = {
 
   // Shelf appearance
   shelfThickness: 12,
-  shelfColor: '#8B4513',
-  backColor: '#654321',
+  shelfColor: '#7a4f2c',
+  backColor: '#e9dcc2',
 } as const;
 
 // Animation durations

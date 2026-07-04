@@ -16,13 +16,26 @@ import { Stack } from 'expo-router';
 
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
+import {
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+} from '@expo-google-fonts/plus-jakarta-sans';
+import {
+  Newsreader_400Regular,
+  Newsreader_400Regular_Italic,
+  Newsreader_500Medium,
+  Newsreader_500Medium_Italic,
+  Newsreader_600SemiBold,
+} from '@expo-google-fonts/newsreader';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Platform } from 'react-native';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { RevenueCatProvider } from '@/contexts/RevenueCatContext';
-import { getFontFamily } from '@/constants/theme';
+import { getSerifFontFamily } from '@/constants/theme';
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -43,7 +56,8 @@ function RootLayoutContent() {
           },
           headerTintColor: colors.textInverse,
           headerTitleStyle: {
-            fontFamily: getFontFamily('semibold'),
+            fontFamily: getSerifFontFamily('semibold'),
+            fontSize: 18,
           },
           contentStyle: {
             backgroundColor: colors.background,
@@ -155,7 +169,17 @@ function RootLayoutContent() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({});
+  const [fontsLoaded] = useFonts({
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    Newsreader_400Regular,
+    Newsreader_400Regular_Italic,
+    Newsreader_500Medium,
+    Newsreader_500Medium_Italic,
+    Newsreader_600SemiBold,
+  });
 
   // Hide splash screen when fonts are loaded
   useEffect(() => {
@@ -185,6 +209,11 @@ export default function RootLayout() {
         id: 'plus-jakarta-stylesheet',
         rel: 'stylesheet',
         href: 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap',
+      },
+      {
+        id: 'newsreader-stylesheet',
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..600&display=swap',
       },
     ];
 

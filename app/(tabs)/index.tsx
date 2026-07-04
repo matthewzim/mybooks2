@@ -22,7 +22,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { BookshelfPreview } from '@/components/BookshelfPreview';
 import { LoadingView, EmptyState } from '@/components/ui';
 import { FREE_TIER_LIMITS } from '@/services/revenuecat';
-import { Spacing, BorderRadius, Typography, getFontFamily } from '@/constants/theme';
+import { Spacing, BorderRadius, Typography, Shadows, getFontFamily, getSerifFontFamily } from '@/constants/theme';
 import type { Bookshelf } from '@/types';
 
 export default function HomeScreen() {
@@ -115,6 +115,18 @@ export default function HomeScreen() {
                 : `${bookshelves.length} ${bookshelves.length === 1 ? 'bookshelf' : 'bookshelves'} organized and ready to explore.`}
             </Text>
           </View>
+          <Pressable
+            style={({ pressed }) => [
+              styles.fab,
+              { backgroundColor: colors.primary },
+              pressed && { opacity: 0.9, transform: [{ scale: 0.96 }] },
+            ]}
+            onPress={handleAddBookshelf}
+            accessibilityRole="button"
+            accessibilityLabel="Create a new bookshelf"
+          >
+            <Ionicons name="add" size={24} color={colors.textInverse} />
+          </Pressable>
         </View>
 
         {bookshelves.length > 0 ? (
@@ -175,19 +187,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.sm,
     paddingBottom: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.md,
   },
   headerText: {
+    flex: 1,
     gap: Spacing.xs,
   },
   eyebrow: {
-    fontSize: Typography.sizes.sm,
+    fontSize: 11,
     fontFamily: getFontFamily('semibold'),
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: 2,
   },
   heading: {
-    fontSize: Typography.sizes.xxl,
-    fontFamily: getFontFamily('bold'),
+    fontSize: 34,
+    fontFamily: getSerifFontFamily('medium'),
+  },
+  fab: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.xs,
+    ...Shadows.md,
   },
   subheading: {
     fontSize: Typography.sizes.md,
