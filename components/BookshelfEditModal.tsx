@@ -1,7 +1,8 @@
 /**
  * Bookshelf Edit Modal
  *
- * Modal for editing bookshelf properties including name, description, and privacy.
+ * Modal for editing bookshelf properties including name, description,
+ * shelf color, and privacy.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -24,6 +25,7 @@ import {
   BorderRadius,
   Typography,
 } from '@/constants/theme';
+import { BOOKSHELF_COLORS } from '@/types';
 import type { Bookshelf, UpdateBookshelfInput } from '@/types';
 
 interface BookshelfEditModalProps {
@@ -43,6 +45,7 @@ export function BookshelfEditModal({
 }: BookshelfEditModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [coverColor, setCoverColor] = useState<string>(BOOKSHELF_COLORS[0]);
   const [isPublic, setIsPublic] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +55,7 @@ export function BookshelfEditModal({
     if (bookshelf) {
       setName(bookshelf.name);
       setDescription(bookshelf.description || '');
+      setCoverColor(bookshelf.cover_color || BOOKSHELF_COLORS[0]);
       setIsPublic(bookshelf.is_public);
       setError(null);
     }
@@ -86,6 +90,7 @@ export function BookshelfEditModal({
       const updates: UpdateBookshelfInput = {
         name: name.trim(),
         description: description.trim() || undefined,
+        cover_color: coverColor,
         is_public: isPublic,
       };
 
@@ -171,6 +176,34 @@ export function BookshelfEditModal({
             multiline
             numberOfLines={3}
           />
+
+          {/* Color Picker */}
+          <View style={styles.colorSection}>
+            <Text style={styles.colorLabel}>Shelf Color</Text>
+            <View style={styles.colorGrid}>
+              {BOOKSHELF_COLORS.map((color) => (
+                <Pressable
+                  key={color}
+                  style={[
+                    styles.colorOption,
+                    { backgroundColor: color },
+                    coverColor === color && styles.colorOptionSelected,
+                  ]}
+                  onPress={() => setCoverColor(color)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Shelf color ${color}`}
+                >
+                  {coverColor === color && (
+                    <Ionicons
+                      name="checkmark"
+                      size={20}
+                      color={Colors.textOnDark}
+                    />
+                  )}
+                </Pressable>
+              ))}
+            </View>
+          </View>
 
           {/* Privacy Toggle */}
           <View style={styles.privacySection}>
@@ -273,6 +306,32 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: Spacing.lg,
     paddingBottom: Spacing.xxl,
+  },
+  colorSection: {
+    marginBottom: Spacing.lg,
+  },
+  colorLabel: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.medium,
+    color: Colors.text,
+    marginBottom: Spacing.md,
+  },
+  colorGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.md,
+  },
+  colorOption: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorOptionSelected: {
+    borderColor: Colors.text,
   },
   privacySection: {
     marginBottom: Spacing.lg,

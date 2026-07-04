@@ -160,6 +160,7 @@ export default function BookshelfDetailScreen() {
               ...prev,
               name: updates.name ?? prev.name,
               description: updates.description ?? prev.description,
+              cover_color: updates.cover_color ?? prev.cover_color,
               is_public: updates.is_public ?? prev.is_public,
               shelf_style: updates.shelf_style ?? prev.shelf_style,
             }

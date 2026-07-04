@@ -45,6 +45,46 @@ function stableHue(title: string): string {
   return `hsl(${hue}, 50%, 55%)`;
 }
 
+/** Mirrors adjustHexBrightness in utils/shelfColors.ts. */
+function adjustHexBrightness(color: string, amount: number): string {
+  const channels = [1, 3, 5].map((index) => {
+    const value = parseInt(color.slice(index, index + 2), 16);
+    return Math.min(255, Math.max(0, Math.round(value + amount)));
+  });
+  return `#${channels.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * Shelf palette derived from the bookshelf cover color — mirrors
+ * getShelfColors in utils/shelfColors.ts (and the ShelfPalette port in the
+ * native Swift widget). The native widget renders the frame/plank as
+ * top-to-bottom gradients; this preview uses the gradient top colors.
+ */
+function getWidgetShelfPalette(coverColor: string | null) {
+  const DEFAULT_SHELF_COLOR = '#7a4f2c'; // Wood.plankTop
+  const hex =
+    coverColor && /^#[0-9a-fA-F]{6}$/.test(coverColor.trim())
+      ? coverColor.trim()
+      : DEFAULT_SHELF_COLOR;
+
+  if (hex.toLowerCase() === DEFAULT_SHELF_COLOR) {
+    return {
+      frame: '#8a5a30', // Wood.frameTop
+      frameEdge: '#b98a52', // Wood.frameEdge
+      plank: '#7a4f2c', // Wood.plankTop
+      back: '#e9dcc2', // Wood.backTop
+    };
+  }
+
+  return {
+    frame: adjustHexBrightness(hex, 18),
+    frameEdge: adjustHexBrightness(hex, 56),
+    plank: adjustHexBrightness(hex, 8),
+    // The warm lit back wall stays constant so books remain readable
+    back: '#e9dcc2',
+  };
+}
+
 function seededNormalized(bookId: string, title: string, salt: string): number {
   const source = `${bookId}-${title}-${salt}`;
   let hash = 0;
@@ -126,12 +166,19 @@ function SpineRow({
   shelfColor: string;
   shelfStyle: 'full' | 'bottom';
 }) {
+  /*
+   * NOTE: matching the in-app BookSpine, the native widget clips every spine
+   * (image or placeholder) with rounded corners (3pt top / 1pt bottom) and
+   * casts a warm shadow onto the plank; placeholder spines also get the
+   * horizontal cloth sheen gradient. This preview approximates that with a
+   * uniform corner radius.
+   */
   const spines = spineData.map(({ book, width, height }) => (
     <Section key={book.id}>
       <VStack
         modifiers={[
           frame({ width, height }),
-          cornerRadius(1),
+          cornerRadius(3),
           background(stableHue(book.title)),
         ]}
       >
@@ -169,13 +216,14 @@ function SpineRow({
           {spines}
         </HStack>
       ) : (
-        /* Full shelf: spines on a background with uniform border */
+        /* Full shelf: spines on the warm lit back panel, inside the cabinet
+           frame (the native widget draws the back panel and frame as
+           top-to-bottom gradients) */
         <HStack
           spacing={0}
           alignment="bottom"
           modifiers={[
             background(shelfBackColor),
-            cornerRadius(2),
             padding({ horizontal: 8 }),
           ]}
         >
@@ -215,8 +263,11 @@ const BookshelfWidget = (
 
   const spineWidth = 36;
   const spineHeight = family === 'systemMedium' ? 108 : 124;
-  const shelfColor = coverColor || '#8B4513';
-  const shelfBackColor = '#654321';
+  // Shelf colors derived from the bookshelf cover color, matching the
+  // in-app cabinet (utils/shelfColors.ts)
+  const palette = getWidgetShelfPalette(coverColor);
+  const shelfColor = palette.plank;
+  const shelfBackColor = palette.back;
 
   // Subscription gate: show upgrade prompt for free users
   if (!isPremium) {
@@ -278,23 +329,34 @@ const BookshelfWidget = (
         background('#fbf6ec'),
       ]}
     >
-      {/* First row of spines with shelf */}
-      <SpineRow
-        spines={topRow}
-        shelfBackColor={shelfBackColor}
-        shelfColor={shelfColor}
-        shelfStyle={shelfStyle}
-      />
-
-      {/* Second row of spines with shelf (large only) */}
-      {isLarge && bottomRow.length > 0 && (
+      {/* Cabinet: rounded wood frame around all rows (full style only),
+          matching the in-app EditableBookshelfGrid cabinet. The native
+          widget also strokes a 1px lighter frame edge around it. */}
+      <VStack
+        modifiers={
+          shelfStyle === 'full'
+            ? [background(palette.frame), cornerRadius(12)]
+            : []
+        }
+      >
+        {/* First row of spines with shelf */}
         <SpineRow
-          spines={bottomRow}
+          spines={topRow}
           shelfBackColor={shelfBackColor}
           shelfColor={shelfColor}
           shelfStyle={shelfStyle}
         />
-      )}
+
+        {/* Second row of spines with shelf (large only) */}
+        {isLarge && bottomRow.length > 0 && (
+          <SpineRow
+            spines={bottomRow}
+            shelfBackColor={shelfBackColor}
+            shelfColor={shelfColor}
+            shelfStyle={shelfStyle}
+          />
+        )}
+      </VStack>
     </VStack>
   );
 };
