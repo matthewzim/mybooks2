@@ -486,7 +486,6 @@ export function EditableBookshelfGrid({
 
   const renderedRows = rows.map((row, rowIndex) => {
         const rowHeight = getRowHeight(row);
-        const isLastRow = rowIndex === rows.length - 1;
 
         return (
           <View
@@ -497,7 +496,7 @@ export function EditableBookshelfGrid({
                 marginBottom: 0,
                 paddingHorizontal: fullShelfBorderWidth,
                 paddingTop: fullShelfBorderWidth,
-                paddingBottom: isLastRow ? fullShelfBorderWidth : 0,
+                paddingBottom: 0,
               },
             ]}
           >
@@ -513,7 +512,7 @@ export function EditableBookshelfGrid({
                     left: fullShelfBorderWidth,
                     right: fullShelfBorderWidth,
                     top: fullShelfBorderWidth,
-                    bottom: isLastRow ? fullShelfBorderWidth : 0,
+                    bottom: 0,
                   },
                 ]}
               />

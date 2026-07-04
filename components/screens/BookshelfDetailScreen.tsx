@@ -30,7 +30,7 @@ import { BookDetailModal } from '@/components/BookDetailModal';
 import { BookshelfEditModal } from '@/components/BookshelfEditModal';
 import { BrowseBooksModal } from '@/components/BrowseBooksModal';
 import { LoadingView, EmptyState } from '@/components/ui';
-import { Spacing, Typography, BorderRadius, Shadows, getFontFamily, getSerifFontFamily, serifItalicStyle } from '@/constants/theme';
+import { Spacing, Typography, BorderRadius, Shadows, getSerifFontFamily, serifItalicStyle } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { Book, Bookshelf, ShelfStyle, UpdateBookshelfInput } from '@/types';
 
@@ -38,7 +38,7 @@ export default function BookshelfDetailScreen() {
   const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
-  const { getBookshelf, updateBookshelf } = useBookshelves();
+  const { getBookshelf, updateBookshelf, deleteBookshelf } = useBookshelves();
   const { books, isLoading: booksLoading, fetchBooks, deleteBook, reorderBooks, updateBook, stackBookOnTop, unstackBook } = useBooks(id || '');
   const [bookshelf, setBookshelf] = useState<Bookshelf | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -168,6 +168,34 @@ export default function BookshelfDetailScreen() {
       return true;
     }
     return false;
+  };
+
+  /**
+   * Delete this bookshelf (from the edit modal) after confirmation
+   */
+  const handleDeleteBookshelf = () => {
+    if (!id || !bookshelf) return;
+
+    Alert.alert(
+      'Delete Bookshelf',
+      `Are you sure you want to delete "${bookshelf.name}"? This will also delete all books on this shelf.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const success = await deleteBookshelf(id);
+            if (success) {
+              setIsEditModalVisible(false);
+              router.back();
+            } else {
+              Alert.alert('Error', 'Failed to delete bookshelf. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   /**
@@ -327,9 +355,6 @@ export default function BookshelfDetailScreen() {
         <View style={[styles.statsContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.stat}>
             <Text style={[styles.statValue, { color: colors.primary }]}>{books.length}</Text>
-            <Text style={[styles.statLabel, { color: colors.textLight }]}>
-              {books.length === 1 ? 'Book' : 'Books'}
-            </Text>
           </View>
           {!isEditMode && Boolean(bookshelf.description) && (
             <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
@@ -432,6 +457,7 @@ export default function BookshelfDetailScreen() {
           bookshelf={bookshelf}
           onClose={() => setIsEditModalVisible(false)}
           onSave={handleSaveBookshelf}
+          onDelete={handleDeleteBookshelf}
         />
 
         {/* Browse Community Books Modal */}
@@ -481,12 +507,6 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 26,
     fontFamily: getSerifFontFamily('medium'),
-  },
-  statLabel: {
-    fontSize: 10,
-    fontFamily: getFontFamily('semibold'),
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
   },
   statDivider: {
     width: 1,

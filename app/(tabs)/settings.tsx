@@ -307,6 +307,8 @@ export default function SettingsScreen() {
         Alert.alert('Error', result.error.message);
       } else {
         setIsEditing(false);
+        setIsEditingUsername(false);
+        setUsernameError(null);
         Alert.alert('Success', 'Profile updated successfully');
       }
     } catch (error) {
@@ -535,77 +537,114 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Heading */}
+        <View style={styles.headingContainer}>
+          <Text style={[styles.heading, { color: colors.text }]}>Settings</Text>
+        </View>
+
         {/* Profile Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Profile</Text>
           <View style={[styles.card, { backgroundColor: colors.card }]}>
-            {/* Avatar */}
-            <View style={styles.avatarContainer}>
-              <View style={styles.avatar}>
-                <LinearGradient
-                  colors={['#c8642a', '#a24417']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0.85, y: 1 }}
-                  style={StyleSheet.absoluteFill}
-                />
-                <Text style={[styles.avatarText, { color: colors.textInverse }]}>
-                  {(user?.name || 'U')[0].toUpperCase()}
-                </Text>
-              </View>
-              {isPro && (
-                <View style={[styles.premiumBadge, { backgroundColor: colors.gilt, borderColor: colors.card }]}>
-                  <Ionicons name="star" size={12} color="#ffffff" />
-                </View>
-              )}
-            </View>
-
             {/* Profile Info */}
             {isEditing ? (
-              <View style={styles.editForm}>
-                <Input
-                  label="Name"
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="Enter your name"
-                  colors={colors}
-                />
-                <View style={styles.editButtons}>
-                  <Button
-                    title="Cancel"
-                    variant="outline"
-                    onPress={() => {
-                      setName(user?.name || '');
-                      setIsEditing(false);
-                    }}
-                    size="sm"
-                    colors={colors}
-                  />
-                  <Button
-                    title="Save"
-                    onPress={handleSaveProfile}
-                    loading={isLoading}
-                    size="sm"
-                    colors={colors}
-                  />
+              <>
+                {/* Avatar */}
+                <View style={styles.avatarContainer}>
+                  <View style={styles.avatar}>
+                    <LinearGradient
+                      colors={['#c8642a', '#a24417']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0.85, y: 1 }}
+                      style={StyleSheet.absoluteFill}
+                    />
+                    <Text style={[styles.avatarText, { color: colors.textInverse }]}>
+                      {(user?.name || 'U')[0].toUpperCase()}
+                    </Text>
+                  </View>
+                  {isPro && (
+                    <View style={[styles.premiumBadge, { backgroundColor: colors.gilt, borderColor: colors.card }]}>
+                      <Ionicons name="star" size={12} color="#ffffff" />
+                    </View>
+                  )}
                 </View>
-              </View>
+
+                <View style={styles.editForm}>
+                  <Input
+                    label="Name"
+                    value={name}
+                    onChangeText={setName}
+                    placeholder="Enter your name"
+                    colors={colors}
+                  />
+                  <View style={styles.editButtons}>
+                    <Button
+                      title="Cancel"
+                      variant="outline"
+                      onPress={() => {
+                        setName(user?.name || '');
+                        setPublicUsername(user?.public_username || '');
+                        setIsEditingUsername(false);
+                        setUsernameError(null);
+                        setIsEditing(false);
+                      }}
+                      size="sm"
+                      colors={colors}
+                    />
+                    <Button
+                      title="Save"
+                      onPress={handleSaveProfile}
+                      loading={isLoading}
+                      size="sm"
+                      colors={colors}
+                    />
+                  </View>
+                </View>
+              </>
             ) : (
-              <View style={styles.profileInfo}>
-                <Text style={[styles.userName, { color: colors.text }]}>{user?.name || 'No name set'}</Text>
-                {user?.public_username && (
-                  <Text style={[styles.userHandle, { color: colors.textLight }]}>@{user.public_username}</Text>
-                )}
+              <View style={styles.profileRow}>
+                <View style={styles.profileAvatarWrap}>
+                  <View style={styles.avatar}>
+                    <LinearGradient
+                      colors={['#c8642a', '#a24417']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0.85, y: 1 }}
+                      style={StyleSheet.absoluteFill}
+                    />
+                    <Text style={[styles.avatarText, { color: colors.textInverse }]}>
+                      {(user?.name || 'U')[0].toUpperCase()}
+                    </Text>
+                  </View>
+                  {isPro && (
+                    <View style={[styles.profileBadge, { backgroundColor: colors.gilt, borderColor: colors.card }]}>
+                      <Ionicons name="star" size={12} color="#ffffff" />
+                    </View>
+                  )}
+                </View>
+                <View style={styles.profileText}>
+                  <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>
+                    {user?.name || 'No name set'}
+                  </Text>
+                  <Text style={[styles.userHandle, { color: colors.textLight }]} numberOfLines={1}>
+                    {user?.public_username ? `@${user.public_username}` : 'No username set'}
+                  </Text>
+                </View>
                 <Pressable
-                  style={[styles.editButton, { backgroundColor: colors.pill }]}
+                  style={({ pressed }) => [
+                    styles.profileEditButton,
+                    { backgroundColor: colors.pill },
+                    pressed && { opacity: 0.85 },
+                  ]}
                   onPress={() => setIsEditing(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit profile"
                 >
-                  <Ionicons name="pencil" size={13} color={colors.primary} />
                   <Text style={[styles.editButtonText, { color: colors.primary }]}>Edit</Text>
                 </Pressable>
               </View>
             )}
 
-            {/* Public Username */}
+            {/* Public Username (shown while editing the profile) */}
+            {isEditing && (
             <View style={[styles.usernameSection, { borderTopColor: colors.border }]}>
               {isEditingUsername ? (
                 <View style={styles.editForm}>
@@ -669,6 +708,7 @@ export default function SettingsScreen() {
                 </View>
               )}
             </View>
+            )}
           </View>
         </View>
 
@@ -914,6 +954,15 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: Spacing.md,
   },
+  headingContainer: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.md,
+  },
+  heading: {
+    fontSize: 34,
+    fontFamily: getSerifFontFamily('medium'),
+  },
   section: {
     marginBottom: Spacing.lg,
     paddingHorizontal: Spacing.md,
@@ -956,10 +1005,30 @@ const styles = StyleSheet.create({
     padding: 4,
     borderWidth: 2,
   },
-  profileInfo: {
+  profileRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.lg,
-    gap: Spacing.xs,
+    padding: Spacing.md,
+    gap: Spacing.md,
+  },
+  profileAvatarWrap: {
+    position: 'relative',
+  },
+  profileBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    borderRadius: 12,
+    padding: 4,
+    borderWidth: 2,
+  },
+  profileText: {
+    flex: 1,
+  },
+  profileEditButton: {
+    borderRadius: BorderRadius.full,
+    paddingVertical: 8,
+    paddingHorizontal: Spacing.md,
   },
   userName: {
     fontSize: 22,
