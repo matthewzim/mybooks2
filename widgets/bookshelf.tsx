@@ -218,7 +218,8 @@ function SpineRow({
       ) : (
         /* Full shelf: spines on the warm lit back panel, inside the cabinet
            frame (the native widget draws the back panel and frame as
-           top-to-bottom gradients) */
+           top-to-bottom gradients). No plank: books rest on the cabinet
+           frame strip below the row. */
         <HStack
           spacing={0}
           alignment="bottom"
@@ -231,13 +232,16 @@ function SpineRow({
         </HStack>
       )}
 
-      {/* Shelf ledge */}
-      <VStack
-        modifiers={[
-          frame({ height: 8 }),
-          background(shelfColor),
-        ]}
-      />
+      {/* Shelf ledge — only for the open 'bottom' style, where the plank is
+          the shelf itself */}
+      {shelfStyle === 'bottom' && (
+        <VStack
+          modifiers={[
+            frame({ height: 8 }),
+            background(shelfColor),
+          ]}
+        />
+      )}
     </VStack>
   );
 }
@@ -335,7 +339,7 @@ const BookshelfWidget = (
       <VStack
         modifiers={
           shelfStyle === 'full'
-            ? [background(palette.frame), cornerRadius(12)]
+            ? [padding({ bottom: 8 }), background(palette.frame), cornerRadius(12)]
             : []
         }
       >

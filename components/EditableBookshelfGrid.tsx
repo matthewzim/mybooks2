@@ -609,8 +609,9 @@ export function EditableBookshelfGrid({
               })}
             </View>
 
-            {/* Gradient plank under every row */}
-            <ShelfPlank shelfColors={shelfColors} />
+            {/* Floating plank only for the open 'bottom' style; cabinet rows
+                rest directly on the frame border below them */}
+            {!isCabinet && <ShelfPlank shelfColors={shelfColors} />}
           </View>
         );
       });
@@ -623,7 +624,17 @@ export function EditableBookshelfGrid({
       scrollEnabled={!isEditing || draggingIndex === null}
     >
       {isCabinet ? (
-        <View style={[styles.cabinet, { marginHorizontal: fullShelfMargin, borderColor: shelfColors.frameEdge }]}>
+        <View
+          style={[
+            styles.cabinet,
+            {
+              marginHorizontal: fullShelfMargin,
+              borderColor: shelfColors.frameEdge,
+              // Frame strip under the last row now that rows carry no plank
+              paddingBottom: fullShelfBorderWidth,
+            },
+          ]}
+        >
           {/* Cabinet frame behind the rows */}
           <LinearGradient
             colors={[...shelfColors.frameGradient]}
