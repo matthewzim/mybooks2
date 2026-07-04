@@ -108,28 +108,84 @@ private var appBackgroundColor: Color {
 
 // MARK: - Color helpers
 
-private func hexToColor(_ hex: String?) -> Color? {
-  guard let hex = hex?.trimmingCharacters(in: .whitespacesAndNewlines),
-        hex.hasPrefix("#") else { return nil }
-  let stripped = String(hex.dropFirst())
+/// Parses a "#rgb" / "#rrggbb" hex string into 0-255 channel values.
+private func hexChannels(_ hex: String?) -> (Double, Double, Double)? {
+  guard let raw = hex?.trimmingCharacters(in: .whitespacesAndNewlines),
+        raw.hasPrefix("#") else { return nil }
+  var stripped = String(raw.dropFirst())
+  if stripped.count == 3 {
+    var expanded = ""
+    for ch in stripped {
+      expanded.append(ch)
+      expanded.append(ch)
+    }
+    stripped = expanded
+  }
   guard stripped.count == 6, let val = UInt64(stripped, radix: 16) else { return nil }
-  let r = Double((val >> 16) & 0xFF) / 255.0
-  let g = Double((val >> 8) & 0xFF) / 255.0
-  let b = Double(val & 0xFF) / 255.0
-  return Color(red: r, green: g, blue: b)
+  return (
+    Double((val >> 16) & 0xFF),
+    Double((val >> 8) & 0xFF),
+    Double(val & 0xFF)
+  )
 }
 
-private func darkenColor(_ hex: String?, amount: Double = 0.14) -> Color {
-  guard let hex = hex?.trimmingCharacters(in: .whitespacesAndNewlines),
-        hex.hasPrefix("#") else { return Color(red: 0.396, green: 0.263, blue: 0.129) }
-  let stripped = String(hex.dropFirst())
-  guard stripped.count == 6, let val = UInt64(stripped, radix: 16) else {
-    return Color(red: 0.396, green: 0.263, blue: 0.129)
+/// Builds a Color from 0-255 channels, optionally shifted by a brightness
+/// amount (mirrors adjustHexBrightness in utils/shelfColors.ts).
+private func channelColor(_ rgb: (Double, Double, Double), adjustedBy amount: Double = 0) -> Color {
+  Color(
+    red: min(255, max(0, rgb.0 + amount)) / 255.0,
+    green: min(255, max(0, rgb.1 + amount)) / 255.0,
+    blue: min(255, max(0, rgb.2 + amount)) / 255.0
+  )
+}
+
+/// Shelf palette derived from the bookshelf cover color — a direct port of
+/// getShelfColors in utils/shelfColors.ts plus the Wood tokens in
+/// constants/theme.ts, so widget shelves match the in-app cabinet.
+private struct ShelfPalette {
+  let plankTop: Color
+  let plankBottom: Color
+  let frameTop: Color
+  let frameBottom: Color
+  let frameEdge: Color
+  let backTop: Color
+  let backBottom: Color
+
+  /// Wood.plankHighlight: rgba(255, 220, 170, 0.35)
+  static let plankHighlight = Color(red: 1.0, green: 220.0 / 255.0, blue: 170.0 / 255.0).opacity(0.35)
+}
+
+private func shelfPalette(for coverColor: String?) -> ShelfPalette {
+  // The warm lit back wall stays constant so books remain readable
+  // (Wood.backTop #e9dcc2 / Wood.backBottom #f1e6cf).
+  let backTop = channelColor((0xE9, 0xDC, 0xC2))
+  let backBottom = channelColor((0xF1, 0xE6, 0xCF))
+
+  // Default wood cabinet when there is no custom cover color, or when the
+  // cover color equals the default shelf color (Wood.plankTop #7a4f2c).
+  let isDefault = coverColor?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "#7a4f2c"
+  guard let rgb = hexChannels(coverColor), !isDefault else {
+    return ShelfPalette(
+      plankTop: channelColor((0x7A, 0x4F, 0x2C)),
+      plankBottom: channelColor((0x5C, 0x3A, 0x1F)),
+      frameTop: channelColor((0x8A, 0x5A, 0x30)),
+      frameBottom: channelColor((0x6E, 0x43, 0x24)),
+      frameEdge: channelColor((0xB9, 0x8A, 0x52)),
+      backTop: backTop,
+      backBottom: backBottom
+    )
   }
-  let r = max(0, Double((val >> 16) & 0xFF) / 255.0 - amount)
-  let g = max(0, Double((val >> 8) & 0xFF) / 255.0 - amount)
-  let b = max(0, Double(val & 0xFF) / 255.0 - amount)
-  return Color(red: r, green: g, blue: b)
+
+  // Custom cover colors tint the plank and frame, same offsets as the app.
+  return ShelfPalette(
+    plankTop: channelColor(rgb, adjustedBy: 8),
+    plankBottom: channelColor(rgb, adjustedBy: -32),
+    frameTop: channelColor(rgb, adjustedBy: 18),
+    frameBottom: channelColor(rgb, adjustedBy: -18),
+    frameEdge: channelColor(rgb, adjustedBy: 56),
+    backTop: backTop,
+    backBottom: backBottom
+  )
 }
 
 // MARK: - Native SwiftUI widget view
@@ -138,11 +194,8 @@ struct BookshelfWidgetView: View {
   let entry: BookshelfEntry
   @Environment(\\.widgetFamily) var family
 
-  private var shelfColor: Color {
-    hexToColor(entry.coverColor) ?? Color(red: 0.545, green: 0.271, blue: 0.075)
-  }
-  private var shelfBackColor: Color {
-    darkenColor(entry.coverColor)
+  private var palette: ShelfPalette {
+    shelfPalette(for: entry.coverColor)
   }
 
   var body: some View {
@@ -188,6 +241,9 @@ struct BookshelfWidgetView: View {
 
   private var shelfThickness: CGFloat { 8 }
 
+  /// Cabinet corner rounding matching the in-app cabinet (BorderRadius.lg).
+  private var cabinetCornerRadius: CGFloat { 12 }
+
   @ViewBuilder
   private var bookshelfContent: some View {
     GeometryReader { geo in
@@ -200,13 +256,14 @@ struct BookshelfWidgetView: View {
       let rowContentWidth = availableWidth - 2 * rowSidePadding
       let baseSpineWidth = min(42, max(20, rowContentWidth / 7))
 
-      // Compute spine height so shelves fill the widget with equal margins on all sides
+      // Compute spine height so shelves fill the widget with equal margins
+      // on all sides. Each full-style row carries a frame strip on top and a
+      // plank underneath (like the in-app cabinet rows); bottom-style rows
+      // just add a little headroom plus the plank.
       let shelfFrameExtra: CGFloat = isBottomStyle ? 6 : shelfThickness
       let perShelfOverhead = shelfFrameExtra + shelfThickness
       let shelfCount: CGFloat = family == .systemLarge ? 2 : 1
-      // Large widget: no middle margin; full-style shares one border between shelves
-      let sharedBorderSaving: CGFloat = (family == .systemLarge && !isBottomStyle) ? shelfThickness : 0
-      let rowSpineHeight: CGFloat = (geo.size.height - 2 * margin - shelfCount * perShelfOverhead + sharedBorderSaving) / shelfCount
+      let rowSpineHeight: CGFloat = (geo.size.height - 2 * margin - shelfCount * perShelfOverhead) / shelfCount
 
       // Rows fill by actual spine width, not a fixed count: a book only
       // moves to the second shelf once the first shelf has no room left.
@@ -214,13 +271,38 @@ struct BookshelfWidgetView: View {
       let layouts = spineLayouts(for: visible, baseSpineWidth: baseSpineWidth, rowSpineHeight: rowSpineHeight)
       let rows = splitIntoRows(layouts: layouts, rowContentWidth: rowContentWidth, rowCount: family == .systemLarge ? 2 : 1)
 
-      VStack(alignment: .leading, spacing: 0) {
-        // First shelf row (large full-style: no ledge, bottom shelf top border serves as shared border)
-        shelfRow(layouts: rows[0], rowSpineHeight: rowSpineHeight, showLedge: family != .systemLarge || isBottomStyle)
+      Group {
+        if isBottomStyle {
+          // Open shelf: rows of spines resting on floating planks
+          VStack(alignment: .leading, spacing: 0) {
+            shelfRow(layouts: rows[0], rowSpineHeight: rowSpineHeight)
 
-        if family == .systemLarge {
-          // Second shelf row
-          shelfRow(layouts: rows[1], rowSpineHeight: rowSpineHeight, showLedge: true)
+            if family == .systemLarge {
+              shelfRow(layouts: rows[1], rowSpineHeight: rowSpineHeight)
+            }
+          }
+        } else {
+          // Classic cabinet: rounded wood frame around all rows, matching
+          // the in-app EditableBookshelfGrid cabinet.
+          VStack(alignment: .leading, spacing: 0) {
+            cabinetRow(layouts: rows[0], rowSpineHeight: rowSpineHeight)
+
+            if family == .systemLarge {
+              cabinetRow(layouts: rows[1], rowSpineHeight: rowSpineHeight)
+            }
+          }
+          .background(
+            LinearGradient(
+              colors: [palette.frameTop, palette.frameBottom],
+              startPoint: .top,
+              endPoint: .bottom
+            )
+          )
+          .clipShape(RoundedRectangle(cornerRadius: cabinetCornerRadius))
+          .overlay(
+            RoundedRectangle(cornerRadius: cabinetCornerRadius)
+              .stroke(palette.frameEdge, lineWidth: 1)
+          )
         }
       }
       .padding(margin)
@@ -231,51 +313,70 @@ struct BookshelfWidgetView: View {
     entry.shelfStyle == "bottom"
   }
 
-  private func shelfRow(layouts: [SpineLayout], rowSpineHeight: CGFloat, showLedge: Bool) -> some View {
+  /// One row inside the cabinet: the warm lit back panel behind
+  /// bottom-aligned spines, framed by the cabinet gradient showing through
+  /// the top/side insets, with a plank underneath — mirroring the in-app
+  /// cabinet rows.
+  private func cabinetRow(layouts: [SpineLayout], rowSpineHeight: CGFloat) -> some View {
     // Like the in-app bookshelf: spines sit flush against each other
     // (spacing 0) and rest on the shelf (bottom alignment).
     VStack(spacing: 0) {
-      if isBottomStyle {
-        // Bottom line shelf: no background, just spines sitting on a ledge
+      ZStack(alignment: .bottom) {
+        // Warm lit back panel behind the books (Wood.backTop → backBottom)
+        LinearGradient(
+          colors: [palette.backTop, palette.backBottom],
+          startPoint: .top,
+          endPoint: .bottom
+        )
+
         HStack(alignment: .bottom, spacing: 0) {
           ForEach(Array(layouts.enumerated()), id: \\.offset) { _, layout in
             spineView(layout: layout)
           }
           Spacer(minLength: 0)
         }
-        .padding(.horizontal, 3)
-        .frame(height: rowSpineHeight + 6, alignment: .bottom)
-      } else {
-        // Full shelf: spines on a background with shelf-colored frame
-        ZStack(alignment: .bottom) {
-          // Shelf frame (sides and top match bottom ledge color)
-          shelfColor
-            .cornerRadius(2)
-
-          // Shelf back panel (behind books)
-          shelfBackColor
-            .padding(.horizontal, shelfThickness)
-            .padding(.top, shelfThickness)
-
-          // Book spines aligned to bottom
-          HStack(alignment: .bottom, spacing: 0) {
-            ForEach(Array(layouts.enumerated()), id: \\.offset) { _, layout in
-              spineView(layout: layout)
-            }
-            Spacer(minLength: 0)
-          }
-          .padding(.horizontal, shelfThickness)
-        }
-        .frame(height: rowSpineHeight + shelfThickness)
       }
+      .frame(height: rowSpineHeight)
+      .padding(.top, shelfThickness)
+      .padding(.horizontal, shelfThickness)
 
-      // Shelf ledge (hidden on top shelf in large full-style mode — bottom shelf top border is the shared border)
-      if showLedge {
-        shelfColor
-          .frame(height: shelfThickness)
-          .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 2)
-      }
+      // Plank inset by the frame width, like the in-app cabinet
+      shelfPlank
+        .padding(.horizontal, shelfThickness)
     }
+  }
+
+  /// One open-shelf row: spines sitting on a full-width floating plank.
+  private func shelfRow(layouts: [SpineLayout], rowSpineHeight: CGFloat) -> some View {
+    VStack(spacing: 0) {
+      HStack(alignment: .bottom, spacing: 0) {
+        ForEach(Array(layouts.enumerated()), id: \\.offset) { _, layout in
+          spineView(layout: layout)
+        }
+        Spacer(minLength: 0)
+      }
+      .padding(.horizontal, 3)
+      .frame(height: rowSpineHeight + 6, alignment: .bottom)
+
+      shelfPlank
+    }
+  }
+
+  /// Shelf plank: wood gradient with a lit top highlight and drop shadow so
+  /// books read as sitting on the surface (in-app ShelfPlank).
+  private var shelfPlank: some View {
+    ZStack(alignment: .top) {
+      LinearGradient(
+        colors: [palette.plankTop, palette.plankBottom],
+        startPoint: .top,
+        endPoint: .bottom
+      )
+      ShelfPalette.plankHighlight
+        .frame(height: 1.5)
+    }
+    .frame(height: shelfThickness)
+    .cornerRadius(2)
+    .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 2)
   }
 
   private struct SpineLayout {
@@ -333,26 +434,49 @@ struct BookshelfWidgetView: View {
     return rows
   }
 
+  /// Horizontal sheen over placeholder spines so they read as a rounded
+  /// cloth surface (SPINE_SHEEN_COLORS / SPINE_SHEEN_LOCATIONS in
+  /// components/BookSpine.tsx).
+  private var spineSheen: LinearGradient {
+    LinearGradient(
+      stops: [
+        .init(color: Color.white.opacity(0.16), location: 0),
+        .init(color: Color.clear, location: 0.24),
+        .init(color: Color.black.opacity(0.16), location: 0.72),
+        .init(color: Color.black.opacity(0.34), location: 1),
+      ],
+      startPoint: .leading,
+      endPoint: .trailing
+    )
+  }
+
   @ViewBuilder
   private func spineView(layout: SpineLayout) -> some View {
-    if let uiImage = layout.image {
-      // The frame already matches the image's aspect ratio (barring width
-      // clamping), so .fill renders edge to edge with no letterbox gaps.
-      Image(uiImage: uiImage)
-        .resizable()
-        .aspectRatio(contentMode: .fill)
-        .frame(width: layout.width, height: layout.height)
-        .clipped()
-    } else {
-      Rectangle()
-        .fill(stableColor(for: layout.title))
-        .frame(width: layout.width, height: layout.height)
-        .overlay(
-          Text(String(layout.title.prefix(1)))
-            .font(.system(size: round(layout.width * 0.38), weight: .bold))
-            .foregroundColor(.white)
-        )
+    Group {
+      if let uiImage = layout.image {
+        // The frame already matches the image's aspect ratio (barring width
+        // clamping), so .fill renders edge to edge with no letterbox gaps.
+        Image(uiImage: uiImage)
+          .resizable()
+          .aspectRatio(contentMode: .fill)
+          .frame(width: layout.width, height: layout.height)
+      } else {
+        Rectangle()
+          .fill(stableColor(for: layout.title))
+          .overlay(spineSheen)
+          .overlay(
+            Text(String(layout.title.prefix(1)))
+              .font(.system(size: round(layout.width * 0.38), weight: .bold))
+              .foregroundColor(.white)
+          )
+          .frame(width: layout.width, height: layout.height)
+      }
     }
+    // Rounded like the in-app BookSpine (3pt top corners, 1pt bottom)
+    .clipShape(SpineShape())
+    // Warm cast shadow so the book sits on the plank (in-app spine shadow
+    // color #32190a, scaled down to widget size)
+    .shadow(color: Color(red: 0.196, green: 0.098, blue: 0.039).opacity(0.35), radius: 3, x: 0, y: 3)
   }
 
   private func stableColor(for title: String) -> Color {
@@ -382,6 +506,45 @@ struct BookshelfWidgetView: View {
     }
 
     return CGFloat(abs(hash % 1000)) / 1000.0
+  }
+}
+
+// MARK: - Spine shape (rounded like the in-app BookSpine)
+
+/// Book spine outline with asymmetric corner rounding, matching the in-app
+/// BookSpine spineBody (borderTopRadius 3, borderBottomRadius 1). A custom
+/// Shape is used instead of UnevenRoundedRectangle so pre-iOS 16 widget
+/// builds keep compiling.
+private struct SpineShape: Shape {
+  var topRadius: CGFloat = 3
+  var bottomRadius: CGFloat = 1
+
+  func path(in rect: CGRect) -> Path {
+    let top = min(topRadius, min(rect.width, rect.height) / 2)
+    let bottom = min(bottomRadius, min(rect.width, rect.height) / 2)
+    var path = Path()
+    path.move(to: CGPoint(x: rect.minX, y: rect.minY + top))
+    path.addArc(
+      center: CGPoint(x: rect.minX + top, y: rect.minY + top),
+      radius: top, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false
+    )
+    path.addLine(to: CGPoint(x: rect.maxX - top, y: rect.minY))
+    path.addArc(
+      center: CGPoint(x: rect.maxX - top, y: rect.minY + top),
+      radius: top, startAngle: .degrees(270), endAngle: .degrees(0), clockwise: false
+    )
+    path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - bottom))
+    path.addArc(
+      center: CGPoint(x: rect.maxX - bottom, y: rect.maxY - bottom),
+      radius: bottom, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false
+    )
+    path.addLine(to: CGPoint(x: rect.minX + bottom, y: rect.maxY))
+    path.addArc(
+      center: CGPoint(x: rect.minX + bottom, y: rect.maxY - bottom),
+      radius: bottom, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false
+    )
+    path.closeSubpath()
+    return path
   }
 }
 
