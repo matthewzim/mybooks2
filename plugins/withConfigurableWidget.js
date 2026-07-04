@@ -99,18 +99,11 @@ struct BookshelfEntry: TimelineEntry {
   let bookImages: [String: Data]
 }
 
-// MARK: - App background color (matches main app theme)
+// MARK: - App background color (always the light theme, regardless of system appearance)
 
 private var appBackgroundColor: Color {
-  Color(UIColor { traitCollection in
-    if traitCollection.userInterfaceStyle == .dark {
-      // Dark theme: #0b1220
-      return UIColor(red: 11/255, green: 18/255, blue: 32/255, alpha: 1)
-    } else {
-      // Light theme: #fbf6ec
-      return UIColor(red: 251/255, green: 246/255, blue: 236/255, alpha: 1)
-    }
-  })
+  // #fbf6ec
+  Color(red: 251/255, green: 246/255, blue: 236/255)
 }
 
 // MARK: - Color helpers
