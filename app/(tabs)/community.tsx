@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -180,15 +179,11 @@ export default function CommunityScreen() {
         </View>
 
         <View style={[styles.userSearchContainer, { backgroundColor: colors.background }]}>
-          <View style={styles.userSearchHeader}>
-            <Ionicons name="people" size={18} color={colors.primary} />
-            <Text style={[styles.userSearchLabel, { color: colors.primary }]}>Find Users</Text>
-          </View>
           <Input
-            placeholder="Search by name or username..."
+            placeholder="Search readers by name or @username"
             value={userSearchQuery}
             onChangeText={setUserSearchQuery}
-            leftIcon="person-outline"
+            leftIcon="search-outline"
             rightIcon={userSearchQuery ? 'close-circle' : undefined}
             onRightIconPress={() => {
               setUserSearchQuery('');
@@ -220,10 +215,7 @@ export default function CommunityScreen() {
         </View>
 
         <View style={styles.previewsSection}>
-          <View style={styles.userSearchHeader}>
-            <Ionicons name="library" size={18} color={colors.primary} />
-            <Text style={[styles.userSearchLabel, { color: colors.primary }]}>Public Bookshelves</Text>
-          </View>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Public bookshelves</Text>
 
           {isLoadingPublicBookshelves ? (
             <View style={[styles.loadingContainer, styles.previewsContentInset]}>
@@ -318,16 +310,9 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
     paddingHorizontal: Spacing.md,
   },
-  userSearchHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-  },
-  userSearchLabel: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: getFontFamily('semibold'),
+  sectionTitle: {
+    fontSize: 22,
+    fontFamily: getSerifFontFamily('medium'),
   },
   userSearchResults: {
     marginTop: Spacing.xs,
