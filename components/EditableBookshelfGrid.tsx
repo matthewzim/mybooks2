@@ -27,18 +27,23 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { DraggableBookSpine } from './DraggableBookSpine';
 import { BookSpine } from './BookSpine';
 import { VerticalBookStack } from './VerticalBookStack';
 import {
   Spacing,
+  BorderRadius,
   BookSpine as BookSpineConstants,
   BookshelfDimensions,
+  Wood,
+  getSerifFontFamily,
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { getSpineImageUrl } from '@/services/storage';
-import { getShelfColors } from '@/utils/shelfColors';
+import { getShelfColors, type ShelfColors } from '@/utils/shelfColors';
+import { getSpineCloth } from '@/utils/spineCloth';
 import { getPlaceholderSpineSize, getImageSpineHeightFactor } from '@/utils/placeholderSpine';
 import type { Book, ShelfStyle } from '@/types';
 
@@ -144,8 +149,9 @@ export function EditableBookshelfGrid({
   }, [localBooks]);
 
   // Calculate shelf height (fixed for all shelves)
+  // Full style: subtract cabinet margins, frame padding, and the 1px cabinet border on each side
   const availableWidth = shelfStyle === 'full'
-    ? screenWidth - (fullShelfMargin * 2) - (fullShelfBorderWidth * 2)
+    ? screenWidth - (fullShelfMargin * 2) - (fullShelfBorderWidth * 2) - 2
     : screenWidth - Spacing.md * 2;
   const shelfHeight = Math.min(
     BookSpineConstants.maxHeight,
@@ -476,52 +482,56 @@ export function EditableBookshelfGrid({
   // Flatten books for index calculation in edit mode
   let flatIndex = 0;
 
-  return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.contentContainer}
-      showsVerticalScrollIndicator={false}
-      scrollEnabled={!isEditing || draggingIndex === null}
-    >
-      {rows.map((row, rowIndex) => {
+  const isCabinet = shelfStyle === 'full';
+
+  const renderedRows = rows.map((row, rowIndex) => {
         const rowHeight = getRowHeight(row);
+        const isLastRow = rowIndex === rows.length - 1;
 
         return (
           <View
             key={rowIndex}
             style={[
               styles.shelfContainer,
-              shelfStyle === 'full' && {
-                borderWidth: fullShelfBorderWidth,
-                borderColor: shelfColors.shelfColor,
-                borderRadius: 0,
+              isCabinet && {
                 marginBottom: 0,
-                paddingHorizontal: 0,
-                marginHorizontal: fullShelfMargin,
-                ...(rowIndex > 0 && { borderTopWidth: 0 }),
+                paddingHorizontal: fullShelfBorderWidth,
+                paddingTop: fullShelfBorderWidth,
+                paddingBottom: isLastRow ? fullShelfBorderWidth : 0,
               },
             ]}
           >
-            {/* Shelf back - only shown in 'full' style */}
-            {shelfStyle === 'full' && (
-              <View
-                style={[styles.shelfBack, { backgroundColor: shelfColors.shelfBackColor }]}
+            {/* Warm lit back panel behind the books - only in 'full' style */}
+            {isCabinet && (
+              <LinearGradient
+                colors={[...shelfColors.backGradient]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={[
+                  styles.shelfBack,
+                  {
+                    left: fullShelfBorderWidth,
+                    right: fullShelfBorderWidth,
+                    top: fullShelfBorderWidth,
+                    bottom: isLastRow ? fullShelfBorderWidth : 0,
+                  },
+                ]}
               />
             )}
 
             {/* Books row - no gaps between spines */}
             <View style={[styles.booksRow, { minHeight: rowHeight }]}>
               {row.map((layoutItem, itemIndex) => {
-                // Handle "add" button
+                // Handle "add" button (only added to rows when onAddBook exists)
                 if (layoutItem.item === 'add') {
-                  return (
+                  return onAddBook ? (
                     <AddBookButton
                       key="add-button"
                       width={BookSpineConstants.width}
                       height={shelfHeight}
                       onPress={onAddBook}
                     />
-                  );
+                  ) : null;
                 }
 
                 // Handle vertical stack (array of books)
@@ -600,17 +610,55 @@ export function EditableBookshelfGrid({
               })}
             </View>
 
-            {/* Shelf surface - only shown in 'bottom' style (full style uses border instead) */}
-            {shelfStyle === 'bottom' && (
-              <View style={[styles.shelfSurface, { backgroundColor: shelfColors.shelfColor }]} />
-            )}
+            {/* Gradient plank under every row */}
+            <ShelfPlank shelfColors={shelfColors} />
           </View>
         );
-      })}
+      });
+
+  return (
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
+      scrollEnabled={!isEditing || draggingIndex === null}
+    >
+      {isCabinet ? (
+        <View style={[styles.cabinet, { marginHorizontal: fullShelfMargin, borderColor: shelfColors.frameEdge }]}>
+          {/* Cabinet frame behind the rows */}
+          <LinearGradient
+            colors={[...shelfColors.frameGradient]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          {renderedRows}
+        </View>
+      ) : (
+        renderedRows
+      )}
 
       {/* Bottom spacing */}
       <View style={styles.bottomPadding} />
     </ScrollView>
+  );
+}
+
+/**
+ * Shelf plank: wood gradient with a lit top highlight and a drop shadow so
+ * books read as sitting on the surface.
+ */
+function ShelfPlank({ shelfColors }: { shelfColors: ShelfColors }) {
+  return (
+    <View style={styles.shelfSurface}>
+      <LinearGradient
+        colors={[...shelfColors.plankGradient]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={styles.plankHighlight} />
+    </View>
   );
 }
 
@@ -636,7 +684,8 @@ function StackedBookSpine({
   const hasValidUrl = Boolean(spineImageUrl);
   const displayTitle = book.title?.trim() || 'Untitled';
   const displayAuthor = book.author?.trim() || 'Unknown Author';
-  const backgroundColor = getBookColor(displayTitle);
+  const cloth = getSpineCloth(displayTitle);
+  const backgroundColor = cloth.color;
 
   return (
     <Pressable
@@ -666,7 +715,7 @@ function StackedBookSpine({
       ) : (
         <View style={[styles.stackedPlaceholder, { backgroundColor }]}>
           <Text
-            style={[styles.stackedTitle, { color: colors.textOnDark }]}
+            style={[styles.stackedTitle, { color: cloth.titleColor }]}
             numberOfLines={1}
           >
             {displayTitle}
@@ -687,19 +736,6 @@ function StackedBookSpine({
 }
 
 /**
- * Get a consistent color for a book based on its title
- */
-function getBookColor(title?: string | null): string {
-  const bookColors = BookSpineConstants.colors;
-  const safeTitle = title?.trim() || 'Untitled';
-  let hash = 0;
-  for (let i = 0; i < safeTitle.length; i++) {
-    hash = safeTitle.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return bookColors[Math.abs(hash) % bookColors.length];
-}
-
-/**
  * Add Book Button Component
  */
 interface AddBookButtonProps {
@@ -717,10 +753,10 @@ function AddBookButton({ width, height, onPress }: AddBookButtonProps) {
         {
           width,
           height,
-          backgroundColor: colors.backgroundDark,
-          borderColor: colors.border,
+          backgroundColor: 'rgba(255, 253, 248, 0.5)',
+          borderColor: Wood.frameEdge,
         },
-        pressed && { backgroundColor: colors.border, opacity: 0.8 },
+        pressed && { backgroundColor: 'rgba(255, 253, 248, 0.7)', opacity: 0.9 },
       ]}
       onPress={onPress}
       accessibilityRole="button"
@@ -728,7 +764,7 @@ function AddBookButton({ width, height, onPress }: AddBookButtonProps) {
     >
       <Ionicons name="add" size={32} color={colors.primary} />
       <Text style={[styles.addButtonText, { color: colors.primary }]}>
-        Add Book
+        Add book
       </Text>
     </Pressable>
   );
@@ -755,13 +791,17 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
     paddingHorizontal: Spacing.md,
   },
+  cabinet: {
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
   shelfBack: {
     position: 'absolute',
     left: 0,
     right: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: BookshelfDimensions.backColor,
   },
   booksRow: {
     flexDirection: 'row',
@@ -772,23 +812,27 @@ const styles = StyleSheet.create({
   },
   shelfSurface: {
     height: BookshelfDimensions.shelfThickness,
-    backgroundColor: BookshelfDimensions.shelfColor,
     borderRadius: 2,
     marginTop: -2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
+    overflow: 'hidden',
+    shadowColor: '#4a2f19',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
     elevation: 4,
+  },
+  plankHighlight: {
+    height: 1.5,
+    backgroundColor: Wood.plankHighlight,
   },
   // Stacked book styles
   stackedBook: {
     borderRadius: 2,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+    shadowColor: '#32190a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
     elevation: 4,
   },
   stackedBookImage: {
@@ -824,15 +868,15 @@ const styles = StyleSheet.create({
   },
   // Add button styles
   addButton: {
-    borderRadius: 4,
-    borderWidth: 2,
+    borderRadius: 6,
+    borderWidth: 1.5,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
   },
   addButtonText: {
-    fontSize: 10,
-    fontWeight: '500',
+    fontSize: 11,
+    fontFamily: getSerifFontFamily('medium'),
     marginTop: Spacing.xs,
     textAlign: 'center',
     width: '100%',

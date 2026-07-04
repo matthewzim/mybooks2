@@ -554,7 +554,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     zIndex: 100,
     // Add shadow for depth
-    shadowColor: '#000',
+    shadowColor: '#4a2f19',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,

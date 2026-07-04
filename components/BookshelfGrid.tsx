@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
     backgroundColor: BookshelfDimensions.shelfColor,
     borderRadius: 2,
     marginTop: -2,
-    shadowColor: '#000',
+    shadowColor: '#4a2f19',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 2,

@@ -1,10 +1,20 @@
+import { Wood } from '@/constants/theme';
+
 export interface ShelfColors {
   shelfColor: string;
   shelfBackColor: string;
+  /** Plank surface gradient (top → bottom) */
+  plankGradient: readonly [string, string];
+  /** Cabinet frame gradient (top → bottom) */
+  frameGradient: readonly [string, string];
+  /** 1px outer cabinet edge */
+  frameEdge: string;
+  /** Warm lit back panel gradient behind the books (top → bottom) */
+  backGradient: readonly [string, string];
 }
 
-const DEFAULT_SHELF_COLOR = '#8B4513';
-const DEFAULT_BACK_COLOR = '#654321';
+const DEFAULT_SHELF_COLOR = Wood.plankTop;
+const DEFAULT_BACK_COLOR = Wood.plankBottom;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -46,11 +56,27 @@ function adjustHexBrightness(color: string, amount: number): string {
 
 export function getShelfColors(coverColor?: string): ShelfColors {
   const shelfColor = normalizeHex(coverColor) || DEFAULT_SHELF_COLOR;
+  const isDefault = shelfColor === DEFAULT_SHELF_COLOR;
 
+  if (isDefault) {
+    return {
+      shelfColor,
+      shelfBackColor: DEFAULT_BACK_COLOR,
+      plankGradient: [Wood.plankTop, Wood.plankBottom],
+      frameGradient: [Wood.frameTop, Wood.frameBottom],
+      frameEdge: Wood.frameEdge,
+      backGradient: [Wood.backTop, Wood.backBottom],
+    };
+  }
+
+  // Custom cover colors tint the plank and frame; the back panel stays a warm
+  // lit wall so books remain readable against it.
   return {
     shelfColor,
-    shelfBackColor: shelfColor === DEFAULT_SHELF_COLOR
-      ? DEFAULT_BACK_COLOR
-      : adjustHexBrightness(shelfColor, -36),
+    shelfBackColor: adjustHexBrightness(shelfColor, -36),
+    plankGradient: [adjustHexBrightness(shelfColor, 8), adjustHexBrightness(shelfColor, -32)],
+    frameGradient: [adjustHexBrightness(shelfColor, 18), adjustHexBrightness(shelfColor, -18)],
+    frameEdge: adjustHexBrightness(shelfColor, 56),
+    backGradient: [Wood.backTop, Wood.backBottom],
   };
 }

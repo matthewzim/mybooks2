@@ -13,6 +13,8 @@
     "postinstall": "node scripts/patch-expo-router-ios-compat.js"
   },
   "dependencies": {
+    "@expo-google-fonts/newsreader": "^0.4.1",
+    "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
     "@expo/ui": "^55.0.5",
     "@expo/vector-icons": "^14.0.0",
     "@react-native-async-storage/async-storage": "2.1.2",
@@ -27,6 +29,7 @@
     "expo-image": "~55.0.0",
     "expo-image-manipulator": "~55.0.0",
     "expo-image-picker": "~55.0.0",
+    "expo-linear-gradient": "~55.0.15",
     "expo-router": "~55.0.0",
     "expo-secure-store": "~55.0.0",
     "expo-splash-screen": "~55.0.0",

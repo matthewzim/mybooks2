@@ -24,9 +24,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { BookSpine as BookSpineConstants, Shadows } from '@/constants/theme';
+import { Shadows, getSerifFontFamily } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
+import { getSpineCloth } from '@/utils/spineCloth';
 import type { Book } from '@/types';
 import type { BookPosition } from './EditableBookshelfGrid';
 
@@ -42,19 +43,6 @@ interface DraggableBookSpineProps {
   onToggleStack: (book: Book) => void;
   bookPositions: BookPosition[];
   totalBooks: number;
-}
-
-/**
- * Get a consistent color for a book based on its title
- */
-function getBookColor(title?: string | null): string {
-  const colors = BookSpineConstants.colors;
-  const safeTitle = title?.trim() || 'Untitled';
-  let hash = 0;
-  for (let i = 0; i < safeTitle.length; i++) {
-    hash = safeTitle.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
 }
 
 export function DraggableBookSpine({
@@ -174,8 +162,8 @@ export function DraggableBookSpine({
   const spineImageUrl = useSpineImageUrl(book.image_url);
   const hasValidUrl = Boolean(spineImageUrl);
   const displayTitle = book.title?.trim() || 'Untitled';
-  const displayAuthor = book.author?.trim() || 'Unknown Author';
-  const backgroundColor = getBookColor(displayTitle);
+  const cloth = getSpineCloth(displayTitle);
+  const backgroundColor = cloth.color;
 
   // Dimensions for stacked (horizontal) books
   const stackedWidth = height;
@@ -211,7 +199,7 @@ export function DraggableBookSpine({
           ) : (
             <View style={[styles.stackedPlaceholder, { backgroundColor }]}>
               <Text
-                style={[styles.stackedTitle, { color: colors.textOnDark }]}
+                style={[styles.stackedTitle, { color: cloth.titleColor }]}
                 numberOfLines={1}
               >
                 {displayTitle}
@@ -244,19 +232,10 @@ export function DraggableBookSpine({
         ) : (
           <View style={[styles.placeholder, { backgroundColor }]}>
             <Text
-              style={[styles.placeholderTitle, { color: colors.textOnDark }]}
-              numberOfLines={3}
-            >
-              {displayTitle}
-            </Text>
-            <Text
-              style={[
-                styles.placeholderAuthor,
-                { color: colors.textOnDarkMuted },
-              ]}
+              style={[styles.placeholderTitle, { color: cloth.titleColor }]}
               numberOfLines={2}
             >
-              {displayAuthor}
+              {displayTitle}
             </Text>
           </View>
         )}
@@ -333,19 +312,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   placeholderTitle: {
-    fontSize: 8,
-    fontWeight: '600',
+    fontSize: 10,
+    fontFamily: getSerifFontFamily('medium'),
+    letterSpacing: 0.4,
     textAlign: 'center',
     writingDirection: 'ltr',
     transform: [{ rotate: '-90deg' }],
-    width: 160,
+    width: 140,
     position: 'absolute',
-  },
-  placeholderAuthor: {
-    fontSize: 6,
-    textAlign: 'center',
-    position: 'absolute',
-    bottom: 8,
   },
   spineEdge: {
     position: 'absolute',

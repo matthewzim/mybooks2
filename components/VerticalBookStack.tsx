@@ -15,9 +15,10 @@ import React from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { BookSpine as BookSpineConstants, Shadows } from '@/constants/theme';
+import { Shadows, getSerifFontFamily } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
+import { getSpineCloth } from '@/utils/spineCloth';
 import type { Book } from '@/types';
 
 interface VerticalBookStackProps {
@@ -27,19 +28,6 @@ interface VerticalBookStackProps {
   onBookPress: (book: Book) => void;
   isEditing?: boolean;
   onUnstackBook?: (book: Book) => void;
-}
-
-/**
- * Get a consistent color for a book based on its title
- */
-function getBookColor(title?: string | null): string {
-  const colors = BookSpineConstants.colors;
-  const safeTitle = title?.trim() || 'Untitled';
-  let hash = 0;
-  for (let i = 0; i < safeTitle.length; i++) {
-    hash = safeTitle.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
 }
 
 // No offset — each book sits flush on the previous one (no overlap, no gap)
@@ -119,7 +107,8 @@ function StackedBookItem({
   const hasValidUrl = Boolean(spineImageUrl);
   const displayTitle = book.title?.trim() || 'Untitled';
   const displayAuthor = book.author?.trim() || 'Unknown Author';
-  const backgroundColor = getBookColor(displayTitle);
+  const cloth = getSpineCloth(displayTitle);
+  const backgroundColor = cloth.color;
 
   return (
     <Pressable
@@ -148,7 +137,7 @@ function StackedBookItem({
         </View>
       ) : (
         <View style={[styles.stackedPlaceholder, { backgroundColor }]}>
-          <Text style={[styles.stackedTitle, { color: colors.textOnDark }]} numberOfLines={1}>
+          <Text style={[styles.stackedTitle, { color: cloth.titleColor }]} numberOfLines={1}>
             {displayTitle}
           </Text>
         </View>
@@ -217,7 +206,8 @@ const styles = StyleSheet.create({
   },
   stackedTitle: {
     fontSize: 10,
-    fontWeight: '600',
+    fontFamily: getSerifFontFamily('medium'),
+    letterSpacing: 0.3,
     textAlign: 'center',
   },
   stackedTopEdge: {
