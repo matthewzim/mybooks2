@@ -33,7 +33,6 @@ import {
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { SpineCropper, CropRect } from './SpineCropper';
-import { SpineFramer } from './SpineFramer';
 
 interface CameraScannerProps {
   onCapture: (imageUri: string) => Promise<void>;
@@ -46,7 +45,7 @@ interface CameraScannerProps {
 const GUIDE_FRAME_WIDTH = 100;
 const GUIDE_FRAME_HEIGHT = 300;
 // Extra context kept around the guide frame, as a fraction of its size,
-// so the framing step has room to fine-tune
+// so the crop step has room to fine-tune
 const GUIDE_CROP_MARGIN = 0.35;
 
 export function CameraScanner({
@@ -58,7 +57,6 @@ export function CameraScanner({
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
   const [rawCapturedImage, setRawCapturedImage] = useState<string | null>(null);
-  const [framedImage, setFramedImage] = useState<string | null>(null);
   const [croppedImage, setCroppedImage] = useState<string | null>(null);
   const [cropRect, setCropRect] = useState<CropRect | null>(null);
   const [previewSize, setPreviewSize] = useState({ width: 0, height: 0 });
@@ -77,7 +75,7 @@ export function CameraScanner({
    * The camera preview fills the screen (cover fit), so the photo extends
    * beyond what the preview showed. This maps the guide frame rectangle
    * through the cover-fit transform into photo pixel coordinates and crops
-   * to it (plus margin), so the framing step shows the region the user
+   * to it (plus margin), so the crop step shows the region the user
    * actually positioned the spine in. Falls back to the full photo if the
    * mapping isn't possible.
    */
@@ -173,9 +171,9 @@ export function CameraScanner({
       });
 
       if (photo?.uri) {
-        const framedUri = await cropToGuideFrame(photo);
+        const guideCroppedUri = await cropToGuideFrame(photo);
         setCropRect(null);
-        setRawCapturedImage(framedUri);
+        setRawCapturedImage(guideCroppedUri);
       }
     } catch (error) {
       console.error('Failed to take picture:', error);
@@ -196,7 +194,7 @@ export function CameraScanner({
 
       if (!result.canceled && result.assets[0]) {
         // Gallery images weren't taken through the guide frame; show them
-        // whole and let the framing step do the positioning
+        // whole and let the crop step do the positioning
         setCropRect(null);
         setRawCapturedImage(result.assets[0].uri);
       }
@@ -204,22 +202,6 @@ export function CameraScanner({
       console.error('Failed to pick image:', error);
       Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
-  };
-
-  /**
-   * Handle frame completion - proceed to corner cropper with zoomed-in image
-   */
-  const handleFrameComplete = (framedUri: string) => {
-    // A newly framed image invalidates any previously chosen corner positions
-    setCropRect(null);
-    setFramedImage(framedUri);
-  };
-
-  /**
-   * Handle frame cancel - go back to camera
-   */
-  const handleFrameCancel = () => {
-    setRawCapturedImage(null);
   };
 
   /**
@@ -232,10 +214,11 @@ export function CameraScanner({
   };
 
   /**
-   * Handle crop cancel - go back to framing step
+   * Handle crop cancel - go back to camera
    */
   const handleCropCancel = () => {
-    setFramedImage(null);
+    setRawCapturedImage(null);
+    setCropRect(null);
   };
 
   /**
@@ -258,7 +241,6 @@ export function CameraScanner({
    */
   const startOver = () => {
     setRawCapturedImage(null);
-    setFramedImage(null);
     setCroppedImage(null);
     setCropRect(null);
   };
@@ -302,22 +284,11 @@ export function CameraScanner({
     );
   }
 
-  // Framing mode - zoom and position the spine area
-  if (rawCapturedImage && !framedImage && !croppedImage) {
-    return (
-      <SpineFramer
-        imageUri={rawCapturedImage}
-        onFrameComplete={handleFrameComplete}
-        onCancel={handleFrameCancel}
-      />
-    );
-  }
-
-  // Cropping mode - fine-tune corners on the zoomed-in framed image
-  if (framedImage && !croppedImage) {
+  // Cropping mode - fine-tune corners directly on the captured photo
+  if (rawCapturedImage && !croppedImage) {
     return (
       <SpineCropper
-        imageUri={framedImage}
+        imageUri={rawCapturedImage}
         initialCrop={cropRect ?? undefined}
         onCropComplete={handleCropComplete}
         onCancel={handleCropCancel}

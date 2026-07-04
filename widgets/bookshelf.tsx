@@ -63,53 +63,81 @@ function imageHeightFactor(bookId: string, title: string): number {
 }
 
 /**
- * Returns the max number of book spines to show for a given widget family.
- * Medium = 1 row (7 books), Large = 2 rows (14 books).
+ * Returns the max number of book spines to consider for a given widget
+ * family. Rows are filled by actual spine width (see splitIntoRows), so
+ * this is only an upper bound. Medium = 1 row, Large = 2 rows.
  */
 function maxBooksForFamily(family: string): number {
   switch (family) {
     case 'systemMedium':
-      return 7;
+      return 15;
     default:
-      return 14;
+      return 30;
   }
+}
+
+/** A book paired with its computed spine display size. */
+type SpineData = {
+  book: BookshelfWidgetProps['books'][number];
+  width: number;
+  height: number;
+};
+
+/**
+ * Distributes spines across shelf rows by their actual widths: spines stay
+ * on the current row until the next one no longer fits, and only then start
+ * filling the next row — so a book is only bumped to the second shelf when
+ * the first shelf is full. Spines that don't fit on the last row are
+ * dropped. Always returns exactly rowCount rows (possibly empty).
+ */
+function splitIntoRows(
+  spines: SpineData[],
+  rowContentWidth: number,
+  rowCount: number
+): SpineData[][] {
+  const rows: SpineData[][] = Array.from({ length: rowCount }, () => []);
+  let rowIndex = 0;
+  let usedWidth = 0;
+
+  for (const spine of spines) {
+    if (usedWidth + spine.width > rowContentWidth && rows[rowIndex].length > 0) {
+      rowIndex += 1;
+      usedWidth = 0;
+      if (rowIndex >= rowCount) break;
+    }
+    rows[rowIndex].push(spine);
+    usedWidth += spine.width;
+  }
+
+  return rows;
 }
 
 /**
  * Renders a single row of book spines with shelf background.
  */
 function SpineRow({
-  books,
-  spineWidth,
-  spineHeight,
+  spines: spineData,
   shelfBackColor,
   shelfColor,
   shelfStyle,
 }: {
-  books: BookshelfWidgetProps['books'];
-  spineWidth: number;
-  spineHeight: number;
+  spines: SpineData[];
   shelfBackColor: string;
   shelfColor: string;
   shelfStyle: 'full' | 'bottom';
 }) {
-  const spines = books.map((book) => {
-    const scale = imageHeightFactor(book.id, book.title);
-    const scaledHeight = Math.round(spineHeight * scale);
-    const scaledWidth = Math.max(18, Math.round(spineWidth * scale));
-
-    return (
+  const spines = spineData.map(({ book, width, height }) => (
     <Section key={book.id}>
       <VStack
         modifiers={[
-          frame({ width: scaledWidth, height: scaledHeight }),
+          frame({ width, height }),
           cornerRadius(1),
           background(stableHue(book.title)),
         ]}
       >
         <Text
           modifiers={[
-            font({ weight: 'bold', size: Math.round(scaledWidth * 0.38) }),
+            font({ weight: 'bold', size: Math.round(width * 0.38) }),
             foregroundStyle('#FFFFFF'),
           ]}
         >
@@ -117,8 +145,7 @@ function SpineRow({
         </Text>
       </VStack>
     </Section>
-    );
-  });
+  ));
 
   /*
    * NOTE: matching the in-app bookshelf, spines are laid out with zero
@@ -224,9 +251,25 @@ const BookshelfWidget = (
   }
 
   const isLarge = family === 'systemLarge';
-  const booksPerRow = 7;
-  const topRow = visibleBooks.slice(0, booksPerRow);
-  const bottomRow = isLarge ? visibleBooks.slice(booksPerRow, booksPerRow * 2) : [];
+
+  // Rows fill by actual spine width, not a fixed count: a book is only
+  // bumped to the second shelf once the first shelf has no room left.
+  // The native Swift widget measures the real row width with GeometryReader;
+  // this preview uses a fixed estimate of the widget's usable width.
+  const estimatedRowContentWidth = 300;
+  const spineData: SpineData[] = visibleBooks.map((book) => {
+    const scale = imageHeightFactor(book.id, book.title);
+    return {
+      book,
+      width: Math.max(18, Math.round(spineWidth * scale)),
+      height: Math.round(spineHeight * scale),
+    };
+  });
+  const [topRow, bottomRow] = splitIntoRows(
+    spineData,
+    estimatedRowContentWidth,
+    isLarge ? 2 : 1
+  );
 
   return (
     <VStack
@@ -237,9 +280,7 @@ const BookshelfWidget = (
     >
       {/* First row of spines with shelf */}
       <SpineRow
-        books={topRow}
-        spineWidth={spineWidth}
-        spineHeight={spineHeight}
+        spines={topRow}
         shelfBackColor={shelfBackColor}
         shelfColor={shelfColor}
         shelfStyle={shelfStyle}
@@ -248,9 +289,7 @@ const BookshelfWidget = (
       {/* Second row of spines with shelf (large only) */}
       {isLarge && bottomRow.length > 0 && (
         <SpineRow
-          books={bottomRow}
-          spineWidth={spineWidth}
-          spineHeight={spineHeight}
+          spines={bottomRow}
           shelfBackColor={shelfBackColor}
           shelfColor={shelfColor}
           shelfStyle={shelfStyle}
