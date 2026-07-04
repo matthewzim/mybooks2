@@ -6,8 +6,8 @@
  *
  * Features:
  * - Displays captured image
- * - 4 draggable corner handles, constrained to a rectangle so the drawn
- *   boundary matches the applied crop exactly
+ * - 4 independently draggable corner handles forming a quadrilateral;
+ *   the applied crop is the bounding rectangle of the four corners
  * - Visual crop boundary with darkened surroundings
  * - Defaults to a centered spine-shaped rectangle
  * - Applies crop with expo-image-manipulator
@@ -154,10 +154,9 @@ export function SpineCropper({
   /**
    * Handle corner drag.
    *
-   * The crop is applied as a rectangle, so the handles are constrained to
-   * stay rectangular: dragging a corner moves its two adjacent corners along
-   * the shared edges. This keeps the drawn boundary identical to the region
-   * that actually gets cropped.
+   * Each corner moves independently of the others, so the selection can be
+   * any quadrilateral. The applied crop is the bounding rectangle of the
+   * four corners (see handleCrop).
    */
   const createPanResponder = useCallback((cornerIndex: number) => {
     let initialCornerPosition: Point | null = null;
@@ -187,11 +186,6 @@ export function SpineCropper({
           const newX = Math.max(0, Math.min(displaySize.width, initialX + gestureState.dx));
           const newY = Math.max(0, Math.min(displaySize.height, initialY + gestureState.dy));
           newCorners[cornerIndex] = { x: newX, y: newY };
-          // Corners 0/1 and 2/3 share a horizontal edge; 0/3 and 1/2 a vertical one
-          const horizontalPartner = cornerIndex ^ 1;
-          const verticalPartner = 3 - cornerIndex;
-          newCorners[horizontalPartner] = { ...prev[horizontalPartner], y: newY };
-          newCorners[verticalPartner] = { ...prev[verticalPartner], x: newX };
           return newCorners;
         });
       },
@@ -220,7 +214,7 @@ export function SpineCropper({
       const scaleX = imageSize.width / displaySize.width;
       const scaleY = imageSize.height / displaySize.height;
 
-      // The corners form a rectangle; take its extent
+      // The corners can form any quadrilateral; crop to its bounding rectangle
       const xs = corners.map((c) => c.x * scaleX);
       const ys = corners.map((c) => c.y * scaleY);
 
@@ -275,19 +269,16 @@ export function SpineCropper({
   }, [corners, isInitialized]);
 
   /**
-   * Even-odd path that darkens everything outside the crop rectangle
+   * Even-odd path that darkens everything outside the crop quadrilateral
    */
   const outsideOverlayPath = useMemo(() => {
     if (!isInitialized || !displaySize.width || !displaySize.height) return '';
-    const xs = corners.map((c) => c.x);
-    const ys = corners.map((c) => c.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
+    const quad = corners
+      .map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x} ${c.y}`)
+      .join('');
     return (
       `M0 0H${displaySize.width}V${displaySize.height}H0Z ` +
-      `M${minX} ${minY}H${maxX}V${maxY}H${minX}Z`
+      `${quad}Z`
     );
   }, [corners, displaySize, isInitialized]);
 

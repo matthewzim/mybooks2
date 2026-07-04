@@ -185,7 +185,9 @@ struct BookshelfWidgetView: View {
     return components.url
   }
 
-  private var booksPerRow: Int { 7 }
+  private var maxVisibleBooks: Int {
+    family == .systemMedium ? 15 : 30
+  }
 
   private var spineHeight: CGFloat {
     family == .systemMedium ? 108 : 124
@@ -195,10 +197,6 @@ struct BookshelfWidgetView: View {
 
   @ViewBuilder
   private var bookshelfContent: some View {
-    let visible = Array(entry.books.prefix(family == .systemMedium ? booksPerRow : booksPerRow * 2))
-    let topRow = Array(visible.prefix(booksPerRow))
-    let bottomRow = family == .systemLarge ? Array(visible.dropFirst(booksPerRow).prefix(booksPerRow)) : []
-
     GeometryReader { geo in
       let margin: CGFloat = 8
       let availableWidth = geo.size.width - 2 * margin
@@ -207,7 +205,7 @@ struct BookshelfWidgetView: View {
       // past the widget's right margin.
       let rowSidePadding: CGFloat = isBottomStyle ? 3 : shelfThickness
       let rowContentWidth = availableWidth - 2 * rowSidePadding
-      let baseSpineWidth = min(42, max(20, rowContentWidth / CGFloat(booksPerRow)))
+      let baseSpineWidth = min(42, max(20, rowContentWidth / 7))
 
       // Compute spine height so shelves fill the widget with equal margins on all sides
       let shelfFrameExtra: CGFloat = isBottomStyle ? 6 : shelfThickness
@@ -217,13 +215,19 @@ struct BookshelfWidgetView: View {
       let sharedBorderSaving: CGFloat = (family == .systemLarge && !isBottomStyle) ? shelfThickness : 0
       let rowSpineHeight: CGFloat = (geo.size.height - 2 * margin - shelfCount * perShelfOverhead + sharedBorderSaving) / shelfCount
 
+      // Rows fill by actual spine width, not a fixed count: a book only
+      // moves to the second shelf once the first shelf has no room left.
+      let visible = Array(entry.books.prefix(maxVisibleBooks))
+      let layouts = spineLayouts(for: visible, baseSpineWidth: baseSpineWidth, rowSpineHeight: rowSpineHeight)
+      let rows = splitIntoRows(layouts: layouts, rowContentWidth: rowContentWidth, rowCount: family == .systemLarge ? 2 : 1)
+
       VStack(alignment: .leading, spacing: 0) {
         // First shelf row (large full-style: no ledge, bottom shelf top border serves as shared border)
-        shelfRow(books: topRow, rowContentWidth: rowContentWidth, baseSpineWidth: baseSpineWidth, rowSpineHeight: rowSpineHeight, showLedge: family != .systemLarge || isBottomStyle)
+        shelfRow(layouts: rows[0], rowSpineHeight: rowSpineHeight, showLedge: family != .systemLarge || isBottomStyle)
 
         if family == .systemLarge {
           // Second shelf row
-          shelfRow(books: bottomRow, rowContentWidth: rowContentWidth, baseSpineWidth: baseSpineWidth, rowSpineHeight: rowSpineHeight, showLedge: true)
+          shelfRow(layouts: rows[1], rowSpineHeight: rowSpineHeight, showLedge: true)
         }
       }
       .padding(margin)
@@ -234,12 +238,10 @@ struct BookshelfWidgetView: View {
     entry.shelfStyle == "bottom"
   }
 
-  private func shelfRow(books: [[String: Any]], rowContentWidth: CGFloat, baseSpineWidth: CGFloat, rowSpineHeight: CGFloat, showLedge: Bool) -> some View {
+  private func shelfRow(layouts: [SpineLayout], rowSpineHeight: CGFloat, showLedge: Bool) -> some View {
     // Like the in-app bookshelf: spines sit flush against each other
     // (spacing 0) and rest on the shelf (bottom alignment).
-    let layouts = spineLayouts(for: books, rowContentWidth: rowContentWidth, baseSpineWidth: baseSpineWidth, rowSpineHeight: rowSpineHeight)
-
-    return VStack(spacing: 0) {
+    VStack(spacing: 0) {
       if isBottomStyle {
         // Bottom line shelf: no background, just spines sitting on a ledge
         HStack(alignment: .bottom, spacing: 0) {
@@ -293,13 +295,12 @@ struct BookshelfWidgetView: View {
   /// Computes each spine's frame like the in-app bookshelf grid: the width
   /// follows the image's natural aspect ratio at the spine's display height,
   /// so the image fills its frame exactly and adjacent spines touch with no
-  /// letterboxing gaps. If a full row would overflow the shelf, all widths
-  /// are scaled down proportionally so the row still fits edge to edge.
-  private func spineLayouts(for books: [[String: Any]], rowContentWidth: CGFloat, baseSpineWidth: CGFloat, rowSpineHeight: CGFloat) -> [SpineLayout] {
+  /// letterboxing gaps.
+  private func spineLayouts(for books: [[String: Any]], baseSpineWidth: CGFloat, rowSpineHeight: CGFloat) -> [SpineLayout] {
     let minSpineWidth: CGFloat = 12
     let maxSpineWidth: CGFloat = 42
 
-    var layouts: [SpineLayout] = books.map { book in
+    return books.map { book in
       let bookId = book["id"] as? String ?? ""
       let title = book["title"] as? String ?? ""
       let heightFactor = imageHeightFactor(bookId: bookId, title: title)
@@ -315,14 +316,28 @@ struct BookshelfWidgetView: View {
 
       return SpineLayout(title: title, width: baseSpineWidth, height: height, image: nil)
     }
+  }
 
-    let totalWidth = layouts.reduce(CGFloat(0)) { $0 + $1.width }
-    if totalWidth > rowContentWidth && totalWidth > 0 {
-      let scale = rowContentWidth / totalWidth
-      layouts = layouts.map { SpineLayout(title: $0.title, width: $0.width * scale, height: $0.height, image: $0.image) }
+  /// Distributes spines across shelf rows by their actual widths: spines
+  /// stay on the current row until the next one no longer fits, and only
+  /// then start filling the next row. Spines that don't fit on the last
+  /// row are dropped. Always returns exactly rowCount rows (possibly empty).
+  private func splitIntoRows(layouts: [SpineLayout], rowContentWidth: CGFloat, rowCount: Int) -> [[SpineLayout]] {
+    var rows: [[SpineLayout]] = Array(repeating: [], count: rowCount)
+    var rowIndex = 0
+    var usedWidth: CGFloat = 0
+
+    for layout in layouts {
+      if usedWidth + layout.width > rowContentWidth && !rows[rowIndex].isEmpty {
+        rowIndex += 1
+        usedWidth = 0
+        if rowIndex >= rowCount { break }
+      }
+      rows[rowIndex].append(layout)
+      usedWidth += layout.width
     }
 
-    return layouts
+    return rows
   }
 
   @ViewBuilder
@@ -561,7 +576,7 @@ struct BookshelfConfigurableProvider: AppIntentTimelineProvider {
 
   func snapshot(for configuration: SelectBookshelfIntent, in context: Context) async -> BookshelfEntry {
     var entry = buildBookshelfEntry(selectedId: configuration.bookshelf?.id)
-    let maxImages = context.family == .systemMedium ? 7 : 14
+    let maxImages = context.family == .systemMedium ? 15 : 30
     let images = await downloadBookImages(for: entry.books, limit: maxImages)
     entry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, shelfStyle: entry.shelfStyle, books: entry.books, bookImages: images)
     return entry
@@ -569,7 +584,7 @@ struct BookshelfConfigurableProvider: AppIntentTimelineProvider {
 
   func timeline(for configuration: SelectBookshelfIntent, in context: Context) async -> Timeline<BookshelfEntry> {
     var entry = buildBookshelfEntry(selectedId: configuration.bookshelf?.id)
-    let maxImages = context.family == .systemMedium ? 7 : 14
+    let maxImages = context.family == .systemMedium ? 15 : 30
     let images = await downloadBookImages(for: entry.books, limit: maxImages)
     entry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, shelfStyle: entry.shelfStyle, books: entry.books, bookImages: images)
     // The app reloads the widget whenever data changes (expo-widgets
@@ -591,7 +606,7 @@ struct BookshelfStaticProvider: TimelineProvider {
 
   func getSnapshot(in context: Context, completion: @escaping (BookshelfEntry) -> Void) {
     let entry = buildBookshelfEntry(selectedId: nil)
-    let maxImages = context.family == .systemMedium ? 7 : 14
+    let maxImages = context.family == .systemMedium ? 15 : 30
     Task {
       let images = await downloadBookImages(for: entry.books, limit: maxImages)
       let finalEntry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, shelfStyle: entry.shelfStyle, books: entry.books, bookImages: images)
@@ -601,7 +616,7 @@ struct BookshelfStaticProvider: TimelineProvider {
 
   func getTimeline(in context: Context, completion: @escaping (Timeline<BookshelfEntry>) -> Void) {
     let entry = buildBookshelfEntry(selectedId: nil)
-    let maxImages = context.family == .systemMedium ? 7 : 14
+    let maxImages = context.family == .systemMedium ? 15 : 30
     Task {
       let images = await downloadBookImages(for: entry.books, limit: maxImages)
       let finalEntry = BookshelfEntry(date: entry.date, isPremium: entry.isPremium, bookshelfName: entry.bookshelfName, bookshelfId: entry.bookshelfId, coverColor: entry.coverColor, shelfStyle: entry.shelfStyle, books: entry.books, bookImages: images)
