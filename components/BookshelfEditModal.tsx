@@ -31,6 +31,7 @@ interface BookshelfEditModalProps {
   bookshelf: Bookshelf | null;
   onClose: () => void;
   onSave: (updates: UpdateBookshelfInput) => Promise<boolean>;
+  onDelete?: () => void;
 }
 
 export function BookshelfEditModal({
@@ -38,6 +39,7 @@ export function BookshelfEditModal({
   bookshelf,
   onClose,
   onSave,
+  onDelete,
 }: BookshelfEditModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -209,6 +211,20 @@ export function BookshelfEditModal({
               size="lg"
             />
           </View>
+
+          {/* Delete Bookshelf */}
+          {onDelete && (
+            <View style={styles.deleteContainer}>
+              <Button
+                title="Delete Bookshelf"
+                variant="danger"
+                onPress={onDelete}
+                disabled={isLoading}
+                fullWidth
+                size="lg"
+              />
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
@@ -290,5 +306,8 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginTop: Spacing.lg,
+  },
+  deleteContainer: {
+    marginTop: Spacing.md,
   },
 });

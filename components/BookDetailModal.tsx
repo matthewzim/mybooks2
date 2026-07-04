@@ -4,7 +4,7 @@
  * A minimal modal for viewing and editing book details.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,6 +14,7 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -283,7 +284,6 @@ export function BookDetailModal({
 
   const [isSaving, setIsSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
   const [isUpdatingSpine, setIsUpdatingSpine] = useState(false);
   const [showCommunityBrowser, setShowCommunityBrowser] = useState(false);
 
@@ -298,10 +298,15 @@ export function BookDetailModal({
   const [isLoadingAlternativeSpines, setIsLoadingAlternativeSpines] = useState(false);
 
   const overlayOpacity = useRef(new Animated.Value(0)).current;
-  const cardOpacity = useRef(new Animated.Value(0)).current;
-  const cardTranslateY = useRef(new Animated.Value(24)).current;
-  const cardScale = useRef(new Animated.Value(0.98)).current;
+  const cardTranslateY = useRef(new Animated.Value(SHEET_MAX_HEIGHT)).current;
+  const isClosingRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  const scrollOffsetRef = useRef(0);
   const coverUrlCacheRef = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
   const resolvedSpineImageUrl = useSpineImageUrl(book?.image_url);
 
   useEffect(() => {
@@ -379,13 +384,13 @@ export function BookDetailModal({
     };
   }, [visible, book]);
 
+  // Slide the sheet up from the bottom of the screen when it opens
   useEffect(() => {
     if (visible && book) {
-      setIsClosing(false);
+      isClosingRef.current = false;
+      scrollOffsetRef.current = 0;
       overlayOpacity.setValue(0);
-      cardOpacity.setValue(0);
-      cardTranslateY.setValue(24);
-      cardScale.setValue(0.98);
+      cardTranslateY.setValue(SHEET_MAX_HEIGHT);
 
       Animated.parallel([
         Animated.timing(overlayOpacity, {
@@ -394,27 +399,15 @@ export function BookDetailModal({
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
         }),
-        Animated.timing(cardOpacity, {
-          toValue: 1,
-          duration: 220,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
         Animated.timing(cardTranslateY, {
           toValue: 0,
-          duration: 300,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(cardScale, {
-          toValue: 1,
-          duration: 300,
+          duration: 320,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
       ]).start();
     }
-  }, [visible, book, overlayOpacity, cardOpacity, cardTranslateY, cardScale]);
+  }, [visible, book, overlayOpacity, cardTranslateY]);
 
   useEffect(() => {
     if (!visible || !book || !isEditing) {
@@ -441,40 +434,85 @@ export function BookDetailModal({
     };
   }, [visible, book, isEditing]);
 
-  const handleClose = () => {
-    if (isClosing) return;
-    setIsClosing(true);
+  // Slide the sheet back down off-screen, then notify the caller
+  const handleClose = useCallback(() => {
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
 
     Animated.parallel([
       Animated.timing(overlayOpacity, {
         toValue: 0,
-        duration: 160,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.timing(cardOpacity, {
-        toValue: 0,
-        duration: 140,
+        duration: 200,
         easing: Easing.in(Easing.quad),
         useNativeDriver: true,
       }),
       Animated.timing(cardTranslateY, {
-        toValue: 16,
-        duration: 180,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(cardScale, {
-        toValue: 0.98,
-        duration: 180,
+        toValue: SHEET_MAX_HEIGHT,
+        duration: 260,
         easing: Easing.in(Easing.cubic),
         useNativeDriver: true,
       }),
     ]).start(() => {
-      setIsClosing(false);
-      onClose();
+      isClosingRef.current = false;
+      onCloseRef.current();
     });
-  };
+  }, [overlayOpacity, cardTranslateY]);
+
+  const springSheetBack = useCallback(() => {
+    Animated.spring(cardTranslateY, {
+      toValue: 0,
+      tension: 120,
+      friction: 16,
+      useNativeDriver: true,
+    }).start();
+  }, [cardTranslateY]);
+
+  const handleDragMove = useCallback(
+    (dy: number) => {
+      cardTranslateY.setValue(Math.max(0, dy));
+    },
+    [cardTranslateY]
+  );
+
+  const handleDragRelease = useCallback(
+    (dy: number, vy: number) => {
+      if (dy > SHEET_MAX_HEIGHT * 0.2 || vy > 0.9) {
+        handleClose();
+      } else {
+        springSheetBack();
+      }
+    },
+    [handleClose, springSheetBack]
+  );
+
+  // Drag handle at the top of the sheet: always draggable
+  const handlePanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_evt, gesture) => Math.abs(gesture.dy) > 4,
+        onPanResponderMove: (_evt, gesture) => handleDragMove(gesture.dy),
+        onPanResponderRelease: (_evt, gesture) => handleDragRelease(gesture.dy, gesture.vy),
+        onPanResponderTerminate: springSheetBack,
+      }),
+    [handleDragMove, handleDragRelease, springSheetBack]
+  );
+
+  // Whole-sheet drag: takes over only when pulling down while the inner
+  // scroll view is already at the top, so normal scrolling keeps working.
+  const sheetPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponderCapture: (_evt, gesture) =>
+          gesture.dy > 6 &&
+          Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.5 &&
+          scrollOffsetRef.current <= 0,
+        onPanResponderMove: (_evt, gesture) => handleDragMove(gesture.dy),
+        onPanResponderRelease: (_evt, gesture) => handleDragRelease(gesture.dy, gesture.vy),
+        onPanResponderTerminate: springSheetBack,
+      }),
+    [handleDragMove, handleDragRelease, springSheetBack]
+  );
 
   const handleSave = async () => {
     if (!book) return;
@@ -684,24 +722,19 @@ export function BookDetailModal({
               styles.card,
               {
                 backgroundColor: colors.background,
-                opacity: cardOpacity,
-                transform: [{ translateY: cardTranslateY }, { scale: cardScale }],
+                transform: [{ translateY: cardTranslateY }],
               },
             ]}
+            {...sheetPanResponder.panHandlers}
           >
-            <View style={styles.grabber} />
+            <View style={styles.sheetHandle} {...handlePanResponder.panHandlers}>
+              <View style={styles.grabber} />
+            </View>
 
-            {isEditing ? (
+            {isEditing && (
               <View style={[styles.headerRow, { borderBottomColor: colors.borderLight }]}>
                 <Text style={[styles.pageTitle, { color: colors.text }]}>Edit Book</Text>
-                <Pressable onPress={handleClose} style={styles.iconButton} hitSlop={8}>
-                  <Ionicons name="close" size={24} color={colors.text} />
-                </Pressable>
               </View>
-            ) : (
-              <Pressable onPress={handleClose} style={styles.floatingClose} hitSlop={8}>
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
-              </Pressable>
             )}
 
             <ScrollView
@@ -709,6 +742,10 @@ export function BookDetailModal({
               contentContainerStyle={styles.scrollContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
+              onScroll={(event) => {
+                scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+              }}
+              scrollEventThrottle={16}
             >
               {isEditing ? (
                 <>
@@ -984,21 +1021,16 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     paddingTop: Spacing.xs,
   },
+  sheetHandle: {
+    paddingVertical: Spacing.xs,
+    alignItems: 'center',
+  },
   grabber: {
     width: 38,
     height: 5,
     borderRadius: 3,
     backgroundColor: '#d8ccb6',
-    alignSelf: 'center',
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.xs,
-  },
-  floatingClose: {
-    position: 'absolute',
-    top: Spacing.md,
-    right: Spacing.md,
-    zIndex: 2,
-    padding: Spacing.xs,
+    marginVertical: Spacing.xs,
   },
   headerRow: {
     flexDirection: 'row',
@@ -1011,9 +1043,6 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 20,
     fontFamily: getSerifFontFamily('medium'),
-  },
-  iconButton: {
-    padding: Spacing.xs,
   },
   scrollView: {
     flexGrow: 0,

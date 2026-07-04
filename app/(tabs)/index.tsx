@@ -33,7 +33,6 @@ export default function HomeScreen() {
     bookshelves,
     isLoading,
     fetchBookshelves,
-    deleteBookshelf,
     bookshelfCount,
   } = useBookshelves();
   const [refreshing, setRefreshing] = useState(false);
@@ -61,13 +60,6 @@ export default function HomeScreen() {
 
   const handleBookshelfPress = (bookshelf: Bookshelf) => {
     router.push({ pathname: '/bookshelf', params: { id: bookshelf.id } });
-  };
-
-  const handleDeleteBookshelf = async (bookshelf: Bookshelf) => {
-    const success = await deleteBookshelf(bookshelf.id);
-    if (!success) {
-      Alert.alert('Error', 'Failed to delete bookshelf. Please try again.');
-    }
   };
 
   const handleAddBookshelf = () => {
@@ -137,7 +129,6 @@ export default function HomeScreen() {
                 bookshelf={shelf}
                 books={shelf.books}
                 onPress={handleBookshelfPress}
-                onDelete={handleDeleteBookshelf}
               />
             ))}
           </View>

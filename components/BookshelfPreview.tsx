@@ -6,7 +6,7 @@
  */
 
 import React, { useRef, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, useWindowDimensions, Animated, ViewStyle, Image as RNImage } from 'react-native';
+import { View, Text, StyleSheet, Pressable, useWindowDimensions, Animated, ViewStyle, Image as RNImage } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,6 +17,7 @@ import {
   Shadows,
   Animations,
   Wood,
+  BookshelfDimensions,
   getFontFamily,
   getSerifFontFamily,
 } from '@/constants/theme';
@@ -34,8 +35,9 @@ const PREVIEW_BOOK_HEIGHT = 132;
 const PREVIEW_MIN_BOOK_HEIGHT = 90;
 const PREVIEW_MIN_BOOK_WIDTH = 14;
 const PREVIEW_MAX_BOOK_WIDTH = 32;
-const PREVIEW_SHELF_THICKNESS = 12;
-const PREVIEW_BORDER_WIDTH = 4;
+const PREVIEW_SHELF_THICKNESS = BookshelfDimensions.shelfThickness;
+// Match the frame thickness used on the actual bookshelf page
+const PREVIEW_BORDER_WIDTH = BookshelfDimensions.shelfThickness;
 
 interface BookshelfOwner {
   name: string | null;
@@ -46,13 +48,12 @@ interface BookshelfPreviewProps {
   bookshelf: Bookshelf;
   books: Book[];
   onPress: (bookshelf: Bookshelf) => void;
-  onDelete?: (bookshelf: Bookshelf) => void;
   containerStyle?: ViewStyle;
   /** When provided, renders an owner row (avatar + handle) under the shelf */
   owner?: BookshelfOwner;
 }
 
-export function BookshelfPreview({ bookshelf, books, onPress, onDelete, containerStyle, owner }: BookshelfPreviewProps) {
+export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, owner }: BookshelfPreviewProps) {
   const { colors } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const scale = useRef(new Animated.Value(1)).current;
@@ -107,17 +108,6 @@ export function BookshelfPreview({ bookshelf, books, onPress, onDelete, containe
     }).start();
   };
 
-  const handleDelete = () => {
-    Alert.alert(
-      'Delete Bookshelf',
-      `Are you sure you want to delete "${bookshelf.name}"? This will also delete all books on this shelf.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => onDelete?.(bookshelf) },
-      ]
-    );
-  };
-
   const ownerHandle = owner
     ? owner.public_username
       ? `@${owner.public_username}`
@@ -137,7 +127,6 @@ export function BookshelfPreview({ bookshelf, books, onPress, onDelete, containe
         onPress={() => onPress(bookshelf)}
         onPressIn={() => animateScale(0.985)}
         onPressOut={() => animateScale(1)}
-        onLongPress={onDelete ? handleDelete : undefined}
         accessibilityRole="button"
         accessibilityLabel={`${bookshelf.name} bookshelf with ${totalBooks} books`}
       >
@@ -148,22 +137,12 @@ export function BookshelfPreview({ bookshelf, books, onPress, onDelete, containe
             </Text>
             <View style={[styles.countPill, { backgroundColor: colors.pill }]}>
               <Text style={[styles.countPillText, { color: colors.pillText }]}>
-                {totalBooks} {totalBooks === 1 ? 'book' : 'books'}
+                {totalBooks}
               </Text>
             </View>
           </View>
 
           <View style={styles.headerActions}>
-            {onDelete && (
-              <Pressable
-                style={styles.iconButton}
-                onPress={handleDelete}
-                hitSlop={8}
-                accessibilityLabel="Delete bookshelf"
-              >
-                <Ionicons name="trash-outline" size={16} color={colors.textLight} />
-              </Pressable>
-            )}
             <View style={[styles.chevronCircle, { borderColor: colors.inputBorder }]}>
               <Ionicons name="chevron-forward" size={14} color="#a89275" />
             </View>
@@ -174,7 +153,9 @@ export function BookshelfPreview({ bookshelf, books, onPress, onDelete, containe
           style={[
             styles.shelfRow,
             shelfStyle === 'full' && {
-              borderWidth: PREVIEW_BORDER_WIDTH,
+              borderTopWidth: PREVIEW_BORDER_WIDTH,
+              borderLeftWidth: PREVIEW_BORDER_WIDTH,
+              borderRightWidth: PREVIEW_BORDER_WIDTH,
               borderColor: shelfColors.frameEdge,
             },
           ]}
@@ -224,7 +205,7 @@ export function BookshelfPreview({ bookshelf, books, onPress, onDelete, containe
               <Text style={styles.ownerInitial}>{ownerInitial}</Text>
             </View>
             <Text style={[styles.ownerHandle, { color: colors.textLight }]} numberOfLines={1}>
-              {ownerHandle} · {totalBooks} {totalBooks === 1 ? 'book' : 'books'}
+              {ownerHandle} · {totalBooks}
             </Text>
           </View>
         )}
@@ -351,9 +332,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
-  },
-  iconButton: {
-    padding: Spacing.xs,
   },
   chevronCircle: {
     width: 26,

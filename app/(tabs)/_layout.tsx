@@ -7,11 +7,13 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
 import { BorderRadius, Spacing, Typography, getFontFamily, getSerifFontFamily } from '@/constants/theme';
 
 export default function TabsLayout() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -24,10 +26,11 @@ export default function TabsLayout() {
           borderTopWidth: 1,
           elevation: 0,
           shadowOpacity: 0,
-          height: 64,
+          // Extend the bar through the bottom safe area so there is no gap
+          // between the tab bar and the bottom edge of the screen.
+          height: 64 + insets.bottom,
           paddingTop: Spacing.xs,
-          paddingBottom: Spacing.xs,
-          marginBottom: Spacing.sm,
+          paddingBottom: Math.max(insets.bottom, Spacing.xs),
         },
         tabBarItemStyle: {
           borderRadius: BorderRadius.lg,
@@ -72,7 +75,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
+          title: '',
+          tabBarLabel: 'Settings',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings-outline" size={size} color={color} />
           ),
