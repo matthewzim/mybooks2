@@ -47,6 +47,9 @@ import type { Book, CommunityBookSpine } from '@/types';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_MAX_HEIGHT = Math.min(SCREEN_HEIGHT * 0.88, 720);
+// Height of the drag-handle strip at the top of the sheet. In view mode the
+// scroll view slides under it so the cover shadow can bleed into that area.
+const SHEET_HANDLE_HEIGHT = Spacing.xs * 4 + 5;
 
 interface BookDetailModalProps {
   visible: boolean;
@@ -738,8 +741,8 @@ export function BookDetailModal({
             )}
 
             <ScrollView
-              style={styles.scrollView}
-              contentContainerStyle={styles.scrollContent}
+              style={[styles.scrollView, !isEditing && styles.scrollViewUnderHandle]}
+              contentContainerStyle={[styles.scrollContent, !isEditing && styles.scrollContentUnderHandle]}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
               onScroll={(event) => {
@@ -1024,6 +1027,8 @@ const styles = StyleSheet.create({
   sheetHandle: {
     paddingVertical: Spacing.xs,
     alignItems: 'center',
+    // Stay above the scroll view, which slides underneath in view mode
+    zIndex: 10,
   },
   grabber: {
     width: 38,
@@ -1047,6 +1052,15 @@ const styles = StyleSheet.create({
   scrollView: {
     flexGrow: 0,
   },
+  // In view mode the scroll view extends up under the drag handle so the
+  // cover shadow isn't clipped at the handle boundary; the extra content
+  // padding keeps the cover in the same visual spot.
+  scrollViewUnderHandle: {
+    marginTop: -SHEET_HANDLE_HEIGHT,
+  },
+  scrollContentUnderHandle: {
+    paddingTop: Spacing.md + SHEET_HANDLE_HEIGHT,
+  },
   scrollContent: {
     padding: Spacing.md,
     paddingBottom: Spacing.xl,
@@ -1057,11 +1071,12 @@ const styles = StyleSheet.create({
   },
   coverShadow: {
     marginBottom: Spacing.md,
-    shadowColor: 'rgba(40, 20, 8, 0.7)',
+    // Shadow strength: tweak the 0.5 alpha (iOS) / elevation 8 (Android)
+    shadowColor: 'rgba(40, 20, 8, 0.5)',
     shadowOffset: { width: 0, height: 26 },
     shadowOpacity: 1,
     shadowRadius: 40,
-    elevation: 12,
+    elevation: 8,
   },
   coverShell: {
     borderTopLeftRadius: 6,
