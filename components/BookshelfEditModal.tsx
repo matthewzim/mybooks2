@@ -26,6 +26,7 @@ import {
   Typography,
 } from '@/constants/theme';
 import { BOOKSHELF_COLORS } from '@/types';
+import { isLightColor } from '@/utils/shelfColors';
 import type { Bookshelf, UpdateBookshelfInput } from '@/types';
 
 interface BookshelfEditModalProps {
@@ -161,9 +162,7 @@ export function BookshelfEditModal({
               setError(null);
             }}
             error={error || undefined}
-            leftIcon="library-outline"
             maxLength={50}
-            autoFocus
           />
 
           {/* Description Input */}
@@ -172,7 +171,6 @@ export function BookshelfEditModal({
             placeholder="What kind of books go here? (optional)"
             value={description}
             onChangeText={setDescription}
-            leftIcon="document-text-outline"
             multiline
             numberOfLines={3}
           />
@@ -187,6 +185,7 @@ export function BookshelfEditModal({
                   style={[
                     styles.colorOption,
                     { backgroundColor: color },
+                    isLightColor(color) && { borderColor: Colors.border },
                     coverColor === color && styles.colorOptionSelected,
                   ]}
                   onPress={() => setCoverColor(color)}
@@ -197,7 +196,7 @@ export function BookshelfEditModal({
                     <Ionicons
                       name="checkmark"
                       size={20}
-                      color={Colors.textOnDark}
+                      color={isLightColor(color) ? Colors.text : Colors.textOnDark}
                     />
                   )}
                 </Pressable>

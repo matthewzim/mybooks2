@@ -197,6 +197,31 @@ class BooksService {
   }
 
   /**
+   * Check whether a global book is already on a shelf.
+   * Used to confirm with the user before adding a duplicate.
+   *
+   * @param bookId - Global book ID
+   * @param shelfId - Bookshelf ID
+   * @returns true if the book already has an item on the shelf
+   */
+  async isBookOnShelf(bookId: string, shelfId: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.BOOKSHELF_ITEMS)
+        .select('id')
+        .eq('book_id', bookId)
+        .eq('shelf_id', shelfId)
+        .limit(1);
+
+      if (error) throw error;
+      return (data?.length ?? 0) > 0;
+    } catch {
+      // If the check fails, assume no duplicate and let the insert proceed
+      return false;
+    }
+  }
+
+  /**
    * Update an existing book.
    * Routes fields to the correct table:
    *   - title, author, image_url, isbn → books table (global)

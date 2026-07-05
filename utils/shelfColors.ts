@@ -54,6 +54,19 @@ function adjustHexBrightness(color: string, amount: number): string {
     .join('')}`;
 }
 
+/**
+ * Whether a hex color is light enough that light-colored UI (e.g. a white
+ * checkmark) would be unreadable on top of it.
+ */
+export function isLightColor(color?: string): boolean {
+  const normalized = normalizeHex(color);
+  if (!normalized) return false;
+  const [r, g, b] = [1, 3, 5].map((index) =>
+    parseInt(normalized.slice(index, index + 2), 16)
+  );
+  return 0.299 * r + 0.587 * g + 0.114 * b > 186;
+}
+
 export function getShelfColors(coverColor?: string): ShelfColors {
   const shelfColor = normalizeHex(coverColor) || DEFAULT_SHELF_COLOR;
   const isDefault = shelfColor === DEFAULT_SHELF_COLOR;

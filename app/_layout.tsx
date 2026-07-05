@@ -149,7 +149,7 @@ function RootLayoutContent() {
         <Stack.Screen
           name="create-bookshelf"
           options={{
-            title: 'New Bookshelf',
+            title: '',
             presentation: 'modal',
           }}
         />

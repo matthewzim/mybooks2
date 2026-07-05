@@ -35,10 +35,20 @@ import {
   BookshelfDimensions,
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
+import { getShelfColors, isLightColor } from '@/utils/shelfColors';
 
 const SHELF_STYLE_OPTIONS: { id: ShelfStyle; label: string }[] = [
   { id: 'full', label: 'Classic Cabinet' },
   { id: 'bottom', label: 'Open Shelf' },
+];
+
+// Decorative book spines shown in the shelf previews
+const PREVIEW_BOOKS = [
+  { color: '#7c3b2e', h: 42 },
+  { color: '#2d3a54', h: 50 },
+  { color: '#3f5641', h: 38 },
+  { color: '#4a2f45', h: 46 },
+  { color: '#c08a2d', h: 44 },
 ];
 
 export default function CreateBookshelfScreen() {
@@ -47,11 +57,13 @@ export default function CreateBookshelfScreen() {
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [selectedColor, setSelectedColor] = useState(BOOKSHELF_COLORS[0]);
+  const [selectedColor, setSelectedColor] = useState<string>(BOOKSHELF_COLORS[0]);
   const [shelfStyle, setShelfStyle] = useState<ShelfStyle>('full');
   const [isPublic, setIsPublic] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const previewColors = getShelfColors(selectedColor);
 
   /**
    * Validate form
@@ -127,14 +139,34 @@ export default function CreateBookshelfScreen() {
             {/* Preview */}
             <View style={[styles.previewSection, { backgroundColor: colors.backgroundDark }]}>
               <View
-                style={[styles.shelfPreview, { backgroundColor: selectedColor }]}
+                style={[
+                  styles.previewShelf,
+                  { backgroundColor: previewColors.shelfBackColor },
+                  shelfStyle === 'full' && {
+                    borderWidth: 10,
+                    borderColor: previewColors.shelfColor,
+                  },
+                ]}
               >
-                <Text style={[styles.previewName, { color: colors.textOnDark }]} numberOfLines={1}>
-                  {name || 'New Bookshelf'}
-                </Text>
-                <View style={styles.previewShelf}>
-                  <View style={[styles.previewShelfSurface, { backgroundColor: colors.overlay }]} />
+                <View style={styles.previewBooks}>
+                  {PREVIEW_BOOKS.map((b, i) => (
+                    <View
+                      key={i}
+                      style={[
+                        styles.previewSpine,
+                        { backgroundColor: b.color, height: Math.round(b.h * 1.7) },
+                      ]}
+                    />
+                  ))}
                 </View>
+                {shelfStyle === 'bottom' && (
+                  <View
+                    style={[
+                      styles.previewShelfBar,
+                      { backgroundColor: previewColors.shelfColor },
+                    ]}
+                  />
+                )}
               </View>
             </View>
 
@@ -149,9 +181,7 @@ export default function CreateBookshelfScreen() {
                   setError(null);
                 }}
                 error={error || undefined}
-                leftIcon="library-outline"
                 maxLength={50}
-                autoFocus
               />
 
               <Input
@@ -159,7 +189,6 @@ export default function CreateBookshelfScreen() {
                 placeholder="What kind of books go here? (optional)"
                 value={description}
                 onChangeText={setDescription}
-                leftIcon="document-text-outline"
                 multiline
                 numberOfLines={3}
               />
@@ -174,6 +203,7 @@ export default function CreateBookshelfScreen() {
                       style={[
                         styles.colorOption,
                         { backgroundColor: color },
+                        isLightColor(color) && { borderColor: colors.border },
                         selectedColor === color && { borderColor: colors.text },
                       ]}
                       onPress={() => setSelectedColor(color)}
@@ -182,7 +212,7 @@ export default function CreateBookshelfScreen() {
                         <Ionicons
                           name="checkmark"
                           size={20}
-                          color={colors.textOnDark}
+                          color={isLightColor(color) ? colors.text : colors.textOnDark}
                         />
                       )}
                     </Pressable>
@@ -221,13 +251,7 @@ export default function CreateBookshelfScreen() {
                           <View style={[styles.miniBack, { backgroundColor: BookshelfDimensions.backColor }]} />
                         )}
                         <View style={styles.miniBooks}>
-                          {[
-                            { color: '#7c3b2e', h: 42 },
-                            { color: '#2d3a54', h: 50 },
-                            { color: '#3f5641', h: 38 },
-                            { color: '#4a2f45', h: 46 },
-                            { color: '#c08a2d', h: 44 },
-                          ].map((b, i) => (
+                          {PREVIEW_BOOKS.map((b, i) => (
                             <View key={i} style={[styles.miniSpine, { backgroundColor: b.color, height: b.h }]} />
                           ))}
                         </View>
@@ -315,26 +339,25 @@ const styles = StyleSheet.create({
   previewSection: {
     padding: Spacing.lg,
   },
-  shelfPreview: {
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    height: 100,
-    justifyContent: 'space-between',
-  },
-  previewName: {
-    fontSize: Typography.sizes.lg,
-    fontWeight: Typography.weights.bold,
-  },
   previewShelf: {
-    height: 30,
+    borderRadius: BorderRadius.lg,
+    overflow: 'hidden',
+    paddingTop: Spacing.md,
+    justifyContent: 'flex-end',
   },
-  previewShelfSurface: {
-    position: 'absolute',
-    bottom: 0,
-    left: -Spacing.md,
-    right: -Spacing.md,
-    height: 8,
+  previewBooks: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    minHeight: 96,
+    paddingHorizontal: Spacing.sm,
+  },
+  previewSpine: {
+    width: 26,
     borderRadius: 2,
+  },
+  previewShelfBar: {
+    height: 10,
   },
   form: {
     padding: Spacing.lg,

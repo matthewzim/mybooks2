@@ -247,12 +247,9 @@ export function BrowseBooksModal({
     });
   };
 
-  const handleAddBook = async (book: CommunityBookSpine) => {
+  const addBookToShelf = async (book: CommunityBookSpine, isExistingBook: boolean) => {
     setIsAdding(book.id);
     try {
-      // If the book has an existing Supabase ID (matched from community), reference it
-      // Otherwise create a new book record
-      const isExistingBook = book.uploaded_by_user_id !== '';
       const result = isExistingBook
         ? await booksService.addCommunityBookToShelf(book, shelfId)
         : await booksService.createBook({
@@ -273,6 +270,33 @@ export function BrowseBooksModal({
     } finally {
       setIsAdding(null);
     }
+  };
+
+  const handleAddBook = async (book: CommunityBookSpine) => {
+    // If the book has an existing Supabase ID (matched from community), reference it
+    // Otherwise create a new book record
+    const isExistingBook = book.uploaded_by_user_id !== '';
+
+    // Confirm before adding a book that is already on this shelf
+    if (isExistingBook) {
+      setIsAdding(book.id);
+      const alreadyOnShelf = await booksService.isBookOnShelf(book.id, shelfId);
+      setIsAdding(null);
+
+      if (alreadyOnShelf) {
+        Alert.alert(
+          'Duplicate Book',
+          'Are you sure you want to add a duplicate book?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Add', onPress: () => addBookToShelf(book, isExistingBook) },
+          ]
+        );
+        return;
+      }
+    }
+
+    await addBookToShelf(book, isExistingBook);
   };
 
   return (
