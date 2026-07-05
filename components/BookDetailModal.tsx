@@ -952,26 +952,39 @@ export function BookDetailModal({
 
                   <View style={[styles.metadata, { borderTopColor: colors.borderLight }]}>
                     {book.isbn && (
-                      <Text style={[styles.metadataText, { color: colors.textSecondary }]}>ISBN: {book.isbn}</Text>
+                      <View style={styles.metadataItem}>
+                        <Text style={[styles.metadataLabel, { color: colors.textLight }]}>ISBN</Text>
+                        <Text style={[styles.metadataValue, { color: colors.text }]}>{book.isbn}</Text>
+                      </View>
                     )}
-                    <Text style={[styles.metadataText, { color: colors.textSecondary }]}>
-                      Added: {new Date(book.created_at).toLocaleDateString()}
-                    </Text>
+                    <View style={styles.metadataItem}>
+                      <Text style={[styles.metadataLabel, { color: colors.textLight }]}>ADDED</Text>
+                      <Text style={[styles.metadataValue, { color: colors.text }]}>
+                        {new Date(book.created_at).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </Text>
+                    </View>
                   </View>
 
                   {!readOnly && (
                     <View style={styles.actionsRow}>
-                      <Button
-                        title="Edit book"
-                        onPress={() => setIsEditing(true)}
-                        style={{
-                          ...styles.editBookButton,
-                          backgroundColor: colors.primary,
-                          borderColor: colors.primary,
-                        }}
-                        textStyle={{ color: colors.textInverse }}
-                        colors={colors}
-                      />
+                      <View style={styles.editButtonWrap}>
+                        <Button
+                          title="Edit book"
+                          onPress={() => setIsEditing(true)}
+                          fullWidth
+                          style={{
+                            ...styles.editBookButton,
+                            backgroundColor: colors.primary,
+                            borderColor: colors.primary,
+                          }}
+                          textStyle={{ color: colors.textInverse }}
+                          colors={colors}
+                        />
+                      </View>
                       <Pressable
                         onPress={handleDelete}
                         style={({ pressed }) => [
@@ -1143,21 +1156,32 @@ const styles = StyleSheet.create({
     ...serifItalicStyle,
   },
   metadata: {
+    flexDirection: 'row',
+    gap: Spacing.xl,
     borderTopWidth: 1,
     paddingTop: Spacing.md,
     marginBottom: Spacing.md,
   },
-  metadataText: {
+  metadataItem: {
+    gap: 2,
+  },
+  metadataLabel: {
     fontSize: Typography.sizes.xs,
-    marginBottom: Spacing.xs,
+    fontFamily: getFontFamily('medium'),
+    letterSpacing: 0.4,
+  },
+  metadataValue: {
+    fontSize: Typography.sizes.md,
   },
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
     gap: Spacing.sm,
   },
-  editBookButton: {
+  editButtonWrap: {
     flex: 1,
+  },
+  editBookButton: {
     borderRadius: 14,
     shadowColor: '#4a2f19',
     shadowOffset: { width: 0, height: 8 },

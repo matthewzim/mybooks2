@@ -55,7 +55,7 @@ function NameChip({
   );
 }
 
-export function NameStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) {
+export function NameStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   const { colors } = useTheme();
   const { shelfName, setShelfName } = useOnboarding();
   const [customName, setCustomName] = useState('');
@@ -134,8 +134,8 @@ export function NameStep({ onNext, onSkip }: { onNext: () => void; onSkip: () =>
           <Text style={styles.finishButtonText}>Finish</Text>
           <Ionicons name="checkmark-circle" size={20} color="#fff" />
         </Pressable>
-        <Pressable style={styles.skipBtn} onPress={onSkip}>
-          <Text style={[styles.skipText, { color: colors.textLight }]}>Skip</Text>
+        <Pressable style={styles.backBtn} onPress={onBack}>
+          <Text style={[styles.backText, { color: colors.textLight }]}>Back</Text>
         </Pressable>
       </View>
     </ScrollView>
@@ -148,6 +148,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: Spacing.xl,
+    paddingTop: Spacing.xxl,
     gap: Spacing.lg,
     paddingBottom: Spacing.xxxl,
   },
@@ -216,10 +217,10 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.lg,
     fontFamily: getFontFamily('semibold'),
   },
-  skipBtn: {
+  backBtn: {
     padding: Spacing.sm,
   },
-  skipText: {
+  backText: {
     fontSize: Typography.sizes.md,
     fontFamily: getFontFamily('medium'),
   },

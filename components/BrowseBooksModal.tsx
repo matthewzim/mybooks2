@@ -28,8 +28,26 @@ import { Input } from '@/components/ui';
 import { BorderRadius, Spacing, Typography } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase, TABLES } from '@/services/supabase';
-import { getSpineImageUrl } from '@/services/storage';
+import { getCoverImageUrl, getSpineImageUrl } from '@/services/storage';
 import type { CommunityBookSpine } from '@/types';
+
+/** Search result with a resolved cover image URL for the results list */
+type BookSearchResult = CommunityBookSpine & { cover_url?: string | null };
+
+/** Key used to collapse duplicate editions/records of the same book */
+function bookKey(title: string, author: string): string {
+  return `${(title || '').trim().toLowerCase()}|${(author || '').trim().toLowerCase()}`;
+}
+
+interface LocalBookRow {
+  id: string;
+  title: string;
+  author: string;
+  image_url: string | null;
+  cover_image_url: string | null;
+  uploaded_by_user_id: string;
+  created_at: string;
+}
 
 const GOOGLE_BOOKS_API = 'https://www.googleapis.com/books/v1/volumes';
 
@@ -53,7 +71,7 @@ export function BrowseBooksModal({
   const { colors } = useTheme();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [bookSearchResults, setBookSearchResults] = useState<CommunityBookSpine[]>([]);
+  const [bookSearchResults, setBookSearchResults] = useState<BookSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isAdding, setIsAdding] = useState<string | null>(null);
   const [isClosing, setIsClosing] = useState(false);
@@ -123,16 +141,38 @@ export function BrowseBooksModal({
         // 1. Search Supabase for existing books first (free, fast)
         const { data: localBooks } = await supabase
           .from(TABLES.BOOKS)
-          .select('id, title, author, image_url, uploaded_by_user_id, created_at')
+          .select('id, title, author, image_url, cover_image_url, uploaded_by_user_id, created_at')
           .or(`title.ilike.%${trimmedQuery}%,author.ilike.%${trimmedQuery}%`)
-          .limit(20);
+          .limit(40);
 
-        const localResults: CommunityBookSpine[] = await Promise.all(
-          (localBooks || []).map(async (book) => {
+        // Collapse duplicate records of the same book (many users can own the
+        // same title), merging in spine/cover images from later duplicates.
+        const localRows = (localBooks || []) as LocalBookRow[];
+        const localByKey = new Map<string, LocalBookRow>();
+        for (const book of localRows) {
+          const key = bookKey(book.title, book.author);
+          const existing = localByKey.get(key);
+          if (!existing) {
+            localByKey.set(key, { ...book });
+          } else {
+            if (!existing.image_url && book.image_url) existing.image_url = book.image_url;
+            if (!existing.cover_image_url && book.cover_image_url) existing.cover_image_url = book.cover_image_url;
+          }
+        }
+        const dedupedLocalBooks = Array.from(localByKey.values()).slice(0, 20);
+
+        const localResults: BookSearchResult[] = await Promise.all(
+          dedupedLocalBooks.map(async (book) => {
             let resolvedUrl: string | null = null;
+            let coverUrl: string | null = null;
             if (book.image_url) {
               try {
                 resolvedUrl = await getSpineImageUrl(book.image_url);
+              } catch {}
+            }
+            if (book.cover_image_url) {
+              try {
+                coverUrl = await getCoverImageUrl(book.cover_image_url);
               } catch {}
             }
             return {
@@ -140,6 +180,7 @@ export function BrowseBooksModal({
               title: book.title,
               author: book.author,
               image_url: resolvedUrl,
+              cover_url: coverUrl,
               uploaded_by_user_id: book.uploaded_by_user_id,
               uploader_name: null,
               times_added: 0,
@@ -169,33 +210,54 @@ export function BrowseBooksModal({
         }
 
         const data = await response.json();
-        const apiItems: CommunityBookSpine[] = (data.items || []).map((item: any) => ({
-          id: item.id,
-          title: item.volumeInfo?.title || 'Untitled',
-          author: item.volumeInfo?.authors?.[0] || 'Unknown Author',
-          image_url: null,
-          uploaded_by_user_id: '',
-          uploader_name: null,
-          times_added: 0,
-          created_at: new Date().toISOString(),
-        }));
+        const apiItems: BookSearchResult[] = (data.items || []).map((item: any) => {
+          const thumbnail =
+            item.volumeInfo?.imageLinks?.thumbnail ||
+            item.volumeInfo?.imageLinks?.smallThumbnail ||
+            null;
+          return {
+            id: item.id,
+            title: item.volumeInfo?.title || 'Untitled',
+            author: item.volumeInfo?.authors?.[0] || 'Unknown Author',
+            image_url: null,
+            cover_url: thumbnail ? thumbnail.replace('http://', 'https://') : null,
+            uploaded_by_user_id: '',
+            uploader_name: null,
+            times_added: 0,
+            created_at: new Date().toISOString(),
+          };
+        });
+
+        // Collapse duplicate editions of the same book in the API results
+        const seenApiKeys = new Set<string>();
+        const dedupedApiItems = apiItems.filter((item) => {
+          const key = bookKey(item.title, item.author);
+          if (seenApiKeys.has(key)) return false;
+          seenApiKeys.add(key);
+          return true;
+        });
 
         // Resolve spine images for API results that exist in Supabase
         const apiItemsWithImages = await Promise.all(
-          apiItems.map(async (item) => {
+          dedupedApiItems.map(async (item) => {
             try {
-              const { data: matchedBook } = await supabase
+              const { data } = await supabase
                 .from(TABLES.BOOKS)
-                .select('id, image_url')
+                .select('id, image_url, cover_image_url')
                 .eq('title', item.title)
                 .eq('author', item.author)
                 .not('image_url', 'is', null)
                 .limit(1)
                 .maybeSingle();
+              const matchedBook = data as Pick<LocalBookRow, 'id' | 'image_url' | 'cover_image_url'> | null;
 
               if (matchedBook?.image_url) {
                 const resolvedUrl = await getSpineImageUrl(matchedBook.image_url);
-                return { ...item, id: matchedBook.id, image_url: resolvedUrl };
+                let coverUrl = item.cover_url;
+                if (!coverUrl && matchedBook.cover_image_url) {
+                  coverUrl = await getCoverImageUrl(matchedBook.cover_image_url);
+                }
+                return { ...item, id: matchedBook.id, image_url: resolvedUrl, cover_url: coverUrl };
               }
             } catch {}
             return item;
@@ -364,17 +426,10 @@ export function BrowseBooksModal({
                     onPress={() => handleAddBook(book)}
                     disabled={isAdding === book.id}
                   >
-                    {book.image_url ? (
-                      <Image source={{ uri: book.image_url }} style={styles.bookThumbnail} contentFit="cover" />
+                    {book.cover_url ? (
+                      <Image source={{ uri: book.cover_url }} style={styles.bookThumbnail} contentFit="cover" />
                     ) : (
-                      <View style={[styles.bookThumbnail, styles.bookPlaceholder, { backgroundColor: colors.primary }]}>
-                        <Text style={[styles.bookPlaceholderTitle, { color: colors.textInverse }]} numberOfLines={3}>
-                          {book.title}
-                        </Text>
-                        <Text style={[styles.bookPlaceholderAuthor, { color: colors.textOnDarkMuted }]} numberOfLines={2}>
-                          {book.author}
-                        </Text>
-                      </View>
+                      <View style={[styles.bookThumbnail, { backgroundColor: colors.background }]} />
                     )}
                     <View style={styles.bookInfo}>
                       <Text style={[styles.bookTitle, { color: colors.text }]} numberOfLines={1}>
@@ -482,21 +537,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 52,
     borderRadius: BorderRadius.sm,
-  },
-  bookPlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-  },
-  bookPlaceholderTitle: {
-    fontSize: Typography.sizes.xs,
-    fontWeight: Typography.weights.semibold,
-    textAlign: 'center',
-  },
-  bookPlaceholderAuthor: {
-    fontSize: 10,
-    textAlign: 'center',
-    marginTop: 4,
   },
   bookInfo: {
     flex: 1,

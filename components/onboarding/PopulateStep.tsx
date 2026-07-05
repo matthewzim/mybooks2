@@ -20,6 +20,7 @@ import {
   Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Spacing, BorderRadius, Typography, getFontFamily } from '@/constants/theme';
@@ -28,7 +29,7 @@ import { useOnboarding, SAMPLE_BOOKS, type PreviewBook } from './OnboardingConte
 import { LivePreview } from './LivePreview';
 import { BookSpine as BookSpineConstants } from '@/constants/theme';
 import { supabase, TABLES } from '@/services/supabase';
-import { getSpineImageUrl } from '@/services/storage';
+import { getCoverImageUrl, getSpineImageUrl } from '@/services/storage';
 
 function getBookColor(title?: string | null): string {
   const colors = BookSpineConstants.colors;
@@ -46,6 +47,21 @@ interface SearchResult {
   author: string;
   image_url?: string | null;
   source_image_url?: string | null;
+  /** Resolved book cover image URL for display in the results list */
+  cover_url?: string | null;
+}
+
+/** Key used to collapse duplicate editions/records of the same book */
+function bookKey(title: string, author: string): string {
+  return `${(title || '').trim().toLowerCase()}|${(author || '').trim().toLowerCase()}`;
+}
+
+interface LocalBookRow {
+  id: string;
+  title: string;
+  author: string;
+  image_url: string | null;
+  cover_image_url: string | null;
 }
 
 const GOODREADS_TITLE_COLUMN_INDEX = 1;
@@ -183,18 +199,40 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
       // 1. Search Supabase for existing books first (free, fast)
       const { data: localBooks } = await supabase
         .from(TABLES.BOOKS)
-        .select('id, title, author, image_url')
+        .select('id, title, author, image_url, cover_image_url')
         .or(`title.ilike.%${trimmed}%,author.ilike.%${trimmed}%`)
-        .limit(8);
+        .limit(24);
+
+      // Collapse duplicate records of the same book (many users can own the
+      // same title), merging in spine/cover images from later duplicates.
+      const localRows = (localBooks || []) as LocalBookRow[];
+      const localByKey = new Map<string, LocalBookRow>();
+      for (const book of localRows) {
+        const key = bookKey(book.title || '', book.author || '');
+        const existing = localByKey.get(key);
+        if (!existing) {
+          localByKey.set(key, { ...book });
+        } else {
+          if (!existing.image_url && book.image_url) existing.image_url = book.image_url;
+          if (!existing.cover_image_url && book.cover_image_url) existing.cover_image_url = book.cover_image_url;
+        }
+      }
+      const dedupedLocalBooks = Array.from(localByKey.values()).slice(0, 8);
 
       const localResults: SearchResult[] = await Promise.all(
-        (localBooks || []).map(async (book) => {
+        dedupedLocalBooks.map(async (book) => {
           let resolvedUrl: string | null = null;
           let sourceUrl: string | null = null;
+          let coverUrl: string | null = null;
           if (book.image_url) {
             try {
               resolvedUrl = await getSpineImageUrl(book.image_url);
               sourceUrl = book.image_url;
+            } catch {}
+          }
+          if (book.cover_image_url) {
+            try {
+              coverUrl = await getCoverImageUrl(book.cover_image_url);
             } catch {}
           }
           return {
@@ -203,6 +241,7 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
             author: book.author,
             image_url: resolvedUrl,
             source_image_url: sourceUrl,
+            cover_url: coverUrl,
           };
         })
       );
@@ -235,19 +274,29 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
       }
 
       const data = await response.json();
-      const apiItems: SearchResult[] = (data.items || []).map((item: any) => ({
-        id: item.id,
-        title: item.volumeInfo?.title || 'Untitled',
-        author: item.volumeInfo?.authors?.[0] || 'Unknown Author',
-      }));
+      const apiItems: SearchResult[] = (data.items || []).map((item: any) => {
+        const thumbnail =
+          item.volumeInfo?.imageLinks?.thumbnail ||
+          item.volumeInfo?.imageLinks?.smallThumbnail ||
+          null;
+        return {
+          id: item.id,
+          title: item.volumeInfo?.title || 'Untitled',
+          author: item.volumeInfo?.authors?.[0] || 'Unknown Author',
+          cover_url: thumbnail ? thumbnail.replace('http://', 'https://') : null,
+        };
+      });
 
-      // Deduplicate: remove API results that match local books
-      const localKeys = new Set(
-        localResults.map((b) => `${b.title.toLowerCase()}|${b.author.toLowerCase()}`)
-      );
-      const newApiItems = apiItems.filter(
-        (item) => !localKeys.has(`${item.title.toLowerCase()}|${item.author.toLowerCase()}`)
-      );
+      // Deduplicate: drop API results that match local books, and collapse
+      // duplicate editions of the same book within the API results.
+      const seenKeys = new Set(localResults.map((b) => bookKey(b.title, b.author)));
+      const newApiItems: SearchResult[] = [];
+      for (const item of apiItems) {
+        const key = bookKey(item.title, item.author);
+        if (seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        newApiItems.push(item);
+      }
 
       // Resolve spine images for API results that exist in Supabase
       const apiItemsWithImages = await Promise.all(
@@ -354,6 +403,11 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
           style={[styles.searchResult, { borderColor: colors.borderLight }]}
           onPress={() => handleAddBook(result)}
         >
+          {result.cover_url ? (
+            <Image source={{ uri: result.cover_url }} style={styles.resultCover} contentFit="cover" />
+          ) : (
+            <View style={[styles.resultCover, { backgroundColor: colors.backgroundDark }]} />
+          )}
           <View style={styles.resultText}>
             <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={1}>{result.title}</Text>
             <Text style={[styles.resultAuthor, { color: colors.textSecondary }]} numberOfLines={1}>{result.author}</Text>
@@ -365,7 +419,7 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function PopulateStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) {
+export function PopulateStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   const { colors } = useTheme();
   const { addBooks, books } = useOnboarding();
   const [showSearch, setShowSearch] = useState(false);
@@ -547,8 +601,8 @@ export function PopulateStep({ onNext, onSkip }: { onNext: () => void; onSkip: (
             {books.length > 0 ? 'Next' : 'Skip for now'}
           </Text>
         </Pressable>
-        <Pressable style={styles.skipBtn} onPress={onSkip}>
-          <Text style={[styles.skipText, { color: colors.textLight }]}>Skip all</Text>
+        <Pressable style={styles.backBtn} onPress={onBack}>
+          <Text style={[styles.backText, { color: colors.textLight }]}>Back</Text>
         </Pressable>
       </View>
 
@@ -603,6 +657,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: Spacing.xl,
+    paddingTop: Spacing.xxl,
     gap: Spacing.lg,
     paddingBottom: Spacing.xxxl,
   },
@@ -731,6 +786,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: Spacing.sm,
   },
+  resultCover: {
+    width: 32,
+    height: 46,
+    borderRadius: BorderRadius.sm,
+  },
   resultText: {
     flex: 1,
     gap: 2,
@@ -763,10 +823,10 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.lg,
     fontFamily: getFontFamily('semibold'),
   },
-  skipBtn: {
+  backBtn: {
     padding: Spacing.sm,
   },
-  skipText: {
+  backText: {
     fontSize: Typography.sizes.md,
     fontFamily: getFontFamily('medium'),
   },
