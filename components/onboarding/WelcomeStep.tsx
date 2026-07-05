@@ -9,7 +9,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Spacing, Typography, BorderRadius, Wood, getFontFamily, getSerifFontFamily } from '@/constants/theme';
+import { Spacing, Typography, BorderRadius, Wood, BookshelfDimensions, getFontFamily, getSerifFontFamily } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useOnboarding } from './OnboardingContext';
 
@@ -34,6 +34,10 @@ const HERO_SHEEN_COLORS = [
   'rgba(0, 0, 0, 0.34)',
 ] as const;
 const HERO_SHEEN_LOCATIONS = [0, 0.24, 0.72, 1] as const;
+
+// Cabinet frame thickness — same as the shelf preview cards on the home page
+const HERO_BORDER_WIDTH = Math.round(BookshelfDimensions.shelfThickness * 0.75);
+const HERO_FRAME_EDGE_WIDTH = 1;
 
 export function WelcomeStep() {
   const { colors } = useTheme();
@@ -105,52 +109,52 @@ export function WelcomeStep() {
           ]}
         >
           <View style={styles.heroShelfInner}>
+            {/* Wood cabinet frame, matching the home page shelf previews */}
             <LinearGradient
-              colors={[Wood.backTop, Wood.backBottom]}
+              colors={[Wood.frameTop, Wood.frameBottom]}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
-              style={styles.heroBack}
+              style={StyleSheet.absoluteFill}
             />
-            <View style={styles.heroBooks}>
-              {HERO_BOOKS.map((book, i) => (
-                <Animated.View
-                  key={i}
-                  style={[
-                    styles.heroSpineShadow,
-                    {
-                      height: book.height,
-                      opacity: shelfAnim,
-                      transform: [{
-                        translateY: shelfAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [30, 0],
-                        }),
-                      }],
-                    },
-                  ]}
-                >
-                  <View style={[styles.heroSpine, { backgroundColor: book.color }]}>
-                    <LinearGradient
-                      colors={HERO_SHEEN_COLORS}
-                      locations={HERO_SHEEN_LOCATIONS}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={StyleSheet.absoluteFill}
-                    />
-                    <View style={[styles.heroGiltBand, { top: 7 }]} />
-                    <View style={[styles.heroGiltBand, { bottom: 8 }]} />
-                  </View>
-                </Animated.View>
-              ))}
-            </View>
-            <View style={styles.heroPlank}>
+            <View style={styles.heroInterior}>
               <LinearGradient
-                colors={[Wood.plankTop, Wood.plankBottom]}
+                colors={[Wood.backTop, Wood.backBottom]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
                 style={StyleSheet.absoluteFill}
               />
-              <View style={styles.heroPlankHighlight} />
+              <View style={styles.heroBooks}>
+                {HERO_BOOKS.map((book, i) => (
+                  <Animated.View
+                    key={i}
+                    style={[
+                      styles.heroSpineShadow,
+                      {
+                        height: book.height,
+                        opacity: shelfAnim,
+                        transform: [{
+                          translateY: shelfAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [30, 0],
+                          }),
+                        }],
+                      },
+                    ]}
+                  >
+                    <View style={[styles.heroSpine, { backgroundColor: book.color }]}>
+                      <LinearGradient
+                        colors={HERO_SHEEN_COLORS}
+                        locations={HERO_SHEEN_LOCATIONS}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={StyleSheet.absoluteFill}
+                      />
+                      <View style={[styles.heroGiltBand, { top: 7 }]} />
+                      <View style={[styles.heroGiltBand, { bottom: 8 }]} />
+                    </View>
+                  </Animated.View>
+                ))}
+              </View>
             </View>
           </View>
         </Animated.View>
@@ -161,9 +165,6 @@ export function WelcomeStep() {
           </Text>
           <Text style={[styles.title, { color: colors.text }]}>
             Build your dream shelf{'\n'}in thirty seconds
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            No forms. No typing. Just tap your way to a beautiful, personalized shelf.
           </Text>
         </View>
 
@@ -214,17 +215,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   heroShelfInner: {
-    borderWidth: 4,
+    padding: HERO_BORDER_WIDTH,
+    borderWidth: HERO_FRAME_EDGE_WIDTH,
     borderColor: Wood.frameEdge,
     borderRadius: BorderRadius.md,
     overflow: 'hidden',
   },
-  heroBack: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
+  heroInterior: {
+    overflow: 'hidden',
   },
   heroBooks: {
     flexDirection: 'row',
@@ -256,15 +254,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(201, 162, 90, 0.55)',
   },
-  heroPlank: {
-    height: 8,
-    marginTop: -1,
-    overflow: 'hidden',
-  },
-  heroPlankHighlight: {
-    height: 1.5,
-    backgroundColor: Wood.plankHighlight,
-  },
   textContainer: {
     alignItems: 'center',
     gap: Spacing.sm,
@@ -279,12 +268,6 @@ const styles = StyleSheet.create({
     fontFamily: getSerifFontFamily('medium'),
     textAlign: 'center',
     lineHeight: 38,
-  },
-  subtitle: {
-    fontSize: Typography.sizes.lg,
-    fontFamily: getFontFamily('regular'),
-    textAlign: 'center',
-    lineHeight: 24,
   },
   buttonContainer: {
     width: '100%',

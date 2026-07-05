@@ -115,21 +115,21 @@ function OnboardingFlow() {
         return (
           <PopulateStep
             onNext={() => transitionTo('layout')}
-            onSkip={handleSkipAll}
+            onBack={() => transitionTo('style')}
           />
         );
       case 'layout':
         return (
           <LayoutStep
             onNext={() => transitionTo('name')}
-            onSkip={handleSkipAll}
+            onBack={() => transitionTo('populate')}
           />
         );
       case 'name':
         return (
           <NameStep
             onNext={() => transitionTo('reveal')}
-            onSkip={handleSkipAll}
+            onBack={() => transitionTo('layout')}
           />
         );
       case 'reveal':
