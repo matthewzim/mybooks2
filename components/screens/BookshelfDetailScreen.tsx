@@ -86,10 +86,27 @@ export default function BookshelfDetailScreen() {
     }, [fetchBooks])
   );
 
+  // Pending timer that clears the selected book after the close animation.
+  // It must be cancelled when a new book is opened within its window,
+  // otherwise it nulls the freshly selected book and the modal shows empty.
+  const clearSelectedBookTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (clearSelectedBookTimerRef.current) {
+        clearTimeout(clearSelectedBookTimerRef.current);
+      }
+    };
+  }, []);
+
   /**
    * Open book detail modal
    */
   const handleBookPress = (book: Book) => {
+    if (clearSelectedBookTimerRef.current) {
+      clearTimeout(clearSelectedBookTimerRef.current);
+      clearSelectedBookTimerRef.current = null;
+    }
     setSelectedBook(book);
     setIsBookModalVisible(true);
   };
@@ -100,7 +117,10 @@ export default function BookshelfDetailScreen() {
   const handleCloseBookModal = () => {
     setIsBookModalVisible(false);
     // Small delay before clearing selected book to allow close animation
-    setTimeout(() => setSelectedBook(null), 400);
+    clearSelectedBookTimerRef.current = setTimeout(() => {
+      clearSelectedBookTimerRef.current = null;
+      setSelectedBook(null);
+    }, 400);
   };
 
   /**

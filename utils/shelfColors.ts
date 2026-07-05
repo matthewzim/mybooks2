@@ -69,14 +69,15 @@ export function getShelfColors(coverColor?: string): ShelfColors {
     };
   }
 
-  // Custom cover colors tint the plank and frame; the back panel stays a warm
-  // lit wall so books remain readable against it.
+  // Custom cover colors tint the plank, frame and back panel; the back panel
+  // (only visible on 'full' shelves) is a slightly darker shade of the shelf
+  // color so it reads as the shadowed interior of the cabinet.
   return {
     shelfColor,
     shelfBackColor: adjustHexBrightness(shelfColor, -36),
     plankGradient: [adjustHexBrightness(shelfColor, 8), adjustHexBrightness(shelfColor, -32)],
     frameGradient: [adjustHexBrightness(shelfColor, 18), adjustHexBrightness(shelfColor, -18)],
     frameEdge: adjustHexBrightness(shelfColor, 56),
-    backGradient: [Wood.backTop, Wood.backBottom],
+    backGradient: [adjustHexBrightness(shelfColor, -44), adjustHexBrightness(shelfColor, -28)],
   };
 }

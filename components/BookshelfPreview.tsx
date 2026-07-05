@@ -24,7 +24,7 @@ import {
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { getShelfColors } from '@/utils/shelfColors';
-import { getSpineCloth, getClothColor } from '@/utils/spineCloth';
+import { getSpineCloth } from '@/utils/spineCloth';
 import { getPlaceholderSpineSize, getImageSpineHeightFactor } from '@/utils/placeholderSpine';
 import { getSpineImageUrl } from '@/services/storage';
 import { SPINE_SHEEN_COLORS, SPINE_SHEEN_LOCATIONS } from '@/components/BookSpine';
@@ -36,8 +36,9 @@ const PREVIEW_MIN_BOOK_HEIGHT = 90;
 const PREVIEW_MIN_BOOK_WIDTH = 14;
 const PREVIEW_MAX_BOOK_WIDTH = 32;
 const PREVIEW_SHELF_THICKNESS = BookshelfDimensions.shelfThickness;
-// Match the frame thickness used on the actual bookshelf page
-const PREVIEW_BORDER_WIDTH = BookshelfDimensions.shelfThickness;
+// Outer cabinet frame thickness for previews — slightly thinner (75%) than
+// the frame on the actual bookshelf page. Tweak the 0.75 factor to taste.
+const PREVIEW_BORDER_WIDTH = Math.round(BookshelfDimensions.shelfThickness * 0.75);
 // The cabinet also strokes a 1px frame edge around the wood frame
 const PREVIEW_FRAME_EDGE_WIDTH = 1;
 
@@ -164,12 +165,8 @@ export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, ow
     }).start();
   };
 
-  const ownerHandle = owner
-    ? owner.public_username
-      ? `@${owner.public_username}`
-      : owner.name || 'Anonymous reader'
-    : null;
-  const ownerInitial = (owner?.name || owner?.public_username || 'R').charAt(0).toUpperCase();
+  const ownerName = owner ? owner.name || 'Anonymous reader' : null;
+  const ownerHandle = owner?.public_username ? `@${owner.public_username}` : null;
 
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
@@ -267,12 +264,14 @@ export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, ow
 
         {owner && (
           <View style={styles.ownerRow}>
-            <View style={[styles.ownerAvatar, { backgroundColor: getClothColor(owner.name || owner.public_username) }]}>
-              <Text style={styles.ownerInitial}>{ownerInitial}</Text>
-            </View>
-            <Text style={[styles.ownerHandle, { color: colors.textLight }]} numberOfLines={1}>
-              {ownerHandle} · {totalBooks}
+            <Text style={[styles.ownerName, { color: colors.text }]} numberOfLines={1}>
+              {ownerName}
             </Text>
+            {ownerHandle && (
+              <Text style={[styles.ownerHandle, { color: colors.textLight }]} numberOfLines={1}>
+                {ownerHandle}
+              </Text>
+            )}
           </View>
         )}
       </Pressable>
@@ -420,17 +419,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.xs,
   },
-  ownerAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ownerInitial: {
-    fontSize: 13,
-    fontFamily: getSerifFontFamily('medium'),
-    color: '#f7efe0',
+  ownerName: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: getFontFamily('bold'),
+    flexShrink: 1,
   },
   ownerHandle: {
     fontSize: Typography.sizes.sm,

@@ -80,8 +80,9 @@ function getWidgetShelfPalette(coverColor: string | null) {
     frame: adjustHexBrightness(hex, 18),
     frameEdge: adjustHexBrightness(hex, 56),
     plank: adjustHexBrightness(hex, 8),
-    // The warm lit back wall stays constant so books remain readable
-    back: '#e9dcc2',
+    // Back panel is a slightly darker shade of the shelf color, matching
+    // getShelfColors' backGradient top color
+    back: adjustHexBrightness(hex, -44),
   };
 }
 

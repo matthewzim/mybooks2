@@ -156,13 +156,9 @@ private struct ShelfPalette {
 }
 
 private func shelfPalette(for coverColor: String?) -> ShelfPalette {
-  // The warm lit back wall stays constant so books remain readable
-  // (Wood.backTop #e9dcc2 / Wood.backBottom #f1e6cf).
-  let backTop = channelColor((0xE9, 0xDC, 0xC2))
-  let backBottom = channelColor((0xF1, 0xE6, 0xCF))
-
   // Default wood cabinet when there is no custom cover color, or when the
   // cover color equals the default shelf color (Wood.plankTop #7a4f2c).
+  // Its back wall is the warm lit default (Wood.backTop / Wood.backBottom).
   let isDefault = coverColor?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "#7a4f2c"
   guard let rgb = hexChannels(coverColor), !isDefault else {
     return ShelfPalette(
@@ -171,20 +167,22 @@ private func shelfPalette(for coverColor: String?) -> ShelfPalette {
       frameTop: channelColor((0x8A, 0x5A, 0x30)),
       frameBottom: channelColor((0x6E, 0x43, 0x24)),
       frameEdge: channelColor((0xB9, 0x8A, 0x52)),
-      backTop: backTop,
-      backBottom: backBottom
+      backTop: channelColor((0xE9, 0xDC, 0xC2)),
+      backBottom: channelColor((0xF1, 0xE6, 0xCF))
     )
   }
 
-  // Custom cover colors tint the plank and frame, same offsets as the app.
+  // Custom cover colors tint the plank, frame and back panel, same offsets
+  // as getShelfColors in the app: the back wall is a slightly darker shade
+  // of the shelf color.
   return ShelfPalette(
     plankTop: channelColor(rgb, adjustedBy: 8),
     plankBottom: channelColor(rgb, adjustedBy: -32),
     frameTop: channelColor(rgb, adjustedBy: 18),
     frameBottom: channelColor(rgb, adjustedBy: -18),
     frameEdge: channelColor(rgb, adjustedBy: 56),
-    backTop: backTop,
-    backBottom: backBottom
+    backTop: channelColor(rgb, adjustedBy: -44),
+    backBottom: channelColor(rgb, adjustedBy: -28)
   )
 }
 
