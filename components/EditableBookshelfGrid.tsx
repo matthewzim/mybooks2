@@ -37,7 +37,6 @@ import {
   BookSpine as BookSpineConstants,
   BookshelfDimensions,
   Wood,
-  getSerifFontFamily,
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
@@ -755,7 +754,6 @@ interface AddBookButtonProps {
 }
 
 function AddBookButton({ width, height, onPress }: AddBookButtonProps) {
-  const { colors } = useTheme();
   return (
     <Pressable
       style={({ pressed }) => [
@@ -763,19 +761,15 @@ function AddBookButton({ width, height, onPress }: AddBookButtonProps) {
         {
           width,
           height,
-          backgroundColor: 'rgba(255, 253, 248, 0.5)',
-          borderColor: Wood.frameEdge,
+          borderColor: '#FFFFFF',
         },
-        pressed && { backgroundColor: 'rgba(255, 253, 248, 0.7)', opacity: 0.9 },
+        pressed && { backgroundColor: 'rgba(255, 255, 255, 0.2)', opacity: 0.9 },
       ]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel="Add a new book"
     >
-      <Ionicons name="add" size={32} color={colors.primary} />
-      <Text style={[styles.addButtonText, { color: colors.primary }]}>
-        Add book
-      </Text>
+      <Ionicons name="add" size={32} color="#FFFFFF" />
     </Pressable>
   );
 }
@@ -883,13 +877,6 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  addButtonText: {
-    fontSize: 11,
-    fontFamily: getSerifFontFamily('medium'),
-    marginTop: Spacing.xs,
-    textAlign: 'center',
-    width: '100%',
   },
   bottomPadding: {
     height: 100,

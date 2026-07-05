@@ -7,15 +7,17 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
+import { View, StyleSheet, Text } from 'react-native';
 import { Redirect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';
-import { Colors, Typography, Spacing, getFontFamily } from '@/constants/theme';
+import { useTheme } from '@/contexts/ThemeContext';
+import { Colors, Typography, Spacing, getFontFamily, getSerifFontFamily } from '@/constants/theme';
 
 const ONBOARDING_COMPLETE_KEY = 'onboarding_complete';
 
 export default function Index() {
+  const { colors } = useTheme();
   const { isAuthenticated, isLoading, authError, restartAnonymousSession } = useAuth();
   const [isRetryingAuth, setIsRetryingAuth] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
@@ -37,21 +39,8 @@ export default function Index() {
   // Show loading state while initialising anonymous session or checking onboarding
   if (isLoading || !onboardingChecked || (isRetryingAuth && !isAuthenticated)) {
     return (
-      <View style={styles.container}>
-        <View style={styles.heroCard}>
-          <View style={styles.logoContainer}>
-            <Text style={styles.eyebrow}>Welcome back</Text>
-            <Text style={styles.logoText}>Virtual Library</Text>
-            <Text style={styles.tagline}>
-              Curate, scan, and revisit every shelf with a calmer, more polished reading home.
-            </Text>
-          </View>
-
-          <View style={styles.statusRow}>
-            <ActivityIndicator size="small" color={Colors.accent} />
-            <Text style={styles.statusText}>Setting up your library</Text>
-          </View>
-        </View>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <Text style={[styles.appName, { color: colors.text }]}>Virtual Library</Text>
       </View>
     );
   }
@@ -83,6 +72,16 @@ export default function Index() {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  appName: {
+    fontSize: 34,
+    fontFamily: getSerifFontFamily('medium'),
+    textAlign: 'center',
+  },
   container: {
     flex: 1,
     justifyContent: 'center',
@@ -102,13 +101,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
   },
-  eyebrow: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: getFontFamily('semibold'),
-    color: Colors.accent,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-  },
   logoText: {
     fontSize: Typography.sizes.xxxl,
     fontFamily: getFontFamily('bold'),
@@ -121,20 +113,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-    paddingVertical: Spacing.md,
-    borderRadius: 12,
-    backgroundColor: Colors.background,
-  },
-  statusText: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: getFontFamily('medium'),
-    color: Colors.textSecondary,
   },
   retryLink: {
     textAlign: 'center',
