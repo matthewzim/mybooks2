@@ -30,7 +30,7 @@ import { BookDetailModal } from '@/components/BookDetailModal';
 import { BookshelfEditModal } from '@/components/BookshelfEditModal';
 import { BrowseBooksModal } from '@/components/BrowseBooksModal';
 import { LoadingView, EmptyState } from '@/components/ui';
-import { Spacing, Typography, BorderRadius, Shadows, getSerifFontFamily, serifItalicStyle } from '@/constants/theme';
+import { Spacing, Typography, BorderRadius, getSerifFontFamily, serifItalicStyle } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { Book, Bookshelf, ShelfStyle, UpdateBookshelfInput } from '@/types';
 
@@ -519,7 +519,9 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     borderWidth: 1,
     borderRadius: BorderRadius.xl,
-    ...Shadows.sm,
+    // No shadow: this card sits flush under the navigation header, and its
+    // cast shadow read as a dark band that made the header background look
+    // like a different colour than the page background.
   },
   stat: {
     alignItems: 'center',

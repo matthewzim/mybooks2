@@ -26,7 +26,7 @@ import {
   Typography,
 } from '@/constants/theme';
 import { BOOKSHELF_COLORS } from '@/types';
-import { isLightColor } from '@/utils/shelfColors';
+import { isLightColor, BLACK_SHELF_COLOR } from '@/utils/shelfColors';
 import type { Bookshelf, UpdateBookshelfInput } from '@/types';
 
 interface BookshelfEditModalProps {
@@ -56,7 +56,9 @@ export function BookshelfEditModal({
     if (bookshelf) {
       setName(bookshelf.name);
       setDescription(bookshelf.description || '');
-      setCoverColor(bookshelf.cover_color || BOOKSHELF_COLORS[0]);
+      // Shelves saved before the black option became dark grey store #000000
+      const savedColor = bookshelf.cover_color === '#000000' ? BLACK_SHELF_COLOR : bookshelf.cover_color;
+      setCoverColor(savedColor || BOOKSHELF_COLORS[0]);
       setIsPublic(bookshelf.is_public);
       setError(null);
     }
@@ -321,9 +323,9 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   colorOption: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,

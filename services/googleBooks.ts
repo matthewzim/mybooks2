@@ -55,6 +55,103 @@ interface GoogleBooksResponse {
   items?: GoogleBooksVolume[];
 }
 
+/** A search result from the user-facing book search */
+export interface BookVolumeResult {
+  id: string;
+  title: string;
+  author: string;
+  /** Cover thumbnail URL (https), if Google has one */
+  thumbnail: string | null;
+}
+
+/** Key used to collapse duplicate editions/records of the same book */
+export function bookDedupeKey(title: string, author: string): string {
+  return `${(title || '').trim().toLowerCase()}|${(author || '').trim().toLowerCase()}`;
+}
+
+function mapVolumes(data: GoogleBooksResponse): BookVolumeResult[] {
+  return (data.items || [])
+    .filter((item) => item.volumeInfo?.title)
+    .map((item) => {
+      const thumbnail =
+        item.volumeInfo.imageLinks?.thumbnail ||
+        item.volumeInfo.imageLinks?.smallThumbnail ||
+        null;
+      return {
+        id: item.id,
+        title: item.volumeInfo.title || 'Untitled',
+        author: item.volumeInfo.authors?.[0] || 'Unknown Author',
+        thumbnail: thumbnail ? thumbnail.replace('http://', 'https://') : null,
+      };
+    });
+}
+
+async function fetchVolumes(query: string, maxResults: number): Promise<BookVolumeResult[]> {
+  const keyParam = GOOGLE_BOOKS_API_KEY ? `&key=${GOOGLE_BOOKS_API_KEY}` : '';
+  const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=${maxResults}&printType=books${keyParam}`;
+  const response = await fetch(url);
+  if (!response.ok) return [];
+  return mapVolumes((await response.json()) as GoogleBooksResponse);
+}
+
+/**
+ * User-facing book search against the Google Books API.
+ *
+ * A plain full-text query matches on descriptions and publisher text too,
+ * which surfaces irrelevant books (e.g. an author-name search returning a
+ * textbook that merely mentions the name). To make searching by author work
+ * as expected, this runs two queries in parallel:
+ *
+ * 1. `inauthor:"<query>"` — books written by a matching author
+ * 2. the plain query — title matches etc., kept only when every search term
+ *    actually appears in the result's title or author
+ *
+ * Author matches are listed first, duplicates collapsed by title+author.
+ * Falls back to the unfiltered general results if the strict pass finds
+ * nothing, so a fuzzy search never gets worse than before.
+ */
+export async function searchBookVolumes(
+  query: string,
+  maxResults = 20
+): Promise<BookVolumeResult[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  const [authorSettled, generalSettled] = await Promise.allSettled([
+    fetchVolumes(`inauthor:"${trimmed}"`, 20),
+    fetchVolumes(trimmed, 20),
+  ]);
+  // One query failing is fine (the other still has results); both failing is
+  // a network problem the caller should surface to the user.
+  if (authorSettled.status === 'rejected' && generalSettled.status === 'rejected') {
+    throw authorSettled.reason;
+  }
+  const authorResults = authorSettled.status === 'fulfilled' ? authorSettled.value : [];
+  const generalResults = generalSettled.status === 'fulfilled' ? generalSettled.value : [];
+
+  const terms = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+  const isRelevant = (item: BookVolumeResult): boolean => {
+    const haystack = `${item.title} ${item.author}`.toLowerCase();
+    return terms.every((term) => haystack.includes(term));
+  };
+  let filteredGeneral = generalResults.filter(isRelevant);
+  if (filteredGeneral.length === 0 && authorResults.length === 0) {
+    filteredGeneral = generalResults;
+  }
+
+  const merged: BookVolumeResult[] = [];
+  const seen = new Set<string>();
+  for (const item of [...authorResults, ...filteredGeneral]) {
+    const key = bookDedupeKey(item.title, item.author);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+    if (merged.length >= maxResults) break;
+  }
+
+  return merged;
+}
+
 class GoogleBooksService {
   private buildSearchQueries(title: string, author: string): string[] {
     const cleanTitle = (title || '').trim();

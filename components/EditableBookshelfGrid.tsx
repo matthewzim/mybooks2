@@ -517,8 +517,18 @@ export function EditableBookshelfGrid({
               />
             )}
 
-            {/* Books row - no gaps between spines */}
-            <View style={[styles.booksRow, { minHeight: rowHeight }]}>
+            {/* Books row - no gaps between spines. Outside edit mode the row
+                clips its children so spine cast shadows stop at the shelf
+                line instead of bleeding onto the frame/plank below (matching
+                the clipped shelf previews). Edit mode leaves it unclipped so
+                dragged books stay visible outside the row. */}
+            <View
+              style={[
+                styles.booksRow,
+                { minHeight: rowHeight },
+                !isEditing && styles.booksRowClipped,
+              ]}
+            >
               {row.map((layoutItem, itemIndex) => {
                 // Handle "add" button (only added to rows when onAddBook exists)
                 if (layoutItem.item === 'add') {
@@ -813,6 +823,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     zIndex: 1,
     flexWrap: 'nowrap',
+  },
+  booksRowClipped: {
+    overflow: 'hidden',
   },
   shelfSurface: {
     height: BookshelfDimensions.shelfThickness,

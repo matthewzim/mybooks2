@@ -6,11 +6,14 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Easing, Image } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Easing, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Spacing, BorderRadius, Typography, BookshelfDimensions, getFontFamily } from '@/constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Spacing, BorderRadius, Typography, BookshelfDimensions, Wood, getFontFamily } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
+import { getShelfColors } from '@/utils/shelfColors';
 import { useOnboarding, type PreviewBook } from './OnboardingContext';
+import { MiniSpine, getSpineSize } from './LivePreview';
 
 const CONFETTI_COLORS = ['#6366f1', '#f59e0b', '#22c55e', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
@@ -70,21 +73,18 @@ function ConfettiPiece({ index }: { index: number }) {
   );
 }
 
-const SPINE_WIDTH = 20;
+// Frame and spine metrics mirror LivePreview / BookshelfPreview
 const SPINE_HEIGHT = 132;
-const REVEAL_SHELF_THICKNESS = 12;
-const REVEAL_BORDER_WIDTH = 5;
-
-function darkenColor(hex: string, factor: number = 0.7): string {
-  const c = hex.replace('#', '');
-  const r = Math.round(parseInt(c.substring(0, 2), 16) * factor);
-  const g = Math.round(parseInt(c.substring(2, 4), 16) * factor);
-  const b = Math.round(parseInt(c.substring(4, 6), 16) * factor);
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-}
+const SHELF_THICKNESS = BookshelfDimensions.shelfThickness;
+const SHELF_BORDER_WIDTH = Math.round(BookshelfDimensions.shelfThickness * 0.75);
+const FRAME_EDGE_WIDTH = 1;
+const REVEAL_MAX_WIDTH = 360;
 
 function RevealShelf({ books, shelfStyle, shelfColor }: { books: PreviewBook[]; shelfStyle: string; shelfColor: string }) {
+  const { colors } = useTheme();
   const slideAnim = useRef(new Animated.Value(0)).current;
+  const { width: screenWidth } = useWindowDimensions();
+  const shelfColors = getShelfColors(shelfColor);
 
   useEffect(() => {
     Animated.spring(slideAnim, {
@@ -96,7 +96,22 @@ function RevealShelf({ books, shelfStyle, shelfColor }: { books: PreviewBook[]; 
     }).start();
   }, []);
 
-  const visibleBooks = books.slice(0, 16);
+  // Fill the row by accumulated spine width so books never spill past the
+  // right shelf border (same logic as LivePreview).
+  const shelfOuterWidth = Math.min(screenWidth - Spacing.xl * 2, REVEAL_MAX_WIDTH);
+  const shelfInnerWidth =
+    shelfStyle === 'full'
+      ? shelfOuterWidth - (SHELF_BORDER_WIDTH + FRAME_EDGE_WIDTH) * 2
+      : shelfOuterWidth;
+
+  const visibleBooks: { book: PreviewBook; width: number; height: number }[] = [];
+  let usedWidth = 0;
+  for (const book of books) {
+    const size = getSpineSize(book);
+    if (usedWidth + size.width > shelfInnerWidth && visibleBooks.length > 0) break;
+    visibleBooks.push({ book, ...size });
+    usedWidth += size.width;
+  }
 
   return (
     <Animated.View
@@ -115,52 +130,61 @@ function RevealShelf({ books, shelfStyle, shelfColor }: { books: PreviewBook[]; 
     >
       <View
         style={[
-          styles.shelfFrame,
+          styles.shelfRow,
           shelfStyle === 'full' && {
-            borderWidth: REVEAL_BORDER_WIDTH,
-            borderColor: shelfColor,
+            padding: SHELF_BORDER_WIDTH,
+            borderWidth: FRAME_EDGE_WIDTH,
+            borderColor: shelfColors.frameEdge,
           },
         ]}
       >
+        {/* Wood frame around the row, matching the shelf previews */}
         {shelfStyle === 'full' && (
-          <View style={[styles.shelfBack, { backgroundColor: darkenColor(shelfColor) }]} />
+          <LinearGradient
+            colors={[...shelfColors.frameGradient]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
         )}
-        <View style={styles.revealBooks}>
-          {visibleBooks.length > 0 ? (
-            visibleBooks.map((book) => (
-              <Animated.View
-                key={book.id}
-                style={[
-                  styles.revealSpine,
-                  {
-                    backgroundColor: book.image_url ? 'transparent' : book.color,
-                    opacity: slideAnim,
-                    transform: [{
-                      translateY: slideAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [40, 0],
-                      }),
-                    }],
-                  },
-                ]}
-              >
-                {book.image_url && (
-                  <Image
-                    source={{ uri: book.image_url }}
-                    style={styles.revealSpineImage}
-                    resizeMode="cover"
-                  />
-                )}
-              </Animated.View>
-            ))
-          ) : (
-            <View style={styles.emptyReveal}>
-              <Text style={styles.emptyRevealText}>Your shelf is ready!</Text>
-            </View>
+
+        <View style={styles.shelfInterior}>
+          {shelfStyle === 'full' && (
+            <LinearGradient
+              colors={[...shelfColors.backGradient]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
           )}
+
+          <View style={[styles.revealBooks, { minHeight: SPINE_HEIGHT }]}>
+            {visibleBooks.length > 0 ? (
+              visibleBooks.map(({ book, width, height }, i) => (
+                <MiniSpine key={book.id} book={book} width={width} height={height} index={i} />
+              ))
+            ) : (
+              <View style={styles.emptyReveal}>
+                <Text style={[styles.emptyRevealText, { color: colors.textSecondary }]}>
+                  Your shelf is ready!
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
-        {shelfStyle === 'bottom' && (
-          <View style={[styles.revealShelfBar, { backgroundColor: shelfColor }]} />
+
+        {/* Floating plank only for the open 'bottom' style; the full style
+            rests books on the frame border below them */}
+        {shelfStyle !== 'full' && (
+          <View style={styles.plank}>
+            <LinearGradient
+              colors={[...shelfColors.plankGradient]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.plankHighlight} />
+          </View>
         )}
       </View>
     </Animated.View>
@@ -303,45 +327,36 @@ const styles = StyleSheet.create({
   },
   revealShelf: {
     width: '100%',
-    maxWidth: 360,
+    maxWidth: REVEAL_MAX_WIDTH,
   },
-  shelfFrame: {
+  shelfRow: {
     overflow: 'hidden',
     borderRadius: BorderRadius.md,
   },
-  shelfBack: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
+  shelfInterior: {
+    overflow: 'hidden',
   },
   revealBooks: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'flex-start',
-    minHeight: SPINE_HEIGHT,
     zIndex: 1,
     flexWrap: 'nowrap',
   },
-  revealSpine: {
-    width: SPINE_WIDTH,
-    height: SPINE_HEIGHT,
-    overflow: 'hidden',
-  },
-  revealSpineImage: {
-    width: '100%',
-    height: '100%',
-  },
-  revealShelfBar: {
-    height: REVEAL_SHELF_THICKNESS,
+  plank: {
+    height: SHELF_THICKNESS,
     borderRadius: BorderRadius.sm,
     marginTop: -1,
+    overflow: 'hidden',
     shadowColor: '#4a2f19',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
+  },
+  plankHighlight: {
+    height: 1.5,
+    backgroundColor: Wood.plankHighlight,
   },
   emptyReveal: {
     flex: 1,
@@ -349,7 +364,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyRevealText: {
-    color: 'rgba(255,255,255,0.7)',
     fontSize: Typography.sizes.md,
     fontFamily: getFontFamily('medium'),
   },

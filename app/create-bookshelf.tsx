@@ -376,9 +376,9 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   colorOption: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
