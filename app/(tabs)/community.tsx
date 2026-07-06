@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { FREE_TIER_LIMITS, bookshelvesService } from '@/services';
+import { FREE_TIER_LIMITS, bookshelvesService, moderationService } from '@/services';
 import { UserSearchResult } from '@/components/UserSearchResult';
 import { BookshelfPreview } from '@/components/BookshelfPreview';
 import { Input, EmptyState, Button } from '@/components/ui';
@@ -59,9 +59,15 @@ export default function CommunityScreen() {
 
   const loadPublicBookshelfPreviews = useCallback(async () => {
     try {
-      const result = await bookshelvesService.getRandomPublicBookshelfPreviews(PUBLIC_PREVIEW_LIMIT);
+      const [result, blockedIds] = await Promise.all([
+        bookshelvesService.getRandomPublicBookshelfPreviews(PUBLIC_PREVIEW_LIMIT),
+        moderationService.getBlockedUserIds(),
+      ]);
       if (result.data) {
-        setPublicBookshelfPreviews(result.data);
+        const blocked = new Set(blockedIds);
+        setPublicBookshelfPreviews(
+          result.data.filter((shelf) => !blocked.has(shelf.owner.id))
+        );
       }
     } catch (error) {
       console.error('Failed to load public bookshelf previews:', error);
@@ -88,9 +94,13 @@ export default function CommunityScreen() {
       }
 
       setIsSearchingUsers(true);
-      const result = await bookshelvesService.searchUsers(userSearchQuery);
+      const [result, blockedIds] = await Promise.all([
+        bookshelvesService.searchUsers(userSearchQuery),
+        moderationService.getBlockedUserIds(),
+      ]);
       if (result.data) {
-        setUserSearchResults(result.data);
+        const blocked = new Set(blockedIds);
+        setUserSearchResults(result.data.filter((u) => !blocked.has(u.id)));
       }
       setIsSearchingUsers(false);
     };

@@ -15,11 +15,15 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
+  Pressable,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '@/contexts/AuthContext';
 import { bookshelvesService } from '@/services/bookshelves';
+import { moderationService, REPORT_REASONS } from '@/services/moderation';
 import { BookshelfPreview } from '@/components/BookshelfPreview';
 import { LoadingView, EmptyState } from '@/components/ui';
 import { Colors, Spacing, Typography, BorderRadius } from '@/constants/theme';
@@ -41,11 +45,16 @@ export default function UserProfileScreen() {
     name?: string;
     public_username?: string;
   }>();
+  const { user: currentUser } = useAuth();
   const [user, setUser] = useState<UserData | null>(null);
   const [bookshelves, setBookshelves] = useState<BookshelfWithBooks[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isOwnProfile = currentUser?.id === id;
+  const displayNameForMenu =
+    user?.name || (user?.public_username ? `@${user.public_username}` : 'This User');
 
   /**
    * Fetch user's public bookshelves
@@ -115,6 +124,76 @@ export default function UserProfileScreen() {
     });
   };
 
+  /**
+   * Report this user's content (App Store Guideline 1.2).
+   * Presents a reason picker, then files a content_reports row.
+   */
+  const handleReportUser = useCallback(() => {
+    if (!id) return;
+
+    Alert.alert(
+      'Report Content',
+      'Why are you reporting this user?',
+      [
+        ...REPORT_REASONS.map((reason) => ({
+          text: reason,
+          onPress: async () => {
+            const result = await moderationService.reportUser(id, reason);
+            if (result.error) {
+              Alert.alert('Report Failed', result.error.message);
+              return;
+            }
+            Alert.alert(
+              'Report Submitted',
+              'Thank you. We review reports within 24 hours and remove content that violates our guidelines.'
+            );
+          },
+        })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ]
+    );
+  }, [id]);
+
+  /**
+   * Block this user. Their shelves stop appearing in community surfaces.
+   */
+  const handleBlockUser = useCallback(() => {
+    if (!id) return;
+
+    Alert.alert(
+      'Block User',
+      "You won't see this user's shelves or profile in the community anymore.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await moderationService.blockUser(id);
+            if (result.error) {
+              Alert.alert('Block Failed', result.error.message);
+              return;
+            }
+            Alert.alert('User Blocked', 'You will no longer see their content.', [
+              { text: 'OK', onPress: () => router.back() },
+            ]);
+          },
+        },
+      ]
+    );
+  }, [id]);
+
+  /**
+   * "..." menu with moderation actions.
+   */
+  const handleModerationMenu = useCallback(() => {
+    Alert.alert(displayNameForMenu, undefined, [
+      { text: 'Report Content', onPress: handleReportUser },
+      { text: 'Block User', style: 'destructive', onPress: handleBlockUser },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [handleReportUser, handleBlockUser, displayNameForMenu]);
+
   // Loading state
   if (isLoading) {
     return <LoadingView message="Loading profile..." />;
@@ -147,6 +226,22 @@ export default function UserProfileScreen() {
       <Stack.Screen
         options={{
           title: `${displayName}'s Library`,
+          headerRight: isOwnProfile
+            ? undefined
+            : () => (
+                <Pressable
+                  onPress={handleModerationMenu}
+                  style={styles.headerMenuButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Report or block this user"
+                >
+                  <Ionicons
+                    name="ellipsis-horizontal"
+                    size={22}
+                    color={Colors.textInverse}
+                  />
+                </Pressable>
+              ),
         }}
       />
 
@@ -216,6 +311,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  headerMenuButton: {
+    padding: Spacing.xs,
   },
   scrollView: {
     flex: 1,

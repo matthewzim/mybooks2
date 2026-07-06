@@ -826,7 +826,7 @@ function readWidgetMeta(config) {
     "systemLarge",
   ]).join(", .");
   const groupIdentifier =
-    pluginOpts.groupIdentifier || "group.com.yourcompany.virtuallibrary";
+    pluginOpts.groupIdentifier || "group.com.matthewzimmerman.virtuallibrary";
   return { displayName, description, families, groupIdentifier };
 }
 

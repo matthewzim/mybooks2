@@ -4,6 +4,7 @@
     "slug": "virtual-library-app",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
     "scheme": "virtuallibrary",
     "userInterfaceStyle": "automatic",
     "assetBundlePatterns": [
@@ -11,7 +12,8 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.virtuallibrary",
+      "bundleIdentifier": "com.matthewzimmerman.virtuallibrary",
+      "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to scan book spines and add them to your library.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to upload book spine images.",
@@ -22,13 +24,17 @@
       },
       "entitlements": {
         "com.apple.security.application-groups": [
-          "group.com.yourcompany.virtuallibrary"
+          "group.com.matthewzimmerman.virtuallibrary"
         ]
       }
     },
     "android": {
-      "package": "com.yourcompany.virtuallibrary",
+      "package": "com.matthewzimmerman.virtuallibrary",
       "softwareKeyboardLayoutMode": "resize",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#f4ecdd"
+      },
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -47,12 +53,24 @@
           "sitemap": false
         }
       ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#f4ecdd",
+          "dark": {
+            "backgroundColor": "#1a1a2e"
+          }
+        }
+      ],
       "expo-secure-store",
       [
         "expo-widgets",
         {
-          "bundleIdentifier": "com.yourcompany.virtuallibrary.widgets",
-          "groupIdentifier": "group.com.yourcompany.virtuallibrary",
+          "bundleIdentifier": "com.matthewzimmerman.virtuallibrary.widgets",
+          "groupIdentifier": "group.com.matthewzimmerman.virtuallibrary",
           "widgets": [
             {
               "name": "BookshelfWidget",
@@ -84,9 +102,6 @@
     ],
     "runtimeVersion": {
       "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/virtual-library-app"
     },
     "experiments": {
       "typedRoutes": true
