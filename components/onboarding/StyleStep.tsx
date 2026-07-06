@@ -20,7 +20,7 @@ const STYLE_OPTIONS: { id: ShelfStyle; label: string }[] = [
   { id: 'bottom', label: 'Open Shelf' },
 ];
 
-const COLOR_OPTIONS = BOOKSHELF_COLORS.slice(0, 8);
+const COLOR_OPTIONS = BOOKSHELF_COLORS;
 
 function StyleCard({
   option,
@@ -247,9 +247,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   colorSwatch: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.1)',
   },

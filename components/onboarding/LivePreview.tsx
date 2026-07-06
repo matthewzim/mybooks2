@@ -41,7 +41,7 @@ const SHELF_THICKNESS = BookshelfDimensions.shelfThickness;
 const SHELF_BORDER_WIDTH = Math.round(BookshelfDimensions.shelfThickness * 0.75);
 const FRAME_EDGE_WIDTH = 1;
 
-function getSpineSize(book: PreviewBook): { width: number; height: number } {
+export function getSpineSize(book: PreviewBook): { width: number; height: number } {
   if (book.image_url) {
     return { width: SPINE_WIDTH, height: SPINE_HEIGHT };
   }
@@ -54,7 +54,7 @@ function getSpineSize(book: PreviewBook): { width: number; height: number } {
   );
 }
 
-function MiniSpine({
+export function MiniSpine({
   book,
   width,
   height,

@@ -29,6 +29,7 @@ import { BorderRadius, Spacing, Typography } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase, TABLES } from '@/services/supabase';
 import { getCoverImageUrl, getSpineImageUrl } from '@/services/storage';
+import { searchBookVolumes } from '@/services/googleBooks';
 import type { CommunityBookSpine } from '@/types';
 
 /** Search result with a resolved cover image URL for the results list */
@@ -48,8 +49,6 @@ interface LocalBookRow {
   uploaded_by_user_id: string;
   created_at: string;
 }
-
-const GOOGLE_BOOKS_API = 'https://www.googleapis.com/books/v1/volumes';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_WIDTH = Math.min(SCREEN_WIDTH * 0.9, 420);
@@ -189,53 +188,29 @@ export function BrowseBooksModal({
           })
         );
 
-        // If Supabase returned any results, use them and skip Google API
+        // Show local results immediately while the API supplement loads
         if (localResults.length > 0) {
           setBookSearchResults(localResults);
-          setIsSearching(false);
-          return;
         }
 
-        // 2. Fall back to Google Books API only when Supabase has zero matches
-        const apiKey = process.env.EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY || '';
-        const keyParam = apiKey ? `&key=${apiKey}` : '';
-        const response = await fetch(
-          `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(trimmedQuery)}&maxResults=20${keyParam}`
-        );
-
-        if (!response.ok) {
-          setBookSearchResults([]);
-          setIsSearching(false);
-          return;
-        }
-
-        const data = await response.json();
-        const apiItems: BookSearchResult[] = (data.items || []).map((item: any) => {
-          const thumbnail =
-            item.volumeInfo?.imageLinks?.thumbnail ||
-            item.volumeInfo?.imageLinks?.smallThumbnail ||
-            null;
-          return {
-            id: item.id,
-            title: item.volumeInfo?.title || 'Untitled',
-            author: item.volumeInfo?.authors?.[0] || 'Unknown Author',
+        // 2. Always supplement with the Google Books API so searching a
+        // prolific author lists their whole catalog, not only the titles
+        // other users happen to own already.
+        const apiVolumes = await searchBookVolumes(trimmedQuery, 20);
+        const localKeys = new Set(localResults.map((b) => bookKey(b.title, b.author)));
+        const dedupedApiItems: BookSearchResult[] = apiVolumes
+          .filter((volume) => !localKeys.has(bookKey(volume.title, volume.author)))
+          .map((volume) => ({
+            id: volume.id,
+            title: volume.title,
+            author: volume.author,
             image_url: null,
-            cover_url: thumbnail ? thumbnail.replace('http://', 'https://') : null,
+            cover_url: volume.thumbnail,
             uploaded_by_user_id: '',
             uploader_name: null,
             times_added: 0,
             created_at: new Date().toISOString(),
-          };
-        });
-
-        // Collapse duplicate editions of the same book in the API results
-        const seenApiKeys = new Set<string>();
-        const dedupedApiItems = apiItems.filter((item) => {
-          const key = bookKey(item.title, item.author);
-          if (seenApiKeys.has(key)) return false;
-          seenApiKeys.add(key);
-          return true;
-        });
+          }));
 
         // Resolve spine images for API results that exist in Supabase
         const apiItemsWithImages = await Promise.all(
@@ -264,7 +239,7 @@ export function BrowseBooksModal({
           })
         );
 
-        setBookSearchResults(apiItemsWithImages);
+        setBookSearchResults([...localResults, ...apiItemsWithImages]);
       } catch {
         setBookSearchResults([]);
       }

@@ -16,6 +16,14 @@ export interface ShelfColors {
 const DEFAULT_SHELF_COLOR = Wood.plankTop;
 const DEFAULT_BACK_COLOR = Wood.plankBottom;
 
+/**
+ * The "black" shelf option renders as a very dark grey so the shelf frame
+ * still stands out against its darker (near-black) back panel. Shelves saved
+ * with pure black before this change are mapped onto the same shade.
+ */
+export const BLACK_SHELF_COLOR = '#2e2e2e';
+const LEGACY_BLACK = '#000000';
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
@@ -68,7 +76,10 @@ export function isLightColor(color?: string): boolean {
 }
 
 export function getShelfColors(coverColor?: string): ShelfColors {
-  const shelfColor = normalizeHex(coverColor) || DEFAULT_SHELF_COLOR;
+  let shelfColor = normalizeHex(coverColor) || DEFAULT_SHELF_COLOR;
+  if (shelfColor === LEGACY_BLACK) {
+    shelfColor = BLACK_SHELF_COLOR;
+  }
   const isDefault = shelfColor === DEFAULT_SHELF_COLOR;
 
   if (isDefault) {

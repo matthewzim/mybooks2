@@ -354,7 +354,7 @@ export const BOOKSHELF_COLORS = [
   '#16213e', // Navy Blue
   '#0f3460', // Deep Blue
   '#FFFFFF', // White
-  '#000000', // Black
+  '#2e2e2e', // Black (very dark grey so the shelf reads against its darker back panel)
 ] as const;
 
 export type BookshelfColor = typeof BOOKSHELF_COLORS[number];
