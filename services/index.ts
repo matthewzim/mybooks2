@@ -13,6 +13,7 @@ export { accountService } from './account';
 export { bookshelvesService } from './bookshelves';
 export { booksService } from './books';
 export { storageService } from './storage';
+export { moderationService, REPORT_REASONS } from './moderation';
 export {
   revenueCatService,
   FREE_TIER_LIMITS,

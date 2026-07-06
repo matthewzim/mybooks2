@@ -18,6 +18,7 @@ import {
   ScrollView,
   Pressable,
   Alert,
+  Linking,
   Modal,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -43,6 +44,7 @@ import {
   getFontFamily,
   getSerifFontFamily,
 } from '@/constants/theme';
+import { LEGAL_URLS } from '@/constants/legal';
 import { FREE_TIER_LIMITS } from '@/services/revenuecat';
 import { bookshelvesService } from '@/services/bookshelves';
 import { booksService } from '@/services/books';
@@ -125,7 +127,7 @@ function parseGoodreadsBooks(csvText: string): GoodreadsCsvBook[] {
 
 export default function SettingsScreen() {
   const { user, updateProfile, restartAnonymousSession } = useAuth();
-  const { isPro } = useRevenueCat();
+  const { isPro, restorePurchases } = useRevenueCat();
   const { colors } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
@@ -138,6 +140,7 @@ export default function SettingsScreen() {
   const [isImportingGoodreads, setIsImportingGoodreads] = useState(false);
   const [isResettingData, setIsResettingData] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isRestoringPurchases, setIsRestoringPurchases] = useState(false);
 
   const promptShelfSelection = async (): Promise<Bookshelf | 'create' | null> => {
     const result = await bookshelvesService.getUserBookshelves();
@@ -389,6 +392,39 @@ export default function SettingsScreen() {
    */
   const handleUpgrade = () => {
     router.push('/payment');
+  };
+
+  /**
+   * Restore previous purchases (required by App Review for apps with IAP).
+   */
+  const handleRestorePurchases = async () => {
+    if (isRestoringPurchases) return;
+
+    setIsRestoringPurchases(true);
+    try {
+      const restored = await restorePurchases();
+      Alert.alert(
+        restored ? 'Purchases Restored' : 'Nothing to Restore',
+        restored
+          ? 'Your premium subscription has been restored.'
+          : 'No previous purchases were found for this Apple ID.'
+      );
+    } catch {
+      Alert.alert(
+        'Restore Failed',
+        'We could not restore your purchases. Please try again.'
+      );
+    } finally {
+      setIsRestoringPurchases(false);
+    }
+  };
+
+  const openLegalUrl = async (url: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('Unable to Open Link', 'Please try again later.');
+    }
   };
 
   const resetLocalAppState = async () => {
@@ -796,6 +832,20 @@ export default function SettingsScreen() {
               )}
             </View>
           </Pressable>
+          <View style={[styles.card, { backgroundColor: colors.card, marginTop: Spacing.sm }]}>
+            <SettingsRow
+              icon="refresh-outline"
+              title={isRestoringPurchases ? 'Restoring...' : 'Restore Purchases'}
+              subtitle="Recover a subscription bought on this Apple ID"
+              colors={colors}
+              onPress={handleRestorePurchases}
+              trailing={
+                isRestoringPurchases ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : undefined
+              }
+            />
+          </View>
         </View>
 
         {/* About Section */}
@@ -807,6 +857,27 @@ export default function SettingsScreen() {
               title="App Version"
               subtitle="1.0.0"
               colors={colors}
+            />
+            <SettingsRow
+              icon="shield-checkmark-outline"
+              title="Privacy Policy"
+              subtitle="How your data is handled"
+              colors={colors}
+              onPress={() => openLegalUrl(LEGAL_URLS.PRIVACY_POLICY)}
+            />
+            <SettingsRow
+              icon="document-text-outline"
+              title="Terms of Use"
+              subtitle="License agreement (EULA)"
+              colors={colors}
+              onPress={() => openLegalUrl(LEGAL_URLS.TERMS_OF_USE)}
+            />
+            <SettingsRow
+              icon="mail-outline"
+              title="Contact Support"
+              subtitle="Questions or feedback"
+              colors={colors}
+              onPress={() => openLegalUrl(LEGAL_URLS.SUPPORT)}
             />
           </View>
         </View>

@@ -387,6 +387,52 @@ npm test
 - `uploadAvatar(uri, userId)` - Upload user avatar
 - `deleteFile(bucket, path)` - Delete file from storage
 
+## Production Release Checklist (TestFlight & App Store)
+
+The repo is configured for production builds, but a few steps can only be
+done from your accounts. Work through these in order.
+
+### 1. One-time project setup
+
+- [ ] **Apple Developer Program**: enroll at https://developer.apple.com ($99/yr) if you haven't.
+- [ ] **Bundle identifier**: the app is configured as `com.matthewzimmerman.virtuallibrary` in `app.json`. If you want a different ID, change it now — it cannot be changed after your first App Store Connect upload. Keep the widget (`...virtuallibrary.widgets`) and app group (`group.com.matthewzimmerman.virtuallibrary`) suffixes in sync.
+- [ ] **Link the EAS project**: run `eas init` (creates the project and writes `extra.eas.projectId` into `app.json`). If you want over-the-air JS updates, also run `eas update:configure` — it restores the `updates.url` (the previous placeholder URL was removed because it pointed at a nonexistent project).
+- [ ] **App icon**: `assets/images/icon.png` is a generated placeholder (books on a shelf). It's submission-ready, but replace it with real branding when you have it — same path, 1024×1024, no transparency.
+
+### 2. Backend & services
+
+- [ ] **Apply the new Supabase migration**: `supabase/migrations/20260706_add_moderation.sql` (report + block tables). Run it via `supabase db push` or paste into the SQL editor. Reports land in the `content_reports` table — check it periodically; Apple expects reports to be acted on within 24 hours.
+- [ ] **RevenueCat production key**: set `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` to your `appl_...` key as an EAS secret: `eas env:create --name EXPO_PUBLIC_REVENUECAT_IOS_API_KEY --value appl_xxx --environment production` (do the same for the Supabase URL/anon key and any Google API keys — EAS builds do not read your local `.env`).
+- [ ] **App Store Connect IAP**: create the app in App Store Connect, add the auto-renewable subscriptions (`monthly`, `yearly`) in a subscription group, and connect them in the RevenueCat dashboard (bundle ID must match). Products must be in "Ready to Submit" state and the paid-apps agreement signed, or the paywall will be empty.
+- [ ] **RevenueCat paywall legal links**: in the RevenueCat paywall editor, add footer links to your Privacy Policy and Terms of Use — Apple checks for these on the paywall itself (Guideline 3.1.2).
+
+### 3. Legal (required for approval)
+
+- [ ] **Host a privacy policy** and update `PRIVACY_POLICY` in `constants/legal.ts` (currently a placeholder URL — a broken link is a guaranteed rejection). GitHub Pages or a policy generator is fine. It must mention: anonymous accounts, book/shelf data, uploaded images, purchases via RevenueCat, and how to delete your account (Settings → Account Deletion).
+- [ ] **Terms of Use**: the app links to Apple's standard EULA, which Apple accepts for subscription apps. Also paste that URL (or your own terms) into the App Store description field, as required by Guideline 3.1.2.
+- [ ] **Support contact**: `SUPPORT` in `constants/legal.ts` uses your email; App Store Connect also needs a Support URL.
+
+### 4. Build & TestFlight
+
+```bash
+npm install -g eas-cli
+eas login
+eas build --platform ios --profile production   # first run walks you through certificates
+eas submit --platform ios --latest              # uploads the build to App Store Connect
+```
+
+- Build numbers auto-increment (`autoIncrement` + remote app version source in `eas.json`).
+- In App Store Connect → TestFlight, add yourself as an internal tester. Internal testing needs no review; external tester groups require a short beta review.
+- Smoke-test on device: onboarding, add/scan a book, widget setup, **a sandbox purchase and Restore Purchases**, community browse, report/block a user, account deletion.
+
+### 5. App Store submission
+
+- [ ] **App Privacy questionnaire** (App Store Connect → App Privacy). Accurate answers for this app: *Purchases* (RevenueCat), *User Content* (photos, book data), *Identifiers* (user ID) — all "linked to you" via the anonymous account; nothing used for tracking (no ATT prompt needed).
+- [ ] **Screenshots**: 6.9" (iPhone 16 Pro Max class) and 6.5" sizes minimum; take them from the simulator with real-looking shelves.
+- [ ] **Review notes**: mention that the app uses anonymous accounts (no demo login needed), and that community content can be reported/blocked via the "…" menu on a user's profile.
+- [ ] **Age rating + category**: Books / Lifestyle, 4+ works if community images are moderated.
+- [ ] Submit. Typical first-review turnaround is 24–48 hours.
+
 ## Contributing
 
 1. Fork the repository
