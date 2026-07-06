@@ -9,17 +9,18 @@
  */
 export const LEGAL_URLS = {
   /**
-   * Apple's standard EULA is explicitly allowed for subscription apps.
-   * Replace with your own terms if you ever host custom ones.
+   * Apple's standard EULA is explicitly allowed for subscription apps and
+   * is a valid link to ship with. A custom Terms of Use draft (with Apple's
+   * required minimum terms and a UGC/IP clause) lives at
+   * legal/terms-of-use.md — once you host it, point this at that URL.
    */
   TERMS_OF_USE:
     'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
 
   /**
-   * TODO(before App Store submission): replace with your live privacy
-   * policy URL. This page MUST be reachable before you submit for review —
-   * a broken link here is a guaranteed rejection. A free GitHub Pages site
-   * or a generator like https://app.privacypolicies.com works fine.
+   * TODO(before App Store submission): host legal/privacy-policy.md and
+   * replace this with its live URL. This page MUST be reachable before you
+   * submit for review — a broken link here is a guaranteed rejection.
    */
   PRIVACY_POLICY:
     'https://matthewzim.github.io/virtual-library-legal/privacy-policy',

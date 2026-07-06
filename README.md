@@ -408,8 +408,8 @@ done from your accounts. Work through these in order.
 
 ### 3. Legal (required for approval)
 
-- [ ] **Host a privacy policy** and update `PRIVACY_POLICY` in `constants/legal.ts` (currently a placeholder URL — a broken link is a guaranteed rejection). GitHub Pages or a policy generator is fine. It must mention: anonymous accounts, book/shelf data, uploaded images, purchases via RevenueCat, and how to delete your account (Settings → Account Deletion).
-- [ ] **Terms of Use**: the app links to Apple's standard EULA, which Apple accepts for subscription apps. Also paste that URL (or your own terms) into the App Store description field, as required by Guideline 3.1.2.
+- [ ] **Host the privacy policy**: a ready-to-publish draft lives at `legal/privacy-policy.md`. Host it (GitHub Pages or any static host) and update `PRIVACY_POLICY` in `constants/legal.ts` (currently a placeholder URL — a broken link is a guaranteed rejection).
+- [ ] **Host the Terms of Use**: a draft with Apple's required minimum terms and a UGC/IP clause lives at `legal/terms-of-use.md`. Fill in the governing-law placeholder in Section 11, host it, and update `TERMS_OF_USE` in `constants/legal.ts` (until then the app links to Apple's standard EULA, which is also acceptable). Paste the same URL into the App Store description field, as required by Guideline 3.1.2.
 - [ ] **Support contact**: `SUPPORT` in `constants/legal.ts` uses your email; App Store Connect also needs a Support URL.
 
 ### 4. Build & TestFlight
