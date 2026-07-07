@@ -11,6 +11,7 @@ export { BookshelfGrid } from './BookshelfGrid';
 export { BookshelfPreview } from './BookshelfPreview';
 export { CameraScanner } from './CameraScanner';
 export { CommunityBookItem } from './CommunityBookItem';
+export { CommunitySpineBrowserModal } from './CommunitySpineBrowserModal';
 export { SpineCropper } from './SpineCropper';
 export { DraggableBookSpine } from './DraggableBookSpine';
 export { EditableBookshelfGrid } from './EditableBookshelfGrid';

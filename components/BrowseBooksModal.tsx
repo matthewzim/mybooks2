@@ -24,13 +24,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { booksService } from '@/services/books';
+import { CommunitySpineBrowserModal } from '@/components/CommunitySpineBrowserModal';
 import { Input } from '@/components/ui';
 import { BorderRadius, Spacing, Typography } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase, TABLES } from '@/services/supabase';
 import { getCoverImageUrl, getSpineImageUrl } from '@/services/storage';
 import { searchBookVolumes } from '@/services/googleBooks';
-import type { CommunityBookSpine } from '@/types';
+import type { Book, CommunityBookSpine } from '@/types';
 
 /** Search result with a resolved cover image URL for the results list */
 type BookSearchResult = CommunityBookSpine & { cover_url?: string | null };
@@ -74,6 +75,10 @@ export function BrowseBooksModal({
   const [isSearching, setIsSearching] = useState(false);
   const [isAdding, setIsAdding] = useState<string | null>(null);
   const [isClosing, setIsClosing] = useState(false);
+  // Book just added with a placeholder spine — target for the community
+  // spine picker that we offer right after the add.
+  const [spinePickerBook, setSpinePickerBook] = useState<Book | null>(null);
+  const [isApplyingSpine, setIsApplyingSpine] = useState(false);
 
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
@@ -88,6 +93,8 @@ export function BrowseBooksModal({
       setIsSearching(false);
       setIsAdding(null);
       setIsClosing(false);
+      setSpinePickerBook(null);
+      setIsApplyingSpine(false);
 
       overlayOpacity.setValue(0);
       cardOpacity.setValue(0);
@@ -218,13 +225,16 @@ export function BrowseBooksModal({
             try {
               const { data } = await supabase
                 .from(TABLES.BOOKS)
-                .select('id, image_url, cover_image_url')
+                .select('id, image_url, cover_image_url, uploaded_by_user_id')
                 .eq('title', item.title)
                 .eq('author', item.author)
                 .not('image_url', 'is', null)
                 .limit(1)
                 .maybeSingle();
-              const matchedBook = data as Pick<LocalBookRow, 'id' | 'image_url' | 'cover_image_url'> | null;
+              const matchedBook = data as Pick<
+                LocalBookRow,
+                'id' | 'image_url' | 'cover_image_url' | 'uploaded_by_user_id'
+              > | null;
 
               if (matchedBook?.image_url) {
                 const resolvedUrl = await getSpineImageUrl(matchedBook.image_url);
@@ -232,7 +242,16 @@ export function BrowseBooksModal({
                 if (!coverUrl && matchedBook.cover_image_url) {
                   coverUrl = await getCoverImageUrl(matchedBook.cover_image_url);
                 }
-                return { ...item, id: matchedBook.id, image_url: resolvedUrl, cover_url: coverUrl };
+                // Carry uploaded_by_user_id so handleAddBook treats this as an
+                // existing book and references its row — otherwise the add
+                // creates a fresh record without the spine image.
+                return {
+                  ...item,
+                  id: matchedBook.id,
+                  uploaded_by_user_id: matchedBook.uploaded_by_user_id,
+                  image_url: resolvedUrl,
+                  cover_url: coverUrl,
+                };
               }
             } catch {}
             return item;
@@ -298,7 +317,32 @@ export function BrowseBooksModal({
 
       if (result.data) {
         onBookAdded();
-        Alert.alert('Added', `"${book.title}" has been added to your shelf.`);
+        const addedBook = result.data;
+        if (!addedBook.image_url) {
+          // The book landed on the shelf with a blank placeholder spine —
+          // tell the user, and offer the community spine picker when other
+          // users have already uploaded a spine photo for this book.
+          const spinesResult = await booksService.getAlternativeSpines(addedBook);
+          const hasCommunitySpines = (spinesResult.data || []).length > 0;
+
+          if (hasCommunitySpines) {
+            Alert.alert(
+              'Added with Placeholder Spine',
+              `"${book.title}" was added to your shelf, but it doesn't have a spine photo yet. Want to pick a spine image from the community?`,
+              [
+                { text: 'Not Now', style: 'cancel' },
+                { text: 'Choose Spine', onPress: () => setSpinePickerBook(addedBook) },
+              ]
+            );
+          } else {
+            Alert.alert(
+              'Added with Placeholder Spine',
+              `"${book.title}" was added to your shelf. No community spine photos exist for it yet — you can scan or upload one from the book's edit screen.`
+            );
+          }
+        } else {
+          Alert.alert('Added', `"${book.title}" has been added to your shelf.`);
+        }
       } else if (result.error) {
         Alert.alert('Error', result.error.message);
       }
@@ -306,6 +350,26 @@ export function BrowseBooksModal({
       Alert.alert('Error', 'Failed to add book to shelf');
     } finally {
       setIsAdding(null);
+    }
+  };
+
+  const handleSpinePicked = async (option: CommunityBookSpine) => {
+    if (!spinePickerBook || isApplyingSpine) return;
+
+    setIsApplyingSpine(true);
+    try {
+      const result = await booksService.setBookSpineFromCommunity(spinePickerBook.id, option);
+      if (result.data) {
+        onBookAdded();
+        setSpinePickerBook(null);
+        Alert.alert('Spine Updated', 'The selected community spine is now on your shelf.');
+      } else {
+        Alert.alert('Error', result.error?.message || 'Failed to apply the spine.');
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to apply the spine.');
+    } finally {
+      setIsApplyingSpine(false);
     }
   };
 
@@ -438,6 +502,15 @@ export function BrowseBooksModal({
           </Animated.View>
         </KeyboardAvoidingView>
       </Animated.View>
+
+      {/* Community spine picker for books added with a placeholder spine */}
+      <CommunitySpineBrowserModal
+        visible={spinePickerBook !== null}
+        book={spinePickerBook}
+        isUpdatingSpine={isApplyingSpine}
+        onSelect={handleSpinePicked}
+        onClose={() => setSpinePickerBook(null)}
+      />
     </Modal>
   );
 }

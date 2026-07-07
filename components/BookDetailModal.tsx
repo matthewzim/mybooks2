@@ -11,7 +11,6 @@ import {
   Animated,
   Dimensions,
   Easing,
-  FlatList,
   KeyboardAvoidingView,
   Modal,
   PanResponder,
@@ -32,6 +31,7 @@ import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { booksService } from '@/services/books';
 import { googleBooksService } from '@/services/googleBooks';
 import { getCoverImageUrl, storageService } from '@/services/storage';
+import { CommunitySpineBrowserModal } from '@/components/CommunitySpineBrowserModal';
 import { Button, Rating } from '@/components/ui';
 import {
   BorderRadius,
@@ -45,7 +45,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getClothColor } from '@/utils/spineCloth';
 import type { Book, CommunityBookSpine } from '@/types';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_MAX_HEIGHT = Math.min(SCREEN_HEIGHT * 0.88, 720);
 // Height of the drag-handle strip at the top of the sheet. In view mode the
 // scroll view slides under it so the cover shadow can bleed into that area.
@@ -88,7 +88,11 @@ function AlternateSpineOption({
       disabled={isUpdating}
     >
       {resolvedImageUrl ? (
-        <Image source={{ uri: resolvedImageUrl }} style={styles.spineOptionImage} contentFit="cover" />
+        // "contain" shows the whole spine at its true aspect ratio instead
+        // of a blown-up crop, so users can tell what the spine looks like.
+        <View style={[styles.spineOptionImage, styles.spineOptionImageFrame, { backgroundColor: colors.backgroundDark }]}>
+          <Image source={{ uri: resolvedImageUrl }} style={styles.spineOptionImageInner} contentFit="contain" />
+        </View>
       ) : (
         <View style={[styles.spineOptionImage, styles.spineOptionPlaceholder, { backgroundColor }]}>
           <Text style={[styles.spineOptionTitle, { color: colors.textOnDark }]} numberOfLines={3}>
@@ -101,174 +105,6 @@ function AlternateSpineOption({
       )}
       <Text style={[styles.spineOptionLabel, { color: colors.textSecondary }]} numberOfLines={1}>
         {option.uploader_name ? `By ${option.uploader_name}` : 'Use this spine'}
-      </Text>
-    </Pressable>
-  );
-}
-
-const GRID_COLUMNS = 3;
-const GRID_SPACING = Spacing.sm;
-const GRID_ITEM_WIDTH = (SCREEN_WIDTH - Spacing.md * 2 - GRID_SPACING * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
-
-function CommunitySpineBrowserModal({
-  visible,
-  book,
-  isUpdatingSpine,
-  onSelect,
-  onClose,
-}: {
-  visible: boolean;
-  book: Book | null;
-  isUpdatingSpine: boolean;
-  onSelect: (option: CommunityBookSpine) => void;
-  onClose: () => void;
-}) {
-  const { colors } = useTheme();
-  const [spines, setSpines] = useState<CommunityBookSpine[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    if (!visible || !book) {
-      setSpines([]);
-      return;
-    }
-
-    let cancelled = false;
-    setIsLoading(true);
-
-    booksService
-      .getAlternativeSpines(book)
-      .then((result) => {
-        if (!cancelled) setSpines(result.data || []);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [visible, book]);
-
-  const handleSelect = useCallback(
-    (option: CommunityBookSpine) => {
-      Alert.alert(
-        'Use This Spine?',
-        `Replace your current spine with this one${option.uploader_name ? ` uploaded by ${option.uploader_name}` : ''}?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Use This Spine',
-            onPress: () => onSelect(option),
-          },
-        ]
-      );
-    },
-    [onSelect]
-  );
-
-  const renderItem = useCallback(
-    ({ item }: { item: CommunityBookSpine }) => (
-      <CommunitySpineGridItem
-        option={item}
-        isUpdating={isUpdatingSpine}
-        onSelect={handleSelect}
-      />
-    ),
-    [isUpdatingSpine, handleSelect]
-  );
-
-  const keyExtractor = useCallback((item: CommunityBookSpine) => item.id, []);
-
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={[communityStyles.container, { backgroundColor: colors.background }]}>
-        <View style={[communityStyles.header, { borderBottomColor: colors.inputBorder }]}>
-          <Text style={[communityStyles.headerTitle, { color: colors.text }]}>Community Spines</Text>
-          <Pressable onPress={onClose} style={communityStyles.closeButton} hitSlop={8}>
-            <Ionicons name="close" size={24} color={colors.text} />
-          </Pressable>
-        </View>
-
-        <Text style={[communityStyles.subtitle, { color: colors.textSecondary }]}>
-          {book ? `Spine images uploaded by the community for "${book.title}"` : ''}
-        </Text>
-
-        {isLoading ? (
-          <View style={communityStyles.centerContent}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[communityStyles.loadingText, { color: colors.textSecondary }]}>
-              Loading community spines...
-            </Text>
-          </View>
-        ) : spines.length === 0 ? (
-          <View style={communityStyles.centerContent}>
-            <Ionicons name="images-outline" size={48} color={colors.textLight} />
-            <Text style={[communityStyles.emptyTitle, { color: colors.text }]}>No Community Spines</Text>
-            <Text style={[communityStyles.emptyText, { color: colors.textSecondary }]}>
-              No one has uploaded an alternative spine image for this book yet. Be the first by scanning or uploading one!
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={spines}
-            renderItem={renderItem}
-            keyExtractor={keyExtractor}
-            numColumns={GRID_COLUMNS}
-            columnWrapperStyle={communityStyles.gridRow}
-            contentContainerStyle={communityStyles.gridContent}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
-      </View>
-    </Modal>
-  );
-}
-
-function CommunitySpineGridItem({
-  option,
-  isUpdating,
-  onSelect,
-}: {
-  option: CommunityBookSpine;
-  isUpdating: boolean;
-  onSelect: (option: CommunityBookSpine) => void;
-}) {
-  const { colors } = useTheme();
-  const resolvedImageUrl = useSpineImageUrl(option.image_url);
-  const backgroundColor = getBookColor(option.title);
-
-  return (
-    <Pressable
-      style={[
-        communityStyles.gridItem,
-        {
-          width: GRID_ITEM_WIDTH,
-          borderColor: colors.inputBorder,
-          backgroundColor: colors.card,
-        },
-      ]}
-      onPress={() => onSelect(option)}
-      disabled={isUpdating}
-    >
-      {resolvedImageUrl ? (
-        <Image
-          source={{ uri: resolvedImageUrl }}
-          style={communityStyles.gridItemImage}
-          contentFit="cover"
-        />
-      ) : (
-        <View style={[communityStyles.gridItemImage, communityStyles.gridItemPlaceholder, { backgroundColor }]}>
-          <Text style={[styles.spineOptionTitle, { color: colors.textOnDark }]} numberOfLines={3}>
-            {option.title}
-          </Text>
-          <Text style={[styles.spineOptionAuthor, { color: colors.textOnDarkMuted }]} numberOfLines={2}>
-            {option.author}
-          </Text>
-        </View>
-      )}
-      <Text style={[communityStyles.gridItemLabel, { color: colors.textSecondary }]} numberOfLines={1}>
-        {option.uploader_name ? `By ${option.uploader_name}` : 'Community'}
       </Text>
     </Pressable>
   );
@@ -588,9 +424,10 @@ export function BookDetailModal({
 
     setIsUpdatingSpine(true);
     try {
-      const result = await booksService.updateBook(book.id, {
-        image_url: option.image_url,
-      });
+      // Community books are owned by their uploader, so a plain image_url
+      // update is silently blocked by RLS. This re-points the user's shelf
+      // item at the book row that carries the selected spine instead.
+      const result = await booksService.setBookSpineFromCommunity(book.id, option);
 
       if (result.data) {
         onBookUpdated?.(result.data);
@@ -1271,6 +1108,13 @@ const styles = StyleSheet.create({
     height: 144,
     borderRadius: BorderRadius.sm,
   },
+  spineOptionImageFrame: {
+    overflow: 'hidden',
+  },
+  spineOptionImageInner: {
+    width: '100%',
+    height: '100%',
+  },
   spineOptionPlaceholder: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -1302,81 +1146,6 @@ const styles = StyleSheet.create({
   },
   editButton: {
     flex: 1,
-  },
-});
-
-const communityStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-  },
-  headerTitle: {
-    fontSize: Typography.sizes.lg,
-    fontWeight: Typography.weights.semibold,
-  },
-  closeButton: {
-    padding: Spacing.xs,
-  },
-  subtitle: {
-    fontSize: Typography.sizes.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    lineHeight: 20,
-  },
-  centerContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.xl,
-    gap: Spacing.md,
-  },
-  loadingText: {
-    fontSize: Typography.sizes.sm,
-    marginTop: Spacing.sm,
-  },
-  emptyTitle: {
-    fontSize: Typography.sizes.lg,
-    fontWeight: Typography.weights.semibold,
-  },
-  emptyText: {
-    fontSize: Typography.sizes.sm,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  gridContent: {
-    padding: Spacing.md,
-  },
-  gridRow: {
-    gap: GRID_SPACING,
-    marginBottom: GRID_SPACING,
-  },
-  gridItem: {
-    borderWidth: 1,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.xs,
-    gap: Spacing.xs,
-  },
-  gridItemImage: {
-    width: '100%',
-    aspectRatio: 1 / 2.5,
-    borderRadius: BorderRadius.sm,
-  },
-  gridItemPlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 8,
-  },
-  gridItemLabel: {
-    fontSize: Typography.sizes.xs,
-    textAlign: 'center',
   },
 });
 

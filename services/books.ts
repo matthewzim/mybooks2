@@ -594,6 +594,83 @@ class BooksService {
   }
 
   /**
+   * Apply a community spine image to a user's bookshelf item.
+   *
+   * The books table's RLS policy only lets the original uploader update a
+   * row, so writing the community image_url onto a shared book silently
+   * updates zero rows (no error, no change on the shelf). Instead:
+   *   - if the user owns the underlying book row, update its image in place
+   *   - otherwise re-point the bookshelf_item at the community book row that
+   *     already carries the selected spine (items are always user-owned)
+   *
+   * @param itemId - BookshelfItem ID on the user's shelf
+   * @param option - Community spine option (a books row with an image)
+   * @returns Updated book (combined view)
+   */
+  async setBookSpineFromCommunity(
+    itemId: string,
+    option: Pick<CommunityBookSpine, 'id' | 'image_url'>
+  ): Promise<ApiResponse<Book>> {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const userId = session.session?.user?.id;
+      if (!userId) throw new Error('Not authenticated');
+      if (!option.image_url) throw new Error('The selected spine has no image');
+
+      const { data, error: itemError } = await supabase
+        .from(TABLES.BOOKSHELF_ITEMS)
+        .select('book_id, book:books(uploaded_by_user_id)')
+        .eq('id', itemId)
+        .single();
+
+      if (itemError) throw itemError;
+      const itemRow = data as unknown as {
+        book_id: string;
+        book: { uploaded_by_user_id: string } | null;
+      };
+
+      // Own book row: update the image in place so any edits the user made
+      // to their copy (title, ISBN, review target) are preserved.
+      if (itemRow.book?.uploaded_by_user_id === userId && itemRow.book_id !== option.id) {
+        const { data: updatedBooks, error: bookError } = await supabase
+          .from(TABLES.BOOKS)
+          .update({
+            image_url: option.image_url,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', itemRow.book_id)
+          .select('id');
+
+        if (!bookError && updatedBooks && updatedBooks.length > 0) {
+          return this.getBookById(itemId);
+        }
+        // RLS blocked the update — fall through to re-pointing the item.
+      }
+
+      const { data: updatedItems, error: updateError } = await supabase
+        .from(TABLES.BOOKSHELF_ITEMS)
+        .update({
+          book_id: option.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', itemId)
+        .select('id');
+
+      if (updateError) throw updateError;
+      if (!updatedItems || updatedItems.length === 0) {
+        throw new Error('Could not update the book spine. Please try again.');
+      }
+
+      return this.getBookById(itemId);
+    } catch (error) {
+      return {
+        data: null,
+        error: { message: handleSupabaseError(error) },
+      };
+    }
+  }
+
+  /**
    * Stack a book on top of another book
    *
    * @param bookId - BookshelfItem ID of the book to stack
