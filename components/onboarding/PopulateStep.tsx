@@ -1,7 +1,7 @@
 /**
  * PopulateStep - Add books to shelf
  *
- * Offers: Search, Generate sample shelf, or Skip.
+ * Offers: Search, Scan a real shelf, Generate sample shelf, or Skip.
  * Tappable option cards instead of forms.
  * (Goodreads CSV import lives on the Settings page.)
  */
@@ -24,6 +24,7 @@ import { Spacing, BorderRadius, Typography, getFontFamily } from '@/constants/th
 import { useTheme } from '@/contexts/ThemeContext';
 import { useOnboarding, SAMPLE_BOOKS, type PreviewBook } from './OnboardingContext';
 import { LivePreview } from './LivePreview';
+import { ScanShelfPanel } from './ScanShelfPanel';
 import { BookSpine as BookSpineConstants } from '@/constants/theme';
 import { supabase, TABLES } from '@/services/supabase';
 import { getCoverImageUrl, getSpineImageUrl } from '@/services/storage';
@@ -337,6 +338,7 @@ export function PopulateStep({ onNext, onBack }: { onNext: () => void; onBack: (
   const { colors } = useTheme();
   const { addBooks, books } = useOnboarding();
   const [showSearch, setShowSearch] = useState(false);
+  const [showScan, setShowScan] = useState(false);
   const [isGeneratingSample, setIsGeneratingSample] = useState(false);
 
   const handleGenerateSample = useCallback(async () => {
@@ -408,6 +410,8 @@ export function PopulateStep({ onNext, onBack }: { onNext: () => void; onBack: (
 
       {showSearch ? (
         <SearchPanel onClose={() => setShowSearch(false)} />
+      ) : showScan ? (
+        <ScanShelfPanel onClose={() => setShowScan(false)} />
       ) : (
         <View style={styles.optionsList}>
           <OptionCard
@@ -415,6 +419,12 @@ export function PopulateStep({ onNext, onBack }: { onNext: () => void; onBack: (
             label="Search for books"
             description="Find books by title or author"
             onPress={() => setShowSearch(true)}
+          />
+          <OptionCard
+            icon="camera"
+            label="Scan your shelf"
+            description="Photograph a real bookshelf to add its books"
+            onPress={() => setShowScan(true)}
           />
           <OptionCard
             icon="sparkles"
