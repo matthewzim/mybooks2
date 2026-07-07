@@ -149,8 +149,8 @@ export default function BookshelfDetailScreen() {
         onPress: () => router.push({ pathname: '/scan', params: { shelfId: id } }),
       },
       {
-        text: 'Add Manually',
-        onPress: () => router.push({ pathname: '/add-book', params: { shelfId: id } }),
+        text: 'Scan Shelf',
+        onPress: () => router.push({ pathname: '/shelf-scan', params: { shelfId: id } }),
       },
       {
         text: 'Browse Community',

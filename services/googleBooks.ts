@@ -43,6 +43,7 @@ interface GoogleBooksVolume {
   volumeInfo: {
     title?: string;
     authors?: string[];
+    publishedDate?: string;
     imageLinks?: {
       thumbnail?: string;
       smallThumbnail?: string;
@@ -179,7 +180,8 @@ class GoogleBooksService {
     if (!bypassCooldown && Date.now() < cooldownUntil) return null;
 
     const keyParam = GOOGLE_BOOKS_API_KEY ? `&key=${GOOGLE_BOOKS_API_KEY}` : '';
-    const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=3${keyParam}`;
+    // Fetch several editions so the newest cover can be preferred below.
+    const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=10${keyParam}`;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       // Throttle: ensure a minimum gap between requests
@@ -214,16 +216,26 @@ class GoogleBooksService {
       const data: GoogleBooksResponse = await response.json();
       if (!data.items || data.items.length === 0) return null;
 
+      // The API can't be asked for "the newest cover" directly, so among the
+      // returned editions prefer the most recently published one that has an
+      // image — this avoids picking a decades-old edition's cover just
+      // because it ranks first by relevance.
+      let bestUrl: string | null = null;
+      let bestYear = -1;
       for (const item of data.items) {
         const imageLinks = item.volumeInfo?.imageLinks;
-        if (imageLinks?.thumbnail || imageLinks?.smallThumbnail) {
-          let imageUrl = imageLinks.thumbnail || imageLinks.smallThumbnail || '';
-          imageUrl = imageUrl.replace('http://', 'https://');
-          return imageUrl;
+        const rawUrl = imageLinks?.thumbnail || imageLinks?.smallThumbnail;
+        if (!rawUrl) continue;
+
+        const year =
+          parseInt((item.volumeInfo?.publishedDate || '').slice(0, 4), 10) || 0;
+        if (year > bestYear) {
+          bestYear = year;
+          bestUrl = rawUrl.replace('http://', 'https://');
         }
       }
 
-      return null;
+      return bestUrl;
     }
 
     return null;

@@ -12,6 +12,7 @@ export { authService } from './auth';
 export { accountService } from './account';
 export { bookshelvesService } from './bookshelves';
 export { booksService } from './books';
+export { shelfScanService } from './shelfScan';
 export { storageService } from './storage';
 export { moderationService, REPORT_REASONS } from './moderation';
 export {

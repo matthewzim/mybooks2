@@ -145,6 +145,15 @@ function RootLayoutContent() {
           }}
         />
 
+        {/* Shelf photo scan modal */}
+        <Stack.Screen
+          name="shelf-scan"
+          options={{
+            title: 'Scan Shelf',
+            presentation: 'modal',
+          }}
+        />
+
         {/* Create bookshelf modal */}
         <Stack.Screen
           name="create-bookshelf"
