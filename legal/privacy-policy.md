@@ -1,10 +1,10 @@
-# Privacy Policy — Virtual Library
+# Privacy Policy — TinyShelves
 
 **Effective date:** July 6, 2026
 **Developer:** Matthew Zimmerman ("we," "us," or "the developer")
 **Contact:** matthew.zimmerman7@gmail.com
 
-This Privacy Policy explains what information the Virtual Library iOS app
+This Privacy Policy explains what information the TinyShelves iOS app
 ("the App") collects, how it is used, and the choices you have. The short
 version: **we never ask for your name, email address, or any other contact
 information; accounts are anonymous; we show no ads and use no analytics or
@@ -77,7 +77,7 @@ or websites.
 
 ## 5. Subscriptions
 
-Virtual Library Pro is an optional auto-renewable subscription billed
+TinyShelves Pro is an optional auto-renewable subscription billed
 through your Apple account. Purchases, renewals, refunds, and cancellations
 are all handled by Apple. We store only whether your anonymous account
 currently has an active entitlement.

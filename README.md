@@ -1,4 +1,4 @@
-# Virtual Library App
+# TinyShelves
 
 A React Native + Expo iOS app for creating and managing virtual bookshelves. Users can organize their book collections, scan book spines, browse community uploads, and display their favorite shelf on their home screen with an iOS widget.
 
@@ -85,8 +85,8 @@ A React Native + Expo iOS app for creating and managing virtual bookshelves. Use
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/virtual-library-app.git
-   cd virtual-library-app
+   git clone https://github.com/yourusername/tinyshelves.git
+   cd tinyshelves
    ```
 
 2. **Install dependencies**
@@ -262,7 +262,7 @@ Go to [revenuecat.com](https://www.revenuecat.com) and create a project with an 
 In the RevenueCat dashboard:
 
 1. Create `monthly` and `yearly` subscription products (linked to App Store Connect).
-2. Create an entitlement named **`Virtual Library Pro`** (must match `ENTITLEMENT_ID` in `services/revenuecat.ts`).
+2. Create an entitlement named **`Virtual Library Pro`** (must match `ENTITLEMENT_ID` in `services/revenuecat.ts` — this identifier predates the rename to TinyShelves and is internal-only; if you create a fresh entitlement with a different name, update the constant to match).
 3. Attach both products to the entitlement and add them to the default offering.
 4. Configure a Paywall and the Customer Center for the default offering (the app renders both with `react-native-purchases-ui`).
 
@@ -302,7 +302,7 @@ The widget is configured in `app.json` under:
 1. Run the iOS build (`npm run ios`) and launch the app once.
 2. Go to the iOS home screen in Simulator.
 3. Long-press home screen → tap **+** (upper-left).
-4. Search for **Virtual Library** (app name) or **My Bookshelf** (widget display name).
+4. Search for **TinyShelves** (app name) or **My Bookshelf** (widget display name).
 
 ### 4. Troubleshooting if widget does not appear
 
@@ -395,7 +395,7 @@ done from your accounts. Work through these in order.
 ### 1. One-time project setup
 
 - [ ] **Apple Developer Program**: enroll at https://developer.apple.com ($99/yr) if you haven't.
-- [ ] **Bundle identifier**: the app is configured as `com.matthewzimmerman.virtuallibrary` in `app.json`. If you want a different ID, change it now — it cannot be changed after your first App Store Connect upload. Keep the widget (`...virtuallibrary.widgets`) and app group (`group.com.matthewzimmerman.virtuallibrary`) suffixes in sync.
+- [ ] **Bundle identifier**: the app is configured as `com.matthewzimmerman.tinyshelves` in `app.json`. If you want a different ID, change it now — it cannot be changed after your first App Store Connect upload. Keep the widget (`...tinyshelves.widgets`) and app group (`group.com.matthewzimmerman.tinyshelves`) suffixes in sync.
 - [ ] **Link the EAS project**: run `eas init` (creates the project and writes `extra.eas.projectId` into `app.json`). If you want over-the-air JS updates, also run `eas update:configure` — it restores the `updates.url` (the previous placeholder URL was removed because it pointed at a nonexistent project).
 - [ ] **App icon**: `assets/images/icon.png` is a generated placeholder (books on a shelf). It's submission-ready, but replace it with real branding when you have it — same path, 1024×1024, no transparency.
 
@@ -447,4 +447,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-For issues and feature requests, please [open an issue](https://github.com/yourusername/virtual-library-app/issues).
+For issues and feature requests, please [open an issue](https://github.com/yourusername/tinyshelves/issues).

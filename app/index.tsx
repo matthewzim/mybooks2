@@ -40,7 +40,7 @@ export default function Index() {
   if (isLoading || !onboardingChecked || (isRetryingAuth && !isAuthenticated)) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <Text style={[styles.appName, { color: colors.text }]}>Virtual Library</Text>
+        <Text style={[styles.appName, { color: colors.text }]}>TinyShelves</Text>
       </View>
     );
   }
