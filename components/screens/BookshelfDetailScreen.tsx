@@ -145,7 +145,7 @@ export default function BookshelfDetailScreen() {
     Alert.alert('Add Book', 'How would you like to add a book?', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Scan Book Spine',
+        text: 'Scan Book',
         onPress: () => router.push({ pathname: '/scan', params: { shelfId: id } }),
       },
       {

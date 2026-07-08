@@ -38,6 +38,10 @@ interface CameraScannerProps {
   onCapture: (imageUri: string) => Promise<void>;
   onCancel: () => void;
   isUploading?: boolean;
+  // 'camera' shows the live camera preview (default). 'gallery' skips the
+  // camera and opens the photo library immediately, for the "Upload Existing
+  // Photo" path; canceling the picker returns to the caller via onCancel.
+  initialMode?: 'camera' | 'gallery';
 }
 
 // Guide frame shown over the camera preview. The captured photo is cropped
@@ -52,6 +56,7 @@ export function CameraScanner({
   onCapture,
   onCancel,
   isUploading = false,
+  initialMode = 'camera',
 }: CameraScannerProps) {
   const { colors } = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
@@ -61,13 +66,30 @@ export function CameraScanner({
   const [cropRect, setCropRect] = useState<CropRect | null>(null);
   const [previewSize, setPreviewSize] = useState({ width: 0, height: 0 });
   const cameraRef = useRef<CameraView>(null);
+  const galleryLaunchedRef = useRef(false);
 
-  // Request permissions on mount
+  // Request camera permission on mount, except in gallery mode which never
+  // shows the camera.
   useEffect(() => {
-    if (!permission?.granted) {
+    if (initialMode !== 'gallery' && !permission?.granted) {
       requestPermission();
     }
-  }, [permission, requestPermission]);
+  }, [permission, requestPermission, initialMode]);
+
+  // In gallery mode, open the photo library right away. If the user cancels
+  // the picker without choosing a photo, hand control back to the caller.
+  useEffect(() => {
+    if (initialMode === 'gallery' && !galleryLaunchedRef.current) {
+      galleryLaunchedRef.current = true;
+      (async () => {
+        const picked = await pickFromGallery();
+        if (!picked) {
+          onCancel();
+        }
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMode]);
 
   /**
    * Crop a captured photo to the on-screen guide frame.
@@ -182,9 +204,9 @@ export function CameraScanner({
   };
 
   /**
-   * Pick an image from the gallery
+   * Pick an image from the gallery. Returns true if a photo was selected.
    */
-  const pickFromGallery = async () => {
+  const pickFromGallery = async (): Promise<boolean> => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
@@ -197,10 +219,13 @@ export function CameraScanner({
         // whole and let the crop step do the positioning
         setCropRect(null);
         setRawCapturedImage(result.assets[0].uri);
+        return true;
       }
+      return false;
     } catch (error) {
       console.error('Failed to pick image:', error);
       Alert.alert('Error', 'Failed to pick image. Please try again.');
+      return false;
     }
   };
 
@@ -252,8 +277,23 @@ export function CameraScanner({
     setFacing((current) => (current === 'back' ? 'front' : 'back'));
   };
 
-  // Permission not yet determined
-  if (!permission) {
+  // Cropping mode - fine-tune corners directly on the captured photo.
+  // Checked before the camera-permission screens so the gallery-upload path
+  // (which never touches the camera) still reaches the cropper.
+  if (rawCapturedImage && !croppedImage) {
+    return (
+      <SpineCropper
+        imageUri={rawCapturedImage}
+        initialCrop={cropRect ?? undefined}
+        onCropComplete={handleCropComplete}
+        onCancel={handleCropCancel}
+      />
+    );
+  }
+
+  // Gallery mode with no photo yet: the picker is open on top, so just show a
+  // neutral background instead of the camera UI or permission screens.
+  if (initialMode === 'gallery' && !croppedImage) {
     return (
       <View style={[styles.container, { backgroundColor: colors.primary }]}>
         <ActivityIndicator size="large" color={colors.accent} />
@@ -261,8 +301,17 @@ export function CameraScanner({
     );
   }
 
-  // Permission denied
-  if (!permission.granted) {
+  // Permission not yet determined (camera mode only)
+  if (initialMode !== 'gallery' && !permission) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.primary }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
+      </View>
+    );
+  }
+
+  // Permission denied (camera mode only)
+  if (initialMode !== 'gallery' && !permission?.granted) {
     return (
       <View style={[styles.container, { backgroundColor: colors.primary }]}>
         <View style={styles.permissionContainer}>
@@ -281,18 +330,6 @@ export function CameraScanner({
           </Pressable>
         </View>
       </View>
-    );
-  }
-
-  // Cropping mode - fine-tune corners directly on the captured photo
-  if (rawCapturedImage && !croppedImage) {
-    return (
-      <SpineCropper
-        imageUri={rawCapturedImage}
-        initialCrop={cropRect ?? undefined}
-        onCropComplete={handleCropComplete}
-        onCancel={handleCropCancel}
-      />
     );
   }
 
