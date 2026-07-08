@@ -1,11 +1,11 @@
-# Terms of Use — Virtual Library
+# Terms of Use — TinyShelves
 
 **Effective date:** July 6, 2026
 **Developer:** Matthew Zimmerman ("we," "us," or "the developer")
 **Contact:** matthew.zimmerman7@gmail.com
 
 These Terms of Use ("Terms") are an agreement between you and the developer
-of the Virtual Library iOS app ("the App"). By downloading or using the
+of the TinyShelves iOS app ("the App"). By downloading or using the
 App, you agree to these Terms. If you do not agree, do not use the App.
 These Terms are an agreement between you and the developer only — not with
 Apple Inc. ("Apple").
@@ -85,7 +85,7 @@ terms. We make no warranty as to their accuracy.
 
 ## 5. Subscriptions
 
-Virtual Library Pro is an optional auto-renewable subscription (monthly or
+TinyShelves Pro is an optional auto-renewable subscription (monthly or
 yearly) purchased through Apple In-App Purchase.
 
 - Payment is charged to your Apple account at confirmation of purchase.

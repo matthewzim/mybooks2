@@ -1,8 +1,8 @@
-# Virtual Library — Comprehensive Project Prompt
+# TinyShelves — Comprehensive Project Prompt
 
 ## Overview
 
-Build **Virtual Library**, a native iOS application in Swift for creating, managing, and sharing personal book collections. Users organize books into customizable virtual bookshelves, scan book spines with their camera, browse community-shared libraries, write reviews, and display their favorite shelf on their iOS home screen via a WidgetKit widget. The app uses anonymous authentication (no email required), Supabase as the backend, StoreKit 2 for premium subscriptions, and supports light/dark theming throughout.
+Build **TinyShelves**, a native iOS application in Swift for creating, managing, and sharing personal book collections. Users organize books into customizable virtual bookshelves, scan book spines with their camera, browse community-shared libraries, write reviews, and display their favorite shelf on their iOS home screen via a WidgetKit widget. The app uses anonymous authentication (no email required), Supabase as the backend, StoreKit 2 for premium subscriptions, and supports light/dark theming throughout.
 
 ---
 
@@ -333,7 +333,7 @@ Organize all Supabase/API calls into dedicated service classes or actors:
 ### Xcode Project Setup
 - Create an Xcode project with a SwiftUI App lifecycle (`@main App` struct).
 - Add a Widget Extension target for the WidgetKit home screen widget.
-- Configure an App Group (e.g., `group.com.yourcompany.virtuallibrary`) shared between the main app and widget extension.
+- Configure an App Group (e.g., `group.com.yourcompany.tinyshelves`) shared between the main app and widget extension.
 - Add `NSCameraUsageDescription` and `NSPhotoLibraryUsageDescription` to `Info.plist`.
 - Configure StoreKit subscription product IDs in App Store Connect and add a StoreKit configuration file for testing.
 

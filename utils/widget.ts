@@ -14,9 +14,9 @@ import { Platform, Settings } from 'react-native';
 import type { WidgetData, WidgetBookshelf, Bookshelf, Book } from '@/types';
 import { getSpineWidgetUrls } from '@/services/storage';
 
-const WIDGET_DATA_KEY = '@virtual_library_widget_data';
-const WIDGET_SELECTED_SHELF_KEY = '@virtual_library_widget_shelf';
-const WIDGET_PREMIUM_KEY = '@virtual_library_widget_premium';
+const WIDGET_DATA_KEY = '@tinyshelves_widget_data';
+const WIDGET_SELECTED_SHELF_KEY = '@tinyshelves_widget_shelf';
+const WIDGET_PREMIUM_KEY = '@tinyshelves_widget_premium';
 
 /**
  * Lazily import the widget so Android/web bundles don't crash.
@@ -316,7 +316,7 @@ class WidgetManager {
     }
   }
 
-  // Widget taps deep-link via widgetURL (virtuallibrary://bookshelf?id=...),
+  // Widget taps deep-link via widgetURL (tinyshelves://bookshelf?id=...),
   // which expo-router resolves to the bookshelf detail screen automatically —
   // no JS-side URL parsing is needed.
 }

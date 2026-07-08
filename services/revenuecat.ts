@@ -42,7 +42,14 @@ const REVENUECAT_API_KEY =
   process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ||
   'test_JICfTmnFPOhNQTrUxXCLhXNIqTO';
 
-/** The entitlement identifier configured in RevenueCat dashboard */
+/**
+ * The entitlement identifier configured in RevenueCat dashboard.
+ *
+ * NOTE: this predates the app's rename to TinyShelves. RevenueCat entitlement
+ * identifiers are internal (never shown to users) and cannot be renamed in the
+ * dashboard, so this stays 'Virtual Library Pro' unless a new entitlement is
+ * created in RevenueCat and this constant is updated to match.
+ */
 export const ENTITLEMENT_ID = 'Virtual Library Pro';
 
 /** Product identifiers matching RevenueCat dashboard */

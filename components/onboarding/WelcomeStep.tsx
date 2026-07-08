@@ -161,7 +161,7 @@ export function WelcomeStep() {
 
         <View style={styles.textContainer}>
           <Text style={[styles.eyebrow, { color: colors.primary }]}>
-            VIRTUAL LIBRARY
+            TINYSHELVES
           </Text>
           <Text style={[styles.title, { color: colors.text }]}>
             Build your dream shelf{'\n'}in thirty seconds

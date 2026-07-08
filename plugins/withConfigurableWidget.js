@@ -220,11 +220,11 @@ struct BookshelfWidgetView: View {
   }
 
   /// Deep link into the selected shelf when the widget is tapped.
-  /// expo-router resolves virtuallibrary://bookshelf?id=<id> to the
+  /// expo-router resolves tinyshelves://bookshelf?id=<id> to the
   /// bookshelf detail screen automatically.
   private var deepLinkURL: URL? {
     guard let shelfId = entry.bookshelfId,
-          var components = URLComponents(string: "virtuallibrary://bookshelf") else { return nil }
+          var components = URLComponents(string: "tinyshelves://bookshelf") else { return nil }
     components.queryItems = [URLQueryItem(name: "id", value: shelfId)]
     return components.url
   }
@@ -826,7 +826,7 @@ function readWidgetMeta(config) {
     "systemLarge",
   ]).join(", .");
   const groupIdentifier =
-    pluginOpts.groupIdentifier || "group.com.matthewzimmerman.virtuallibrary";
+    pluginOpts.groupIdentifier || "group.com.matthewzimmerman.tinyshelves";
   return { displayName, description, families, groupIdentifier };
 }
 

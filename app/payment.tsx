@@ -75,7 +75,7 @@ export default function PaymentScreen() {
             </View>
             <Text style={styles.premiumTitle}>You're a Premium Member!</Text>
             <Text style={styles.premiumDescription}>
-              Thank you for supporting Virtual Library. You have access to all
+              Thank you for supporting TinyShelves. You have access to all
               premium features.
             </Text>
 

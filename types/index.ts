@@ -1,5 +1,5 @@
 /**
- * TypeScript type definitions for the Virtual Library App
+ * TypeScript type definitions for the TinyShelves app
  * These types match the Supabase database schema and are used throughout the app
  */
 

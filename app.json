@@ -1,18 +1,18 @@
 {
   "expo": {
-    "name": "Virtual Library",
-    "slug": "virtual-library-app",
+    "name": "TinyShelves",
+    "slug": "tinyshelves",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "virtuallibrary",
+    "scheme": "tinyshelves",
     "userInterfaceStyle": "automatic",
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.matthewzimmerman.virtuallibrary",
+      "bundleIdentifier": "com.matthewzimmerman.tinyshelves",
       "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to scan book spines and add them to your library.",
@@ -24,12 +24,12 @@
       },
       "entitlements": {
         "com.apple.security.application-groups": [
-          "group.com.matthewzimmerman.virtuallibrary"
+          "group.com.matthewzimmerman.tinyshelves"
         ]
       }
     },
     "android": {
-      "package": "com.matthewzimmerman.virtuallibrary",
+      "package": "com.matthewzimmerman.tinyshelves",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
@@ -69,8 +69,8 @@
       [
         "expo-widgets",
         {
-          "bundleIdentifier": "com.matthewzimmerman.virtuallibrary.widgets",
-          "groupIdentifier": "group.com.matthewzimmerman.virtuallibrary",
+          "bundleIdentifier": "com.matthewzimmerman.tinyshelves.widgets",
+          "groupIdentifier": "group.com.matthewzimmerman.tinyshelves",
           "widgets": [
             {
               "name": "BookshelfWidget",
@@ -89,13 +89,13 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Virtual Library to access your camera to scan book spines."
+          "cameraPermission": "Allow TinyShelves to access your camera to scan book spines."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Virtual Library to access your photos to upload book spine images."
+          "photosPermission": "Allow TinyShelves to access your photos to upload book spine images."
         }
       ],
       "./plugins/withAllowHTTPDevServer"
