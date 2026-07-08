@@ -16,6 +16,7 @@
  * const result = await shelfScanService.addMatchesToShelf(matches, shelfId);
  */
 
+import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase, TABLES, handleSupabaseError } from './supabase';
 import { booksService } from './books';
 import { getSpineImageUrl } from './storage';
@@ -26,6 +27,14 @@ const GOOGLE_VISION_API_KEY =
   process.env.EXPO_PUBLIC_GOOGLE_CLOUD_VISION_API_KEY || '';
 const GOOGLE_BOOKS_API = 'https://www.googleapis.com/books/v1/volumes';
 const GOOGLE_BOOKS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY || '';
+
+/**
+ * Longest edge (px) we downscale a shelf photo to before OCR. Full-resolution
+ * phone photos base64-encode to several megabytes, which the Vision API
+ * rejects with an HTTP 400 ("payload size exceeds the limit"). ~1600px keeps
+ * spine text legible while cutting the request well under the limit.
+ */
+const MAX_OCR_IMAGE_DIMENSION = 1600;
 
 /** Minimum delay between Google Books lookups while matching a whole shelf. */
 const MATCH_REQUEST_GAP_MS = 350;
@@ -104,6 +113,52 @@ class ShelfScanService {
   }
 
   /**
+   * Downscale and re-encode a picked photo to a JPEG that is safely under the
+   * Vision API's request-size limit, returning its base64 content.
+   *
+   * Full-resolution photos (or large PNGs) routinely exceed the limit and make
+   * Vision reject the request with HTTP 400. Resizing the longest edge down to
+   * {@link MAX_OCR_IMAGE_DIMENSION} and re-encoding as JPEG keeps the payload
+   * small while preserving enough detail to read spine text.
+   *
+   * @param uri - Local file URI of the picked/captured photo
+   * @param width - Original pixel width, so small photos are not upscaled
+   * @param height - Original pixel height, so small photos are not upscaled
+   * @returns Base64 (no data-URI prefix), or null if manipulation failed
+   */
+  async prepareImageForOcr(
+    uri: string,
+    width?: number,
+    height?: number
+  ): Promise<string | null> {
+    try {
+      const longestEdge = Math.max(width || 0, height || 0);
+      const isPortrait = (height || 0) > (width || 0);
+      // Only downscale when we know the photo is larger than the target;
+      // re-encode to JPEG regardless to shrink oversized PNGs/originals.
+      const actions: ImageManipulator.Action[] =
+        longestEdge > MAX_OCR_IMAGE_DIMENSION
+          ? [
+              {
+                resize: isPortrait
+                  ? { height: MAX_OCR_IMAGE_DIMENSION }
+                  : { width: MAX_OCR_IMAGE_DIMENSION },
+              },
+            ]
+          : [];
+
+      const result = await ImageManipulator.manipulateAsync(uri, actions, {
+        compress: 0.7,
+        format: ImageManipulator.SaveFormat.JPEG,
+        base64: true,
+      });
+      return result.base64 ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Run Google Cloud Vision OCR on a shelf photo and return candidate
    * spine texts, one per detected text block.
    *
@@ -137,9 +192,24 @@ class ShelfScanService {
       );
 
       if (!response.ok) {
+        // Surface the Vision API's own error message (e.g. an invalid key or an
+        // oversized payload) instead of a bare status code, so failures are
+        // diagnosable rather than a generic "HTTP 400".
+        let detail = '';
+        try {
+          const errorBody = await response.json();
+          const apiMessage = errorBody?.error?.message;
+          if (typeof apiMessage === 'string' && apiMessage) {
+            detail = ` ${apiMessage}`;
+          }
+        } catch {
+          // Non-JSON error body — fall back to the status code alone
+        }
         return {
           data: null,
-          error: { message: `Text recognition failed (HTTP ${response.status}).` },
+          error: {
+            message: `Text recognition failed (HTTP ${response.status}).${detail}`,
+          },
         };
       }
 

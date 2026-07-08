@@ -45,13 +45,20 @@ export default function ShelfScanScreen() {
 
   const isBusy = phase === 'detecting' || phase === 'matching' || phase === 'adding';
 
-  const handlePhotoPicked = (asset: ImagePicker.ImagePickerAsset) => {
+  const handlePhotoPicked = async (asset: ImagePicker.ImagePickerAsset) => {
     if (!asset.base64) {
       Alert.alert('Error', 'Could not read the selected photo. Please try again.');
       return;
     }
     setPhotoUri(asset.uri);
-    setPhotoBase64(asset.base64);
+    // Downscale before OCR so large photos don't get rejected with an HTTP 400;
+    // fall back to the raw base64 if manipulation fails for any reason.
+    const prepared = await shelfScanService.prepareImageForOcr(
+      asset.uri,
+      asset.width,
+      asset.height
+    );
+    setPhotoBase64(prepared ?? asset.base64);
     setMatches([]);
     setDeselectedKeys(new Set());
     setPhase('pick');
@@ -72,7 +79,7 @@ export default function ShelfScanScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        handlePhotoPicked(result.assets[0]);
+        await handlePhotoPicked(result.assets[0]);
       }
     } catch {
       Alert.alert('Error', 'Failed to take a photo. Please try again.');
@@ -88,7 +95,7 @@ export default function ShelfScanScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        handlePhotoPicked(result.assets[0]);
+        await handlePhotoPicked(result.assets[0]);
       }
     } catch {
       Alert.alert('Error', 'Failed to pick a photo. Please try again.');
