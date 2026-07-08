@@ -6,12 +6,13 @@
  *
  * Features:
  * - Displays captured image
- * - 4 draggable corner handles that stay locked into a rectangle: dragging a
- *   corner moves its two neighbors so opposite edges keep sharing an x/y, so
- *   the selection you see is exactly the region that gets cropped
+ * - 4 independently draggable corner handles forming an arbitrary
+ *   quadrilateral, so the selection can follow a spine photographed at an angle
  * - Visual crop boundary with darkened surroundings
  * - Defaults to a centered spine-shaped rectangle
- * - Applies crop with expo-image-manipulator
+ * - Applies a perspective (homography) warp so the quadrilateral is de-skewed
+ *   into an upright rectangle (expo-gl), falling back to a bounding-box crop
+ *   with expo-image-manipulator if the warp is unavailable
  */
 
 import React, { useState, useMemo, useCallback, useRef } from 'react';
@@ -36,18 +37,25 @@ import {
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import Svg, { Polygon, Circle, Line, Path } from 'react-native-svg';
+import { warpPerspective, WarpPoint } from '@/utils/perspectiveWarp';
 
 interface Point {
   x: number;
   y: number;
 }
 
-/** Crop rectangle normalized to 0..1 relative to the image dimensions */
+/**
+ * The chosen crop region, normalized to 0..1 relative to the image dimensions.
+ * `x/y/width/height` are the quad's bounding box (kept for compatibility and
+ * the fallback crop); `corners` are the four quad corners (TL, TR, BR, BL) so a
+ * later "Adjust Crop" can restore the exact quad the user drew.
+ */
 export interface CropRect {
   x: number;
   y: number;
   width: number;
   height: number;
+  corners?: Point[];
 }
 
 interface SpineCropperProps {
@@ -61,13 +69,6 @@ interface SpineCropperProps {
 const HANDLE_SIZE = 30;
 const HANDLE_HIT_SLOP = 20;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-// Corner order: 0 = top-left, 1 = top-right, 2 = bottom-right, 3 = bottom-left.
-// To keep the four corners forming a rectangle, dragging a corner also moves the
-// neighbor that shares its vertical edge (same x) and the neighbor that shares
-// its horizontal edge (same y).
-const X_NEIGHBOR = [3, 2, 1, 0];
-const Y_NEIGHBOR = [1, 0, 3, 2];
 
 // Zoom bubble configuration
 const ZOOM_BUBBLE_SIZE = 120;
@@ -125,34 +126,44 @@ export function SpineCropper({
 
       setDisplaySize({ width: displayWidth, height: displayHeight });
 
-      let left: number;
-      let top: number;
-      let right: number;
-      let bottom: number;
+      let initialCorners: Point[];
 
-      if (initialCrop) {
-        // Restore the previously chosen crop region
-        left = Math.max(0, initialCrop.x * displayWidth);
-        top = Math.max(0, initialCrop.y * displayHeight);
-        right = Math.min(displayWidth, (initialCrop.x + initialCrop.width) * displayWidth);
-        bottom = Math.min(displayHeight, (initialCrop.y + initialCrop.height) * displayHeight);
+      if (initialCrop?.corners && initialCrop.corners.length === 4) {
+        // Restore the exact quad the user drew last time.
+        initialCorners = initialCrop.corners.map((c) => ({
+          x: Math.max(0, Math.min(displayWidth, c.x * displayWidth)),
+          y: Math.max(0, Math.min(displayHeight, c.y * displayHeight)),
+        }));
       } else {
-        // Initialize crop region as centered vertical rectangle
-        // Typical book spine aspect ratio is about 1:3 to 1:4
-        const spineWidth = displayWidth * 0.3;
-        const spineHeight = displayHeight * 0.85;
-        left = (displayWidth - spineWidth) / 2;
-        top = (displayHeight - spineHeight) / 2;
-        right = left + spineWidth;
-        bottom = top + spineHeight;
-      }
+        let left: number;
+        let top: number;
+        let right: number;
+        let bottom: number;
 
-      const initialCorners: Point[] = [
-        { x: left, y: top }, // top-left
-        { x: right, y: top }, // top-right
-        { x: right, y: bottom }, // bottom-right
-        { x: left, y: bottom }, // bottom-left
-      ];
+        if (initialCrop) {
+          // Restore from a bounding-box-only crop region.
+          left = Math.max(0, initialCrop.x * displayWidth);
+          top = Math.max(0, initialCrop.y * displayHeight);
+          right = Math.min(displayWidth, (initialCrop.x + initialCrop.width) * displayWidth);
+          bottom = Math.min(displayHeight, (initialCrop.y + initialCrop.height) * displayHeight);
+        } else {
+          // Initialize crop region as centered vertical rectangle
+          // Typical book spine aspect ratio is about 1:3 to 1:4
+          const spineWidth = displayWidth * 0.3;
+          const spineHeight = displayHeight * 0.85;
+          left = (displayWidth - spineWidth) / 2;
+          top = (displayHeight - spineHeight) / 2;
+          right = left + spineWidth;
+          bottom = top + spineHeight;
+        }
+
+        initialCorners = [
+          { x: left, y: top }, // top-left
+          { x: right, y: top }, // top-right
+          { x: right, y: bottom }, // bottom-right
+          { x: left, y: bottom }, // bottom-left
+        ];
+      }
 
       setCorners(initialCorners);
       setIsInitialized(true);
@@ -162,10 +173,9 @@ export function SpineCropper({
   /**
    * Handle corner drag.
    *
-   * The dragged corner follows the finger; its two neighbors move with it so
-   * the four corners always stay a rectangle. Because the selection is already
-   * a rectangle, the applied crop (the bounding box in handleCrop) matches it
-   * exactly — every corner ends up where the user placed it.
+   * Each corner moves independently of the others, so the selection can be any
+   * quadrilateral. handleCrop then perspective-warps that quad into an upright
+   * rectangle, so every corner is honored exactly where the user placed it.
    */
   const createPanResponder = useCallback((cornerIndex: number) => {
     let initialCornerPosition: Point | null = null;
@@ -194,13 +204,7 @@ export function SpineCropper({
           const newCorners = [...prev];
           const newX = Math.max(0, Math.min(displaySize.width, initialX + gestureState.dx));
           const newY = Math.max(0, Math.min(displaySize.height, initialY + gestureState.dy));
-          // Move the dragged corner and drag its neighbors along so the
-          // selection stays a rectangle (see X_NEIGHBOR / Y_NEIGHBOR).
-          const xNeighbor = X_NEIGHBOR[cornerIndex];
-          const yNeighbor = Y_NEIGHBOR[cornerIndex];
           newCorners[cornerIndex] = { x: newX, y: newY };
-          newCorners[xNeighbor] = { ...newCorners[xNeighbor], x: newX };
-          newCorners[yNeighbor] = { ...newCorners[yNeighbor], y: newY };
           return newCorners;
         });
       },
@@ -217,37 +221,70 @@ export function SpineCropper({
   }, [createPanResponder, isInitialized]);
 
   /**
-   * Apply crop and return the cropped image
+   * Apply the crop.
+   *
+   * The four corners define an arbitrary quadrilateral. The preferred path
+   * perspective-warps that quad into an upright rectangle (so a spine shot at
+   * an angle is de-skewed); if the GL warp is unavailable it falls back to a
+   * plain bounding-box crop. Either way the quad corners are saved so a later
+   * "Adjust Crop" restores exactly what the user drew.
    */
   const handleCrop = async () => {
-    if (!imageSize.width || !imageSize.height) return;
+    if (!imageSize.width || !imageSize.height || !displaySize.width || !displaySize.height) {
+      return;
+    }
 
     setIsProcessing(true);
 
     try {
-      // Convert display coordinates to image coordinates
+      // Convert display coordinates to image pixel coordinates (TL, TR, BR, BL).
       const scaleX = imageSize.width / displaySize.width;
       const scaleY = imageSize.height / displaySize.height;
+      const imageCorners = corners.map((c) => ({
+        x: Math.max(0, Math.min(imageSize.width, c.x * scaleX)),
+        y: Math.max(0, Math.min(imageSize.height, c.y * scaleY)),
+      })) as [WarpPoint, WarpPoint, WarpPoint, WarpPoint];
 
-      // The corners are kept as a rectangle, so its bounding box is the
-      // rectangle itself — this crops to exactly what the user selected.
-      const xs = corners.map((c) => c.x * scaleX);
-      const ys = corners.map((c) => c.y * scaleY);
-
+      // Bounding box of the quad — used for the fallback crop and stored on the
+      // returned CropRect.
+      const xs = imageCorners.map((c) => c.x);
+      const ys = imageCorners.map((c) => c.y);
       const minX = Math.max(0, Math.floor(Math.min(...xs)));
       const maxX = Math.min(imageSize.width, Math.ceil(Math.max(...xs)));
       const minY = Math.max(0, Math.floor(Math.min(...ys)));
       const maxY = Math.min(imageSize.height, Math.ceil(Math.max(...ys)));
+      const boundWidth = maxX - minX;
+      const boundHeight = maxY - minY;
 
-      const cropWidth = maxX - minX;
-      const cropHeight = maxY - minY;
+      if (boundWidth < 1 || boundHeight < 1) return;
 
-      if (cropWidth < 1 || cropHeight < 1) {
-        setIsProcessing(false);
+      const cropRect: CropRect = {
+        x: minX / imageSize.width,
+        y: minY / imageSize.height,
+        width: boundWidth / imageSize.width,
+        height: boundHeight / imageSize.height,
+        // Normalized to the display (== image) box so it restores on re-adjust.
+        corners: corners.map((c) => ({
+          x: c.x / displaySize.width,
+          y: c.y / displaySize.height,
+        })),
+      };
+
+      // Preferred: perspective-warp the quad into an upright rectangle.
+      try {
+        const warpedUri = await warpPerspective({
+          imageUri,
+          imageWidth: imageSize.width,
+          imageHeight: imageSize.height,
+          corners: imageCorners,
+        });
+        onCropComplete(warpedUri, cropRect);
         return;
+      } catch (warpError) {
+        console.warn('Perspective warp failed; falling back to crop:', warpError);
       }
 
-      // Crop the image
+      // Fallback: plain bounding-box crop.
       const result = await ImageManipulator.manipulateAsync(
         imageUri,
         [
@@ -255,20 +292,15 @@ export function SpineCropper({
             crop: {
               originX: minX,
               originY: minY,
-              width: cropWidth,
-              height: cropHeight,
+              width: boundWidth,
+              height: boundHeight,
             },
           },
         ],
         { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
       );
 
-      onCropComplete(result.uri, {
-        x: minX / imageSize.width,
-        y: minY / imageSize.height,
-        width: cropWidth / imageSize.width,
-        height: cropHeight / imageSize.height,
-      });
+      onCropComplete(result.uri, cropRect);
     } catch (error) {
       console.error('Failed to crop image:', error);
     } finally {
