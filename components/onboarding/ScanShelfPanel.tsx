@@ -51,14 +51,21 @@ export function ScanShelfPanel({ onClose }: { onClose: () => void }) {
 
   const isBusy = phase === 'detecting' || phase === 'matching';
 
-  const handlePhotoPicked = (asset: ImagePicker.ImagePickerAsset) => {
+  const handlePhotoPicked = async (asset: ImagePicker.ImagePickerAsset) => {
     if (!asset.base64) {
       setError('Could not read the selected photo. Please try again.');
       return;
     }
     setError(null);
     setPhotoUri(asset.uri);
-    setPhotoBase64(asset.base64);
+    // Downscale before OCR so large photos don't get rejected with an HTTP 400;
+    // fall back to the raw base64 if manipulation fails for any reason.
+    const prepared = await shelfScanService.prepareImageForOcr(
+      asset.uri,
+      asset.width,
+      asset.height
+    );
+    setPhotoBase64(prepared ?? asset.base64);
     setMatches([]);
     setDeselectedKeys(new Set());
     setPhase('pick');
@@ -79,7 +86,7 @@ export function ScanShelfPanel({ onClose }: { onClose: () => void }) {
       });
 
       if (!result.canceled && result.assets[0]) {
-        handlePhotoPicked(result.assets[0]);
+        await handlePhotoPicked(result.assets[0]);
       }
     } catch {
       setError('Failed to take a photo. Please try again.');
@@ -95,7 +102,7 @@ export function ScanShelfPanel({ onClose }: { onClose: () => void }) {
       });
 
       if (!result.canceled && result.assets[0]) {
-        handlePhotoPicked(result.assets[0]);
+        await handlePhotoPicked(result.assets[0]);
       }
     } catch {
       setError('Failed to pick a photo. Please try again.');
