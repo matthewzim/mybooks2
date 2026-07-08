@@ -153,26 +153,125 @@ export async function searchBookVolumes(
   return merged;
 }
 
+/**
+ * Normalize a title/author string for comparison: lowercase, strip
+ * diacritics and punctuation, collapse whitespace.
+ */
+function normalizeForMatch(value: string): string {
+  return (value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Whether a Google Books result title refers to the same book as the
+ * requested title. Exact match after normalization, or a prefix match in
+ * either direction to tolerate subtitles ("Why Buddhism Is True" vs.
+ * "Why Buddhism Is True: The Science and Philosophy of…") and series
+ * suffixes ("Fourth Wing (The Empyrean, 1)").
+ */
+function titleMatches(wantedTitle: string, candidateTitle: string): boolean {
+  const wanted = normalizeForMatch(wantedTitle);
+  const candidate = normalizeForMatch(candidateTitle);
+  if (!wanted || !candidate) return false;
+  return (
+    wanted === candidate ||
+    wanted.startsWith(`${candidate} `) ||
+    candidate.startsWith(`${wanted} `)
+  );
+}
+
+/** Common filler words that appear in stored author strings but not in
+ *  Google's authors array (e.g. "Neil Gaiman and Terry Pratchett"). */
+const AUTHOR_STOPWORDS = new Set(['and', 'with', 'the']);
+
+/**
+ * Whether a result's authors plausibly match the requested author.
+ * Every meaningful name token must appear somewhere in the candidate
+ * authors — so "Robert Wright" rejects "Robert Thurman", while
+ * "Yarros, Rebecca" still matches "Rebecca Yarros". Initials and
+ * middle-initial differences are tolerated by skipping 1-letter tokens.
+ */
+function authorMatches(
+  wantedAuthor: string,
+  candidateAuthors: string[] | undefined
+): boolean {
+  const wanted = normalizeForMatch(wantedAuthor);
+  if (!wanted) return true;
+  const haystack = normalizeForMatch((candidateAuthors || []).join(' '));
+  if (!haystack) return false;
+  const tokens = wanted
+    .split(' ')
+    .filter((token) => token.length > 1 && !AUTHOR_STOPWORDS.has(token));
+  if (tokens.length === 0) return true;
+  return tokens.every((token) => haystack.includes(token));
+}
+
 class GoogleBooksService {
   private buildSearchQueries(title: string, author: string): string[] {
-    const cleanTitle = (title || '').trim();
-    const cleanAuthor = (author || '').trim();
+    // Strip embedded quotes so the terms can be safely quoted below.
+    const cleanTitle = (title || '').replace(/"/g, ' ').trim();
+    const cleanAuthor = (author || '').replace(/"/g, ' ').trim();
 
+    // Quote the intitle:/inauthor: terms — unquoted, Google only scopes the
+    // first word to the field (intitle:Fourth Wing scopes just "Fourth"),
+    // which lets other books by the same author rank highly.
     // Keep to at most 2 queries to stay within unauthenticated rate limits.
     const queries = [
       cleanAuthor
-        ? `intitle:${cleanTitle} inauthor:${cleanAuthor}`
-        : cleanTitle,
+        ? `intitle:"${cleanTitle}" inauthor:"${cleanAuthor}"`
+        : `intitle:"${cleanTitle}"`,
       `${cleanTitle} ${cleanAuthor}`.trim(),
     ];
 
     return [...new Set(queries.filter((query) => query.length > 0))];
   }
 
+  /**
+   * Pick the best cover URL from a page of search results.
+   *
+   * Only volumes whose title actually matches the requested book are
+   * considered — the API's relevance ranking freely mixes in other books
+   * by the same author (series siblings, forewords, summaries), and
+   * blindly taking the newest of those is how "Fourth Wing" ends up with
+   * the "Onyx Storm" cover. Among title matches, author-matching volumes
+   * are preferred, then the most recently published edition (so an old
+   * book still gets its modern cover).
+   */
+  private pickBestCover(
+    items: GoogleBooksVolume[],
+    title: string,
+    author: string
+  ): string | null {
+    let bestUrl: string | null = null;
+    let bestScore = -1;
+
+    for (const item of items) {
+      const info = item.volumeInfo;
+      const rawUrl = info?.imageLinks?.thumbnail || info?.imageLinks?.smallThumbnail;
+      if (!rawUrl) continue;
+      if (!titleMatches(title, info?.title || '')) continue;
+
+      const year = parseInt((info?.publishedDate || '').slice(0, 4), 10) || 0;
+      // Author match dominates recency; recency breaks ties between editions.
+      const score = (authorMatches(author, info?.authors) ? 1_000_000 : 0) + year;
+      if (score > bestScore) {
+        bestScore = score;
+        bestUrl = rawUrl.replace('http://', 'https://');
+      }
+    }
+
+    return bestUrl;
+  }
+
   private async searchQuery(
     query: string,
     bypassCooldown = false
-  ): Promise<string | null> {
+  ): Promise<GoogleBooksVolume[] | null> {
     // If we're in a global cooldown after a 429, skip immediately.
     // On-demand requests (e.g. opening the book detail modal) bypass the
     // cooldown so a background prefetch hitting 429 doesn't starve them;
@@ -180,8 +279,8 @@ class GoogleBooksService {
     if (!bypassCooldown && Date.now() < cooldownUntil) return null;
 
     const keyParam = GOOGLE_BOOKS_API_KEY ? `&key=${GOOGLE_BOOKS_API_KEY}` : '';
-    // Fetch several editions so the newest cover can be preferred below.
-    const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=10${keyParam}`;
+    // Fetch several editions so the caller can pick the best-matching cover.
+    const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=10&printType=books${keyParam}`;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       // Throttle: ensure a minimum gap between requests
@@ -214,28 +313,7 @@ class GoogleBooksService {
       }
 
       const data: GoogleBooksResponse = await response.json();
-      if (!data.items || data.items.length === 0) return null;
-
-      // The API can't be asked for "the newest cover" directly, so among the
-      // returned editions prefer the most recently published one that has an
-      // image — this avoids picking a decades-old edition's cover just
-      // because it ranks first by relevance.
-      let bestUrl: string | null = null;
-      let bestYear = -1;
-      for (const item of data.items) {
-        const imageLinks = item.volumeInfo?.imageLinks;
-        const rawUrl = imageLinks?.thumbnail || imageLinks?.smallThumbnail;
-        if (!rawUrl) continue;
-
-        const year =
-          parseInt((item.volumeInfo?.publishedDate || '').slice(0, 4), 10) || 0;
-        if (year > bestYear) {
-          bestYear = year;
-          bestUrl = rawUrl.replace('http://', 'https://');
-        }
-      }
-
-      return bestUrl;
+      return data.items || [];
     }
 
     return null;
@@ -243,7 +321,9 @@ class GoogleBooksService {
 
   /**
    * Search Google Books API by title and author.
-   * Returns the best-matching cover image URL or null.
+   * Returns the best-matching cover image URL, or null when no result
+   * verifiably matches the requested book — a missing cover is better
+   * than a wrong one.
    */
   async searchCoverUrl(
     title: string,
@@ -256,7 +336,9 @@ class GoogleBooksService {
       for (const query of queries) {
         // If a previous request triggered cooldown, stop trying more queries
         if (!bypassCooldown && Date.now() < cooldownUntil) return null;
-        const imageUrl = await this.searchQuery(query, bypassCooldown);
+        const items = await this.searchQuery(query, bypassCooldown);
+        if (!items || items.length === 0) continue;
+        const imageUrl = this.pickBestCover(items, title, author);
         if (imageUrl) return imageUrl;
       }
 
