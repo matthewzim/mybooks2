@@ -1,27 +1,41 @@
 /**
  * Scan Screen
  *
- * Camera screen for scanning book spines.
- * Features:
- * - Camera capture
- * - Gallery picker
- * - Upload to Supabase storage
- * - Add book with captured image
+ * Add a single book from a photo of its spine:
+ * 1. Choose whether to take a photo or upload an existing one
+ * 2. Capture/pick and crop the spine
+ * 3. Upload to Supabase storage
+ * 4. Add book with captured image
  */
 
 import React, { useState } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, Text, StyleSheet, Alert, Pressable } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { storageService, booksService } from '@/services';
 import { CameraScanner } from '@/components/CameraScanner';
-import { Colors, Spacing } from '@/constants/theme';
+import { Button } from '@/components/ui';
+import {
+  Colors,
+  Spacing,
+  Typography,
+  getFontFamily,
+  getSerifFontFamily,
+} from '@/constants/theme';
+import { useTheme } from '@/contexts/ThemeContext';
+
+// 'pick' asks whether to take a photo or upload one; the other modes hand off
+// to the camera/gallery scanner.
+type ScanMode = 'pick' | 'camera' | 'gallery';
 
 export default function ScanScreen() {
   const { shelfId } = useLocalSearchParams<{ shelfId: string }>();
   const { user } = useAuth();
+  const { colors } = useTheme();
   const [isUploading, setIsUploading] = useState(false);
+  const [mode, setMode] = useState<ScanMode>('pick');
 
   /**
    * Handle captured image
@@ -123,18 +137,60 @@ export default function ScanScreen() {
   };
 
   /**
-   * Handle cancel
+   * Handle cancel from the scanner - return to the pick screen so the user
+   * can switch between taking and uploading a photo
    */
-  const handleCancel = () => {
-    router.back();
+  const handleScannerCancel = () => {
+    setMode('pick');
   };
+
+  // Take-a-photo / upload-existing-photo chooser
+  if (mode === 'pick') {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.pickContainer}>
+          <View style={[styles.heroIcon, { backgroundColor: colors.backgroundDark }]}>
+            <Ionicons name="book-outline" size={44} color={colors.primary} />
+          </View>
+          <Text style={[styles.heroTitle, { color: colors.text }]}>Scan a book</Text>
+          <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+            Take a photo of a book spine or upload an existing one, then we&apos;ll add it
+            to this shelf. Best results come from a straight-on, well-lit photo.
+          </Text>
+
+          <View style={styles.pickActions}>
+            <Button
+              title="Take Photo"
+              onPress={() => setMode('camera')}
+              fullWidth
+              size="lg"
+              colors={colors}
+            />
+            <Button
+              title="Upload Existing Photo"
+              variant="outline"
+              onPress={() => setMode('gallery')}
+              fullWidth
+              size="lg"
+              colors={colors}
+            />
+          </View>
+        </View>
+
+        <Pressable style={styles.cancelButton} onPress={() => router.back()}>
+          <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>Cancel</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <CameraScanner
         onCapture={handleCapture}
-        onCancel={handleCancel}
+        onCancel={handleScannerCancel}
         isUploading={isUploading}
+        initialMode={mode === 'gallery' ? 'gallery' : 'camera'}
       />
     </SafeAreaView>
   );
@@ -144,5 +200,43 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.primary,
+  },
+  pickContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.xl,
+    gap: Spacing.md,
+  },
+  heroIcon: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroTitle: {
+    fontSize: 24,
+    fontFamily: getSerifFontFamily('medium'),
+    textAlign: 'center',
+  },
+  heroSubtitle: {
+    fontSize: Typography.sizes.md,
+    fontFamily: getFontFamily('regular'),
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  pickActions: {
+    width: '100%',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  cancelButton: {
+    paddingVertical: Spacing.lg,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: Typography.sizes.md,
+    fontFamily: getFontFamily('medium'),
   },
 });
