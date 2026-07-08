@@ -335,6 +335,9 @@ struct BookshelfWidgetView: View {
       }
     }
     .frame(height: rowSpineHeight)
+    // Confine each spine's cast shadow to the back panel so it no longer
+    // bleeds onto the surrounding wood frame border lines.
+    .clipped()
     .padding(.top, shelfThickness)
     .padding(.horizontal, shelfThickness)
   }
@@ -350,6 +353,9 @@ struct BookshelfWidgetView: View {
       }
       .padding(.horizontal, 3)
       .frame(height: rowSpineHeight + 6, alignment: .bottom)
+      // Confine each spine's cast shadow to the row so it no longer bleeds
+      // down onto the shelf plank's border line.
+      .clipped()
 
       shelfPlank
     }
