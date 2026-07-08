@@ -11,7 +11,36 @@
  * snapshots it to a JPEG file, so it can be called from anywhere.
  */
 
-import { GLView, ExpoWebGLRenderingContext } from 'expo-gl';
+// `expo-gl` is a native module, so importing it eagerly throws at module-load
+// time ("Cannot find native module 'ExpoGL'") whenever the dev client wasn't
+// rebuilt after expo-gl was added. That throw would cascade up the import chain
+// (SpineCropper -> CameraScanner -> app/scan.tsx) and take the whole Scan route
+// down. We load it lazily instead so an unavailable/broken GL module surfaces as
+// a catchable error inside warpPerspective, letting SpineCropper fall back to a
+// plain bounding-box crop. The type is imported with `import type`, which is
+// erased at build time and never triggers the native module lookup.
+import type { ExpoWebGLRenderingContext } from 'expo-gl';
+
+// The static (constructor) side of GLView, resolved purely at the type level so
+// this line emits no runtime `require` of the native module.
+type GLViewStatic = typeof import('expo-gl').GLView;
+
+let cachedGLView: GLViewStatic | null = null;
+
+/**
+ * Resolve expo-gl's GLView at call time. Throws (rather than crashing at import)
+ * if the native module isn't in this build, so callers can fall back to a crop.
+ */
+function getGLView(): GLViewStatic {
+  if (cachedGLView) return cachedGLView;
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const mod = require('expo-gl') as typeof import('expo-gl');
+  if (!mod?.GLView) {
+    throw new Error("Native module 'ExpoGL' is unavailable in this build");
+  }
+  cachedGLView = mod.GLView;
+  return cachedGLView;
+}
 
 export interface WarpPoint {
   x: number;
@@ -157,6 +186,9 @@ export async function warpPerspective(params: WarpParams): Promise<string> {
     m[2], m[5], m[8],
   ];
 
+  // Resolve GLView now; if the native module is missing this throws and the
+  // caller (SpineCropper) falls back to a bounding-box crop.
+  const GLView = getGLView();
   const gl = await GLView.createContextAsync();
   let program: WebGLProgram | null = null;
   try {
