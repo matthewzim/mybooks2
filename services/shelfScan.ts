@@ -48,6 +48,8 @@ export interface ShelfScanMatch {
   key: string;
   title: string;
   author: string;
+  /** Canonical ISBN (13 preferred) from Google Books, when available */
+  isbn: string | null;
   /** The raw OCR text this match came from (shown for transparency) */
   detectedText: string;
   /** Existing global books row to reference instead of creating a new one */
@@ -93,6 +95,16 @@ function tokenize(text: string): string[] {
   return (text.toLowerCase().match(/[a-z0-9]+/g) || []).filter(
     (token) => token.length >= 3
   );
+}
+
+/** Pick a canonical ISBN from a volume's identifiers, preferring ISBN-13. */
+function pickIsbn(
+  ids?: { type?: string; identifier?: string }[]
+): string | null {
+  if (!ids) return null;
+  const isbn13 = ids.find((id) => id.type === 'ISBN_13')?.identifier;
+  const isbn10 = ids.find((id) => id.type === 'ISBN_10')?.identifier;
+  return isbn13 || isbn10 || null;
 }
 
 function blockToText(block: VisionBlock): string {
@@ -276,6 +288,56 @@ class ShelfScanService {
   }
 
   /**
+   * Identify a single book from a photo of one spine.
+   *
+   * Runs OCR on the spine, then matches the text against Google Books to
+   * recover a canonical title/author/ISBN. The whole spine's text is tried as
+   * one query first (title + author together give the strongest match); the
+   * longest single block is a fallback when the combined text is too noisy.
+   * The returned `detectedText` is always provided so the caller can prefill
+   * the manual-entry fields even when nothing matched.
+   */
+  async identifySpine(
+    base64Image: string
+  ): Promise<ApiResponse<{ match: ShelfScanMatch | null; detectedText: string }>> {
+    const detectResult = await this.detectSpineTexts(base64Image);
+    if (detectResult.error) {
+      return { data: null, error: detectResult.error };
+    }
+
+    const texts = detectResult.data || [];
+    const combined = texts.join(' ').replace(/\s+/g, ' ').trim();
+
+    // Try the combined text first, then fall back to the longest block.
+    const longestBlock = texts
+      .slice()
+      .sort((a, b) => b.length - a.length)[0];
+    const candidates: string[] = [];
+    if (combined) candidates.push(combined);
+    if (longestBlock && longestBlock !== combined) candidates.push(longestBlock);
+
+    let match: ShelfScanMatch | null = null;
+    for (let i = 0; i < candidates.length; i++) {
+      try {
+        match = await this.matchSingleText(candidates[i]);
+      } catch {
+        match = null;
+      }
+      if (match) break;
+      if (i < candidates.length - 1) await sleep(MATCH_REQUEST_GAP_MS);
+    }
+
+    if (match) {
+      // Keep the full detected text for transparency rather than just the
+      // block that happened to win the match.
+      match.detectedText = combined || match.detectedText;
+      await this.attachExistingSpines([match]);
+    }
+
+    return { data: { match, detectedText: combined }, error: null };
+  }
+
+  /**
    * Add matched books to a shelf. Existing books (with community spines)
    * are referenced; unmatched ones become new records with placeholder
    * spines, mirroring the Goodreads CSV import behaviour.
@@ -321,8 +383,13 @@ class ShelfScanService {
 
     const volumes = await this.fetchVolumesThrottled(detectedText);
 
-    let best: { score: number; title: string; author: string; coverUrl: string | null } | null =
-      null;
+    let best: {
+      score: number;
+      title: string;
+      author: string;
+      isbn: string | null;
+      coverUrl: string | null;
+    } | null = null;
 
     for (const volume of volumes) {
       const title = volume.volumeInfo?.title || '';
@@ -354,6 +421,7 @@ class ShelfScanService {
           score,
           title,
           author: author || 'Unknown Author',
+          isbn: pickIsbn(volume.volumeInfo?.industryIdentifiers),
           coverUrl: rawThumbnail ? rawThumbnail.replace('http://', 'https://') : null,
         };
       }
@@ -365,6 +433,7 @@ class ShelfScanService {
       key: bookDedupeKey(best.title, best.author),
       title: best.title,
       author: best.author,
+      isbn: best.isbn,
       detectedText,
       existingBookId: null,
       spineImagePath: null,
@@ -380,6 +449,7 @@ class ShelfScanService {
         title?: string;
         authors?: string[];
         imageLinks?: { thumbnail?: string; smallThumbnail?: string };
+        industryIdentifiers?: { type?: string; identifier?: string }[];
       };
     }[]
   > {

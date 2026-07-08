@@ -6,8 +6,9 @@
  *
  * Features:
  * - Displays captured image
- * - 4 independently draggable corner handles forming a quadrilateral;
- *   the applied crop is the bounding rectangle of the four corners
+ * - 4 draggable corner handles that stay locked into a rectangle: dragging a
+ *   corner moves its two neighbors so opposite edges keep sharing an x/y, so
+ *   the selection you see is exactly the region that gets cropped
  * - Visual crop boundary with darkened surroundings
  * - Defaults to a centered spine-shaped rectangle
  * - Applies crop with expo-image-manipulator
@@ -60,6 +61,13 @@ interface SpineCropperProps {
 const HANDLE_SIZE = 30;
 const HANDLE_HIT_SLOP = 20;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// Corner order: 0 = top-left, 1 = top-right, 2 = bottom-right, 3 = bottom-left.
+// To keep the four corners forming a rectangle, dragging a corner also moves the
+// neighbor that shares its vertical edge (same x) and the neighbor that shares
+// its horizontal edge (same y).
+const X_NEIGHBOR = [3, 2, 1, 0];
+const Y_NEIGHBOR = [1, 0, 3, 2];
 
 // Zoom bubble configuration
 const ZOOM_BUBBLE_SIZE = 120;
@@ -154,9 +162,10 @@ export function SpineCropper({
   /**
    * Handle corner drag.
    *
-   * Each corner moves independently of the others, so the selection can be
-   * any quadrilateral. The applied crop is the bounding rectangle of the
-   * four corners (see handleCrop).
+   * The dragged corner follows the finger; its two neighbors move with it so
+   * the four corners always stay a rectangle. Because the selection is already
+   * a rectangle, the applied crop (the bounding box in handleCrop) matches it
+   * exactly — every corner ends up where the user placed it.
    */
   const createPanResponder = useCallback((cornerIndex: number) => {
     let initialCornerPosition: Point | null = null;
@@ -185,7 +194,13 @@ export function SpineCropper({
           const newCorners = [...prev];
           const newX = Math.max(0, Math.min(displaySize.width, initialX + gestureState.dx));
           const newY = Math.max(0, Math.min(displaySize.height, initialY + gestureState.dy));
+          // Move the dragged corner and drag its neighbors along so the
+          // selection stays a rectangle (see X_NEIGHBOR / Y_NEIGHBOR).
+          const xNeighbor = X_NEIGHBOR[cornerIndex];
+          const yNeighbor = Y_NEIGHBOR[cornerIndex];
           newCorners[cornerIndex] = { x: newX, y: newY };
+          newCorners[xNeighbor] = { ...newCorners[xNeighbor], x: newX };
+          newCorners[yNeighbor] = { ...newCorners[yNeighbor], y: newY };
           return newCorners;
         });
       },
@@ -214,7 +229,8 @@ export function SpineCropper({
       const scaleX = imageSize.width / displaySize.width;
       const scaleY = imageSize.height / displaySize.height;
 
-      // The corners can form any quadrilateral; crop to its bounding rectangle
+      // The corners are kept as a rectangle, so its bounding box is the
+      // rectangle itself — this crops to exactly what the user selected.
       const xs = corners.map((c) => c.x * scaleX);
       const ys = corners.map((c) => c.y * scaleY);
 
