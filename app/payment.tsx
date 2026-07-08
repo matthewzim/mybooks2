@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { router, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import RevenueCatUI from 'react-native-purchases-ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRevenueCat } from '@/contexts/RevenueCatContext';
@@ -34,6 +34,7 @@ export default function PaymentScreen() {
   const { refreshUser } = useAuth();
   const { isPro, refresh } = useRevenueCat();
   const [showConfetti, setShowConfetti] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const handleConfettiComplete = useCallback(() => {
     setShowConfetti(false);
@@ -107,19 +108,11 @@ export default function PaymentScreen() {
     );
   }
 
-  // Non-premium: show RevenueCat Paywall inline
+  // Non-premium: show the RevenueCat Paywall full screen with a floating
+  // close button in the corner (no navigation header).
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: 'Go Premium',
-          headerLeft: () => (
-            <Pressable onPress={() => router.back()} style={styles.headerButton}>
-              <Ionicons name="close" size={24} color={Colors.textInverse} />
-            </Pressable>
-          ),
-        }}
-      />
+      <Stack.Screen options={{ headerShown: false }} />
 
       <View style={styles.paywallContainer}>
         <RevenueCatUI.Paywall
@@ -139,6 +132,17 @@ export default function PaymentScreen() {
           onDismiss={() => router.back()}
           style={styles.paywall}
         />
+
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          style={[styles.closeButton, { top: insets.top + Spacing.sm }]}
+        >
+          <Ionicons name="close" size={22} color={Colors.textInverse} />
+        </Pressable>
+
         <ConfettiOverlay visible={showConfetti} onComplete={handleConfettiComplete} />
       </View>
     </>
@@ -158,6 +162,16 @@ const styles = StyleSheet.create({
   },
   paywall: {
     flex: 1,
+  },
+  closeButton: {
+    position: 'absolute',
+    right: Spacing.md,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   featureRow: {
     flexDirection: 'row',

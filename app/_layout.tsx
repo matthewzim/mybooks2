@@ -123,7 +123,7 @@ function RootLayoutContent() {
           name="payment"
           options={{
             title: 'Premium',
-            presentation: 'modal',
+            presentation: 'fullScreenModal',
           }}
         />
 
