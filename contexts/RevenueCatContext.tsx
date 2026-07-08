@@ -28,6 +28,7 @@ import {
 } from 'react-native-purchases';
 import {
   revenueCatService,
+  isRevenueCatConfigured,
   ENTITLEMENT_ID,
   FREE_TIER_LIMITS,
   PREMIUM_FEATURES,
@@ -108,6 +109,13 @@ export function RevenueCatProvider({
       try {
         // Initialize SDK with the Supabase user ID if available
         await revenueCatService.initialize(user?.id);
+
+        // Purchases SDK isn't configured (e.g. local dev without a RevenueCat
+        // key). Run in free-tier mode without touching the native SDK.
+        if (!isRevenueCatConfigured) {
+          setIsReady(true);
+          return;
+        }
 
         // If we have a user ID, log in so purchases are tied to this user
         if (user?.id) {

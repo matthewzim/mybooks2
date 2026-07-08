@@ -34,13 +34,25 @@ import { supabase } from './supabase';
  * RevenueCat public SDK key.
  *
  * Read from the environment so production builds can ship a real store key
- * (`appl_...` for the App Store) without a code change. The checked-in
- * fallback is a RevenueCat *test store* key and will not process real
- * purchases — it exists only so development builds work out of the box.
+ * (`appl_...` for the App Store) without a code change.
+ *
+ * When no key is set (e.g. a local dev build with no `.env`) the app runs in
+ * "free tier" mode: the Purchases SDK is left unconfigured and every premium
+ * check falls back to the free-tier defaults. We deliberately do NOT fall back
+ * to a placeholder key here — configuring the SDK with an invalid key makes
+ * RevenueCat reject it with a native "Invalid API Key" credentials error.
  */
-const REVENUECAT_API_KEY =
-  process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ||
-  'test_JICfTmnFPOhNQTrUxXCLhXNIqTO';
+const REVENUECAT_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? '';
+
+/**
+ * Whether a usable RevenueCat API key is configured.
+ *
+ * Mirrors `isSupabaseConfigured`: lets the app degrade gracefully when in-app
+ * purchases aren't set up (local dev, tests) instead of crashing the SDK.
+ */
+export const isRevenueCatConfigured = Boolean(
+  REVENUECAT_API_KEY && REVENUECAT_API_KEY !== 'appl_your-revenuecat-ios-key'
+);
 
 /**
  * The entitlement identifier configured in RevenueCat dashboard.
@@ -98,6 +110,18 @@ class RevenueCatService {
     // react-native-purchases only supports native platforms.
     if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
       console.warn('RevenueCat is not supported on this platform; skipping initialization.');
+      return;
+    }
+
+    // Skip configuration when no API key is set. Configuring the SDK with a
+    // missing or placeholder key triggers a native "Invalid API Key"
+    // credentials error, so we degrade to free-tier mode instead — matching
+    // how the app handles a missing Supabase config.
+    if (!isRevenueCatConfigured) {
+      console.warn(
+        'RevenueCat is not configured. Skipping purchase initialization. ' +
+          'Set EXPO_PUBLIC_REVENUECAT_IOS_API_KEY in your .env file to enable in-app purchases.'
+      );
       return;
     }
 
@@ -186,6 +210,7 @@ class RevenueCatService {
    * Offerings contain the packages (products) configured in your dashboard.
    */
   async getOfferings(): Promise<PurchasesOffering | null> {
+    if (!isRevenueCatConfigured) return null;
     const offerings = await Purchases.getOfferings();
     return offerings.current ?? null;
   }
@@ -223,6 +248,9 @@ class RevenueCatService {
   async purchasePackage(
     pkg: PurchasesPackage
   ): Promise<{ customerInfo: CustomerInfo; cancelled: boolean }> {
+    if (!isRevenueCatConfigured) {
+      throw new Error('In-app purchases are not available in this build.');
+    }
     try {
       const { customerInfo } = await Purchases.purchasePackage(pkg);
       // Sync premium status to Supabase after successful purchase
@@ -244,6 +272,9 @@ class RevenueCatService {
    * Restore previous purchases (e.g. after reinstall or device switch).
    */
   async restorePurchases(): Promise<CustomerInfo> {
+    if (!isRevenueCatConfigured) {
+      throw new Error('In-app purchases are not available in this build.');
+    }
     const customerInfo = await Purchases.restorePurchases();
     const { isActive } = this.extractProEntitlement(customerInfo);
     await this.syncPremiumStatus(isActive);
