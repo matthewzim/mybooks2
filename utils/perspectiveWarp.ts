@@ -26,6 +26,7 @@
 // the warp isn't available. The `expo-gl` types are imported with `import type`,
 // which is erased at build time and never triggers the native module lookup.
 import { requireOptionalNativeModule } from 'expo-modules-core';
+import * as ImageManipulator from 'expo-image-manipulator';
 import type { ExpoWebGLRenderingContext } from 'expo-gl';
 
 // The static (constructor) side of GLView, resolved purely at the type level so
@@ -90,6 +91,56 @@ export interface WarpParams {
 
 /** Largest output edge we render, to keep the framebuffer a sane size. */
 const MAX_OUTPUT_DIMENSION = 2000;
+
+/**
+ * Fallback for GL_MAX_TEXTURE_SIZE when the driver can't report it. 2048 is the
+ * smallest limit in common use, so it's the safe assumption.
+ */
+const FALLBACK_MAX_TEXTURE_SIZE = 2048;
+
+/**
+ * Normalize the source image before it becomes a GL texture:
+ *
+ *  - Downscale it to fit within `maxEdge` (the GPU's max texture size). A raw
+ *    phone photo is often 3000–4000px on its long edge, which overflows the
+ *    texture limit on many devices; `texImage2D` then fails and the whole warp
+ *    throws, sending the caller to a bounding-box crop that includes everything
+ *    beside a slanted spine. Downscaling keeps the upload valid.
+ *  - Re-encode it, which bakes in any EXIF orientation flag. expo-image reports
+ *    EXIF-corrected dimensions (so the on-screen corners live in that space),
+ *    but expo-gl uploads the raw pixels; an unbaked orientation flag would make
+ *    the texture sample the wrong region. Re-encoding removes the flag so the
+ *    texture matches the corner coordinate system.
+ *
+ * Corners are normalized to 0..1 by the caller, so a uniform downscale doesn't
+ * change the homography. Returns the original URI if manipulation fails, so a
+ * best-effort upload is still attempted.
+ */
+async function prepareSourceForTexture(
+  imageUri: string,
+  imageWidth: number,
+  imageHeight: number,
+  maxEdge: number
+): Promise<string> {
+  const longest = Math.max(imageWidth, imageHeight);
+  // Resize by the longer edge so the shorter one scales proportionally.
+  const resizeAction =
+    imageWidth >= imageHeight
+      ? { resize: { width: maxEdge } }
+      : { resize: { height: maxEdge } };
+  const actions = longest > maxEdge ? [resizeAction] : [];
+
+  try {
+    const result = await ImageManipulator.manipulateAsync(imageUri, actions, {
+      compress: 1,
+      format: ImageManipulator.SaveFormat.JPEG,
+    });
+    return result.uri;
+  } catch (error) {
+    console.warn('Failed to normalize source image for warp; using original:', error);
+    return imageUri;
+  }
+}
 
 const VERTEX_SHADER = `
 attribute vec2 aPos;
@@ -197,16 +248,9 @@ export async function warpPerspective(params: WarpParams): Promise<string> {
   const { imageUri, imageWidth, imageHeight, corners } = params;
   const [tl, tr, br, bl] = corners;
 
-  // Output size: use the longer of each pair of opposite edges so we don't
-  // lose resolution, capped so the framebuffer stays reasonable.
-  const rawWidth = Math.max(distance(tl, tr), distance(bl, br));
-  const rawHeight = Math.max(distance(tl, bl), distance(tr, br));
-  const longest = Math.max(rawWidth, rawHeight);
-  const scale = longest > MAX_OUTPUT_DIMENSION ? MAX_OUTPUT_DIMENSION / longest : 1;
-  const outWidth = Math.max(1, Math.round(rawWidth * scale));
-  const outHeight = Math.max(1, Math.round(rawHeight * scale));
-
   // Homography from output unit square -> source quad in normalized coords.
+  // This works in 0..1 space, so it's independent of the source's pixel size
+  // (and therefore unaffected by the downscale applied below).
   const norm = (p: WarpPoint): WarpPoint => ({
     x: p.x / imageWidth,
     y: p.y / imageHeight,
@@ -225,6 +269,33 @@ export async function warpPerspective(params: WarpParams): Promise<string> {
   const gl = await GLView.createContextAsync();
   let program: WebGLProgram | null = null;
   try {
+    // The GPU's texture-size ceiling bounds both the source we can upload and
+    // the framebuffer we can render into. Overshooting it makes texImage2D fail
+    // and the warp throw — which is what silently drops us to the bounding-box
+    // fallback that pulls in content beside a slanted spine.
+    const maxTextureSize =
+      gl.getParameter(gl.MAX_TEXTURE_SIZE) || FALLBACK_MAX_TEXTURE_SIZE;
+
+    // Output size: use the longer of each pair of opposite edges so we don't
+    // lose resolution, capped so the framebuffer stays within both our sane
+    // limit and the GPU's texture ceiling.
+    const outputCap = Math.min(MAX_OUTPUT_DIMENSION, maxTextureSize);
+    const rawWidth = Math.max(distance(tl, tr), distance(bl, br));
+    const rawHeight = Math.max(distance(tl, bl), distance(tr, br));
+    const longest = Math.max(rawWidth, rawHeight);
+    const scale = longest > outputCap ? outputCap / longest : 1;
+    const outWidth = Math.max(1, Math.round(rawWidth * scale));
+    const outHeight = Math.max(1, Math.round(rawHeight * scale));
+
+    // Normalize the source (bake EXIF orientation, fit the texture ceiling)
+    // before uploading it.
+    const sourceUri = await prepareSourceForTexture(
+      imageUri,
+      imageWidth,
+      imageHeight,
+      maxTextureSize
+    );
+
     // --- Source texture (loaded natively from the file URI) ---
     const srcTexture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, srcTexture);
@@ -235,7 +306,7 @@ export async function warpPerspective(params: WarpParams): Promise<string> {
       gl.RGBA,
       gl.UNSIGNED_BYTE,
       // expo-gl loads the image from a file:// URI passed as `localUri`.
-      { localUri: imageUri } as unknown as HTMLImageElement
+      { localUri: sourceUri } as unknown as HTMLImageElement
     );
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
