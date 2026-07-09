@@ -113,8 +113,15 @@ const FALLBACK_MAX_TEXTURE_SIZE = 2048;
  *    texture matches the corner coordinate system.
  *
  * Corners are normalized to 0..1 by the caller, so a uniform downscale doesn't
- * change the homography. Returns the original URI if manipulation fails, so a
- * best-effort upload is still attempted.
+ * change the homography.
+ *
+ * If normalization fails this throws rather than falling back to the original
+ * URI: expo-gl decodes textures with stb_image, which ignores EXIF orientation
+ * and silently produces an empty texture for oversized or non-file:// sources
+ * (glTexImage2D with null data is a legal call, so nothing throws). Uploading
+ * the raw original would therefore not fail loudly — it would "succeed" with a
+ * black or wrong-region result, which is worse than the caller's bounding-box
+ * fallback (orientation-aware, correct region).
  */
 async function prepareSourceForTexture(
   imageUri: string,
@@ -137,8 +144,7 @@ async function prepareSourceForTexture(
     });
     return result.uri;
   } catch (error) {
-    console.warn('Failed to normalize source image for warp; using original:', error);
-    return imageUri;
+    throw new Error(`Failed to normalize source image for warp: ${error}`);
   }
 }
 
