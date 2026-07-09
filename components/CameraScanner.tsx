@@ -381,16 +381,26 @@ export function CameraScanner({
   }
 
   // Camera mode
+  //
+  // <CameraView> does not support children (it warns and can render
+  // inconsistently), so the guide frame and controls are stacked over the
+  // camera as absolutely-positioned siblings inside a wrapper rather than
+  // nested inside <CameraView>. The wrapper carries the onLayout used to map
+  // the guide frame into photo coordinates; the camera fills it exactly.
   return (
     <View style={[styles.container, { backgroundColor: colors.primary }]}>
-      <CameraView
-        ref={cameraRef}
+      <View
         style={styles.camera}
-        facing={facing}
         onLayout={(event) => setPreviewSize(event.nativeEvent.layout)}
       >
+        <CameraView
+          ref={cameraRef}
+          style={StyleSheet.absoluteFill}
+          facing={facing}
+        />
+
         {/* Guide overlay */}
-        <View style={styles.guideOverlay}>
+        <View style={styles.guideOverlay} pointerEvents="none">
           <View style={[styles.guideBox, { borderColor: colors.textInverse }]}>
             <Text style={[styles.guideText, { color: colors.textInverse }]}>
               Position the book spine within the frame
@@ -415,7 +425,7 @@ export function CameraScanner({
             <Ionicons name="camera-reverse" size={28} color={colors.textInverse} />
           </Pressable>
         </View>
-      </CameraView>
+      </View>
 
       {/* Cancel button */}
       <Pressable style={styles.cancelButton} onPress={onCancel}>
