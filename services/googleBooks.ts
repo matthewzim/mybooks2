@@ -70,6 +70,30 @@ export function bookDedupeKey(title: string, author: string): string {
   return `${(title || '').trim().toLowerCase()}|${(author || '').trim().toLowerCase()}`;
 }
 
+/**
+ * Zoom level requested from Google's book-content image server when
+ * downloading a cover for caching. The API's `imageLinks.thumbnail` URL
+ * uses zoom=1 (~128px wide), which looks blurry rendered at full cover
+ * size. The same endpoint serves larger renditions of the same image at
+ * higher zoom levels (2 ≈ 300px, 3 ≈ 575px wide); 3 is plenty for a
+ * phone-sized cover without fetching print-quality files.
+ */
+const COVER_ZOOM = 3;
+
+/**
+ * Rewrite a Google Books thumbnail URL to a higher-quality rendition:
+ * bumps the zoom level and drops the `edge=curl` page-curl overlay.
+ * Non-Google URLs are returned unchanged. Not every volume serves every
+ * zoom level, so callers must fall back to the original URL when the
+ * upgraded one fails to download.
+ */
+export function upgradeGoogleCoverUrl(url: string, zoom: number = COVER_ZOOM): string {
+  if (!url.includes('books.google')) return url;
+  return url
+    .replace(/([?&])edge=curl(&)?/, (_match, prefix, trailing) => (trailing ? prefix : ''))
+    .replace(/([?&])zoom=\d+/, `$1zoom=${zoom}`);
+}
+
 function mapVolumes(data: GoogleBooksResponse): BookVolumeResult[] {
   return (data.items || [])
     .filter((item) => item.volumeInfo?.title)
@@ -190,6 +214,16 @@ function titleMatches(wantedTitle: string, candidateTitle: string): boolean {
 const AUTHOR_STOPWORDS = new Set(['and', 'with', 'the']);
 
 /**
+ * Whether a stored author string carries real author information.
+ * Several flows default to "Unknown Author" when nothing better is
+ * available; requiring a match against that would reject every volume.
+ */
+function hasAuthorInfo(author: string): boolean {
+  const normalized = normalizeForMatch(author);
+  return normalized !== '' && normalized !== 'unknown' && normalized !== 'unknown author';
+}
+
+/**
  * Whether a result's authors plausibly match the requested author.
  * Every meaningful name token must appear somewhere in the candidate
  * authors — so "Robert Wright" rejects "Robert Thurman", while
@@ -238,9 +272,16 @@ class GoogleBooksService {
    * considered — the API's relevance ranking freely mixes in other books
    * by the same author (series siblings, forewords, summaries), and
    * blindly taking the newest of those is how "Fourth Wing" ends up with
-   * the "Onyx Storm" cover. Among title matches, author-matching volumes
-   * are preferred, then the most recently published edition (so an old
-   * book still gets its modern cover).
+   * the "Onyx Storm" cover. When the author is known, volumes by a
+   * different author are rejected outright rather than merely
+   * deprioritised: a title collision ("It" matching "It Ends with Us")
+   * must not produce a wrong cover — missing is better than wrong.
+   *
+   * Among the surviving volumes, prefer exact title matches over
+   * subtitle/prefix matches (reprints, summaries and omnibus editions
+   * tend to carry junk imagery), then volumes with a real thumbnail over
+   * ones with only a tiny smallThumbnail, then the most recently
+   * published edition (so an old book still gets its modern cover).
    */
   private pickBestCover(
     items: GoogleBooksVolume[],
@@ -249,16 +290,21 @@ class GoogleBooksService {
   ): string | null {
     let bestUrl: string | null = null;
     let bestScore = -1;
+    const authorKnown = hasAuthorInfo(author);
+    const wantedTitle = normalizeForMatch(title);
 
     for (const item of items) {
       const info = item.volumeInfo;
       const rawUrl = info?.imageLinks?.thumbnail || info?.imageLinks?.smallThumbnail;
       if (!rawUrl) continue;
       if (!titleMatches(title, info?.title || '')) continue;
+      if (authorKnown && !authorMatches(author, info?.authors)) continue;
 
       const year = parseInt((info?.publishedDate || '').slice(0, 4), 10) || 0;
-      // Author match dominates recency; recency breaks ties between editions.
-      const score = (authorMatches(author, info?.authors) ? 1_000_000 : 0) + year;
+      const score =
+        (normalizeForMatch(info?.title || '') === wantedTitle ? 1_000_000 : 0) +
+        (info?.imageLinks?.thumbnail ? 100_000 : 0) +
+        year;
       if (score > bestScore) {
         bestScore = score;
         bestUrl = rawUrl.replace('http://', 'https://');
@@ -390,20 +436,33 @@ class GoogleBooksService {
         };
       }
 
-      // 2. Try to download and upload to Supabase storage
-      let uploadResult: { data: string | null; error: { message: string } | null };
-      try {
-        uploadResult = await storageService.uploadBookCover(
-          googleCoverUrl,
-          book.book_id
-        );
-      } catch (uploadError) {
-        // If caching fails, still use the direct Google image URL for display.
-        console.warn(
-          `Failed to cache cover for book ${book.book_id}:`,
-          uploadError instanceof Error ? uploadError.message : uploadError
-        );
-        return { data: googleCoverUrl, error: null };
+      // 2. Try to download and upload to Supabase storage. Try the
+      //    high-quality rendition first; volumes that don't serve the
+      //    higher zoom level fall back to the API-provided thumbnail.
+      const candidateUrls = [
+        ...new Set([upgradeGoogleCoverUrl(googleCoverUrl), googleCoverUrl]),
+      ];
+
+      let uploadResult: { data: string | null; error: { message: string } | null } = {
+        data: null,
+        error: { message: 'No cover URL candidates' },
+      };
+      for (const candidateUrl of candidateUrls) {
+        try {
+          uploadResult = await storageService.uploadBookCover(
+            candidateUrl,
+            book.book_id
+          );
+        } catch (uploadError) {
+          uploadResult = {
+            data: null,
+            error: {
+              message:
+                uploadError instanceof Error ? uploadError.message : String(uploadError),
+            },
+          };
+        }
+        if (uploadResult.data) break;
       }
 
       if (uploadResult.error || !uploadResult.data) {
