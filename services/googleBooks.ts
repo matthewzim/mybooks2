@@ -70,6 +70,30 @@ export function bookDedupeKey(title: string, author: string): string {
   return `${(title || '').trim().toLowerCase()}|${(author || '').trim().toLowerCase()}`;
 }
 
+/**
+ * Zoom level requested from Google's book-content image server when
+ * downloading a cover for caching. The API's `imageLinks.thumbnail` URL
+ * uses zoom=1 (~128px wide), which looks blurry rendered at full cover
+ * size. The same endpoint serves larger renditions of the same image at
+ * higher zoom levels (2 ≈ 300px, 3 ≈ 575px wide); 3 is plenty for a
+ * phone-sized cover without fetching print-quality files.
+ */
+const COVER_ZOOM = 3;
+
+/**
+ * Rewrite a Google Books thumbnail URL to a higher-quality rendition:
+ * bumps the zoom level and drops the `edge=curl` page-curl overlay.
+ * Non-Google URLs are returned unchanged. Not every volume serves every
+ * zoom level, so callers must fall back to the original URL when the
+ * upgraded one fails to download.
+ */
+export function upgradeGoogleCoverUrl(url: string, zoom: number = COVER_ZOOM): string {
+  if (!url.includes('books.google')) return url;
+  return url
+    .replace(/([?&])edge=curl(&)?/, (_match, prefix, trailing) => (trailing ? prefix : ''))
+    .replace(/([?&])zoom=\d+/, `$1zoom=${zoom}`);
+}
+
 function mapVolumes(data: GoogleBooksResponse): BookVolumeResult[] {
   return (data.items || [])
     .filter((item) => item.volumeInfo?.title)
@@ -390,20 +414,33 @@ class GoogleBooksService {
         };
       }
 
-      // 2. Try to download and upload to Supabase storage
-      let uploadResult: { data: string | null; error: { message: string } | null };
-      try {
-        uploadResult = await storageService.uploadBookCover(
-          googleCoverUrl,
-          book.book_id
-        );
-      } catch (uploadError) {
-        // If caching fails, still use the direct Google image URL for display.
-        console.warn(
-          `Failed to cache cover for book ${book.book_id}:`,
-          uploadError instanceof Error ? uploadError.message : uploadError
-        );
-        return { data: googleCoverUrl, error: null };
+      // 2. Try to download and upload to Supabase storage. Try the
+      //    high-quality rendition first; volumes that don't serve the
+      //    higher zoom level fall back to the API-provided thumbnail.
+      const candidateUrls = [
+        ...new Set([upgradeGoogleCoverUrl(googleCoverUrl), googleCoverUrl]),
+      ];
+
+      let uploadResult: { data: string | null; error: { message: string } | null } = {
+        data: null,
+        error: { message: 'No cover URL candidates' },
+      };
+      for (const candidateUrl of candidateUrls) {
+        try {
+          uploadResult = await storageService.uploadBookCover(
+            candidateUrl,
+            book.book_id
+          );
+        } catch (uploadError) {
+          uploadResult = {
+            data: null,
+            error: {
+              message:
+                uploadError instanceof Error ? uploadError.message : String(uploadError),
+            },
+          };
+        }
+        if (uploadResult.data) break;
       }
 
       if (uploadResult.error || !uploadResult.data) {
