@@ -12,13 +12,20 @@
  */
 
 // `expo-gl` is a native module, so importing it eagerly throws at module-load
-// time ("Cannot find native module 'ExpoGL'") whenever the dev client wasn't
+// time ("Cannot find native module 'ExpoGL'") whenever the app binary wasn't
 // rebuilt after expo-gl was added. That throw would cascade up the import chain
 // (SpineCropper -> CameraScanner -> app/scan.tsx) and take the whole Scan route
-// down. We load it lazily instead so an unavailable/broken GL module surfaces as
-// a catchable error inside warpPerspective, letting SpineCropper fall back to a
-// plain bounding-box crop. The type is imported with `import type`, which is
-// erased at build time and never triggers the native module lookup.
+// down. Worse, a bare `require('expo-gl')` in a build without the module logs a
+// red "Cannot find native module 'ExpoGL'" error even when the throw is caught.
+//
+// So we (a) probe for the native module with expo-modules-core's
+// `requireOptionalNativeModule`, which returns null instead of throwing (and
+// logs nothing) when the module is missing, and (b) only `require('expo-gl')`
+// once that probe confirms it is present. Callers check
+// `isPerspectiveWarpAvailable()` and fall back to a plain bounding-box crop when
+// the warp isn't available. The `expo-gl` types are imported with `import type`,
+// which is erased at build time and never triggers the native module lookup.
+import { requireOptionalNativeModule } from 'expo-modules-core';
 import type { ExpoWebGLRenderingContext } from 'expo-gl';
 
 // The static (constructor) side of GLView, resolved purely at the type level so
@@ -26,13 +33,39 @@ import type { ExpoWebGLRenderingContext } from 'expo-gl';
 type GLViewStatic = typeof import('expo-gl').GLView;
 
 let cachedGLView: GLViewStatic | null = null;
+let glModuleAvailable: boolean | null = null;
+
+/**
+ * Whether expo-gl's native module ("ExpoGL") is present in this build.
+ *
+ * Uses the optional native-module lookup, which returns null instead of throwing
+ * when the module is missing, so probing never logs the red "Cannot find native
+ * module 'ExpoGL'" error that a bare `require('expo-gl')` would. The result is
+ * cached, and callers use it to decide whether to attempt a perspective warp or
+ * skip straight to a plain crop.
+ */
+export function isPerspectiveWarpAvailable(): boolean {
+  if (glModuleAvailable === null) {
+    try {
+      glModuleAvailable = requireOptionalNativeModule('ExpoGL') != null;
+    } catch {
+      glModuleAvailable = false;
+    }
+  }
+  return glModuleAvailable;
+}
 
 /**
  * Resolve expo-gl's GLView at call time. Throws (rather than crashing at import)
  * if the native module isn't in this build, so callers can fall back to a crop.
+ * `expo-gl` is only required once the native module is confirmed present, so the
+ * throwing require is never reached — and never logs — in a build without it.
  */
 function getGLView(): GLViewStatic {
   if (cachedGLView) return cachedGLView;
+  if (!isPerspectiveWarpAvailable()) {
+    throw new Error("Native module 'ExpoGL' is unavailable in this build");
+  }
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const mod = require('expo-gl') as typeof import('expo-gl');
   if (!mod?.GLView) {

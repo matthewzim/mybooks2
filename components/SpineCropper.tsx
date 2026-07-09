@@ -37,7 +37,11 @@ import {
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import Svg, { Polygon, Circle, Line, Path } from 'react-native-svg';
-import { warpPerspective, WarpPoint } from '@/utils/perspectiveWarp';
+import {
+  warpPerspective,
+  isPerspectiveWarpAvailable,
+  WarpPoint,
+} from '@/utils/perspectiveWarp';
 
 interface Point {
   x: number;
@@ -270,18 +274,23 @@ export function SpineCropper({
         })),
       };
 
-      // Preferred: perspective-warp the quad into an upright rectangle.
-      try {
-        const warpedUri = await warpPerspective({
-          imageUri,
-          imageWidth: imageSize.width,
-          imageHeight: imageSize.height,
-          corners: imageCorners,
-        });
-        onCropComplete(warpedUri, cropRect);
-        return;
-      } catch (warpError) {
-        console.warn('Perspective warp failed; falling back to crop:', warpError);
+      // Preferred: perspective-warp the quad into an upright rectangle. Only
+      // attempt this when expo-gl's native module is present in the build;
+      // otherwise skip straight to the crop so we don't log a failed-warp
+      // warning on every crop.
+      if (isPerspectiveWarpAvailable()) {
+        try {
+          const warpedUri = await warpPerspective({
+            imageUri,
+            imageWidth: imageSize.width,
+            imageHeight: imageSize.height,
+            corners: imageCorners,
+          });
+          onCropComplete(warpedUri, cropRect);
+          return;
+        } catch (warpError) {
+          console.warn('Perspective warp failed; falling back to crop:', warpError);
+        }
       }
 
       // Fallback: plain bounding-box crop.
