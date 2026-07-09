@@ -214,6 +214,16 @@ function titleMatches(wantedTitle: string, candidateTitle: string): boolean {
 const AUTHOR_STOPWORDS = new Set(['and', 'with', 'the']);
 
 /**
+ * Whether a stored author string carries real author information.
+ * Several flows default to "Unknown Author" when nothing better is
+ * available; requiring a match against that would reject every volume.
+ */
+function hasAuthorInfo(author: string): boolean {
+  const normalized = normalizeForMatch(author);
+  return normalized !== '' && normalized !== 'unknown' && normalized !== 'unknown author';
+}
+
+/**
  * Whether a result's authors plausibly match the requested author.
  * Every meaningful name token must appear somewhere in the candidate
  * authors — so "Robert Wright" rejects "Robert Thurman", while
@@ -262,9 +272,16 @@ class GoogleBooksService {
    * considered — the API's relevance ranking freely mixes in other books
    * by the same author (series siblings, forewords, summaries), and
    * blindly taking the newest of those is how "Fourth Wing" ends up with
-   * the "Onyx Storm" cover. Among title matches, author-matching volumes
-   * are preferred, then the most recently published edition (so an old
-   * book still gets its modern cover).
+   * the "Onyx Storm" cover. When the author is known, volumes by a
+   * different author are rejected outright rather than merely
+   * deprioritised: a title collision ("It" matching "It Ends with Us")
+   * must not produce a wrong cover — missing is better than wrong.
+   *
+   * Among the surviving volumes, prefer exact title matches over
+   * subtitle/prefix matches (reprints, summaries and omnibus editions
+   * tend to carry junk imagery), then volumes with a real thumbnail over
+   * ones with only a tiny smallThumbnail, then the most recently
+   * published edition (so an old book still gets its modern cover).
    */
   private pickBestCover(
     items: GoogleBooksVolume[],
@@ -273,16 +290,21 @@ class GoogleBooksService {
   ): string | null {
     let bestUrl: string | null = null;
     let bestScore = -1;
+    const authorKnown = hasAuthorInfo(author);
+    const wantedTitle = normalizeForMatch(title);
 
     for (const item of items) {
       const info = item.volumeInfo;
       const rawUrl = info?.imageLinks?.thumbnail || info?.imageLinks?.smallThumbnail;
       if (!rawUrl) continue;
       if (!titleMatches(title, info?.title || '')) continue;
+      if (authorKnown && !authorMatches(author, info?.authors)) continue;
 
       const year = parseInt((info?.publishedDate || '').slice(0, 4), 10) || 0;
-      // Author match dominates recency; recency breaks ties between editions.
-      const score = (authorMatches(author, info?.authors) ? 1_000_000 : 0) + year;
+      const score =
+        (normalizeForMatch(info?.title || '') === wantedTitle ? 1_000_000 : 0) +
+        (info?.imageLinks?.thumbnail ? 100_000 : 0) +
+        year;
       if (score > bestScore) {
         bestScore = score;
         bestUrl = rawUrl.replace('http://', 'https://');
