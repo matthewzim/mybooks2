@@ -279,8 +279,9 @@ export function useBooks(shelfId: string): UseBooksReturn {
   }, [fetchBooks]);
 
   // Pre-fetch and cache Google Books covers in the background for books
-  // that don't have a cover_image_url yet. Updates local state as each
-  // cover is cached so the BookDetailModal can display them instantly.
+  // that don't have a high-quality cover yet (none at all, or one cached by
+  // the old low-resolution pipeline). Updates local state as each cover is
+  // cached so the BookDetailModal can display them instantly.
   //
   // Cancellation lives in a ref flipped only on shelf change/unmount: an
   // effect-scoped flag would be set by the cleanup that runs when `onCached`
