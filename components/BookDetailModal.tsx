@@ -29,7 +29,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { booksService } from '@/services/books';
-import { googleBooksService } from '@/services/googleBooks';
+import { googleBooksService, needsCoverUpgrade } from '@/services/googleBooks';
 import { getCoverImageUrl, storageService } from '@/services/storage';
 import { CommunitySpineBrowserModal } from '@/components/CommunitySpineBrowserModal';
 import { Button, Rating } from '@/components/ui';
@@ -166,25 +166,41 @@ export function BookDetailModal({
     if (!visible || !book) return;
 
     let cancelled = false;
+    // The key includes the stored URL so a background upgrade (which changes
+    // cover_image_url) isn't masked by a stale cached resolution.
+    const coverCacheKey = `${book.book_id}:${book.cover_image_url ?? ''}`;
 
-    const cachedCoverForBook = coverUrlCacheRef.current[book.book_id];
+    const cachedCoverForBook = coverUrlCacheRef.current[coverCacheKey];
     if (cachedCoverForBook) {
       setCoverImageUrl(cachedCoverForBook);
       return;
     }
 
-    // Already have a cached cover — resolve its URL (handles signed URLs for private buckets)
-    if (book.cover_image_url) {
+    // Already have an up-to-date cached cover — resolve its URL
+    // (handles signed URLs for private buckets)
+    if (book.cover_image_url && !needsCoverUpgrade(book.cover_image_url)) {
       getCoverImageUrl(book.cover_image_url).then((resolved) => {
         if (!cancelled && resolved) {
-          coverUrlCacheRef.current[book.book_id] = resolved;
+          coverUrlCacheRef.current[coverCacheKey] = resolved;
           setCoverImageUrl(resolved);
         }
       });
       return;
     }
 
-    setIsCoverLoading(true);
+    // No cover yet, or one cached by the old low-quality pipeline: fetch the
+    // high-quality version. A legacy cover is shown while the fetch runs so
+    // the modal never regresses to a spinner over a book that had an image.
+    let fetchCompleted = false;
+    if (book.cover_image_url) {
+      getCoverImageUrl(book.cover_image_url).then((resolved) => {
+        if (!cancelled && resolved && !fetchCompleted) {
+          setCoverImageUrl(resolved);
+        }
+      });
+    } else {
+      setIsCoverLoading(true);
+    }
 
     googleBooksService
       .fetchAndCacheCover(
@@ -209,7 +225,8 @@ export function BookDetailModal({
             ? result.data
             : await getCoverImageUrl(result.data);
           if (!cancelled && resolved) {
-            coverUrlCacheRef.current[book.book_id] = resolved;
+            fetchCompleted = true;
+            coverUrlCacheRef.current[coverCacheKey] = resolved;
             setCoverImageUrl(resolved);
           }
         }

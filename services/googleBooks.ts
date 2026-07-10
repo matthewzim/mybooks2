@@ -94,6 +94,53 @@ export function upgradeGoogleCoverUrl(url: string, zoom: number = COVER_ZOOM): s
     .replace(/([?&])zoom=\d+/, `$1zoom=${zoom}`);
 }
 
+/**
+ * Query-string marker appended to cover URLs cached by the current
+ * high-quality pipeline. Covers stored without it were cached by the old
+ * low-resolution pipeline (or are raw Google URLs), so they get re-fetched
+ * and overwritten in place. Bump the version if the pipeline improves again
+ * — the guard inside the `set_book_cover_url` RPC must be updated in
+ * lockstep (see supabase/migrations/20260709_book_cover_quality_upgrade.sql).
+ */
+const COVER_VERSION_MARKER = 'cv=2';
+
+/** Whether a stored cover URL still needs the high-quality re-fetch. */
+export function needsCoverUpgrade(coverUrl: string | null | undefined): boolean {
+  return !coverUrl || !coverUrl.includes(COVER_VERSION_MARKER);
+}
+
+/** Tag a freshly cached cover URL as produced by the current pipeline. */
+function markCoverUrl(url: string): string {
+  return `${url}${url.includes('?') ? '&' : '?'}${COVER_VERSION_MARKER}`;
+}
+
+/**
+ * Base64 prefixes of the magic bytes for the image formats Google serves
+ * (JPEG, PNG, GIF, WebP). The content server can answer 200 with an HTML
+ * error page, which previously got cached as a cover and rendered blank.
+ */
+const IMAGE_BASE64_PREFIXES = ['/9j/', 'iVBOR', 'R0lGOD', 'UklGR'];
+
+function isImageBase64(base64: string): boolean {
+  return IMAGE_BASE64_PREFIXES.some((prefix) => base64.startsWith(prefix));
+}
+
+/**
+ * Volume id used to probe Google's "image not available" placeholder: it is
+ * syntactically valid but unassigned, so the content server answers with the
+ * same static placeholder it serves for volumes that lack the requested zoom
+ * level. Comparing bytes against this reference detects placeholders exactly.
+ */
+const PLACEHOLDER_PROBE_ID = 'zzzzzzzzzzzz';
+
+/**
+ * Fallback floor (bytes) used only when the placeholder probe is unavailable:
+ * real covers at zoom >= 2 are tens of kilobytes, while the flat placeholder
+ * graphic is far smaller. Rejecting a rare small-but-real upgrade just falls
+ * back to the original thumbnail — never worse than the old behaviour.
+ */
+const MIN_UPGRADED_COVER_BYTES = 15_000;
+
 function mapVolumes(data: GoogleBooksResponse): BookVolumeResult[] {
   return (data.items || [])
     .filter((item) => item.volumeInfo?.title)
@@ -246,6 +293,83 @@ function authorMatches(
 }
 
 class GoogleBooksService {
+  /**
+   * Reference "image not available" placeholder per zoom level, fetched
+   * lazily via PLACEHOLDER_PROBE_ID. `null` means the probe failed (blocked
+   * network, unexpected 404), in which case a size heuristic is used instead.
+   */
+  private placeholderRefByZoom = new Map<string, string | null>();
+
+  /**
+   * Whether downloaded cover bytes are Google's "image not available"
+   * placeholder. The content server answers HTTP 200 with that placeholder
+   * when a volume doesn't serve the requested zoom level, so status checks
+   * alone let it slip through and get cached as the real cover.
+   */
+  private async isGooglePlaceholder(base64: string, url: string): Promise<boolean> {
+    if (!url.includes('books.google')) return false;
+    const zoom = url.match(/[?&]zoom=(\d+)/)?.[1] ?? '1';
+
+    if (!this.placeholderRefByZoom.has(zoom)) {
+      const probeUrl = url.replace(/([?&]id=)[^&]*/, `$1${PLACEHOLDER_PROBE_ID}`);
+      let reference: string | null = null;
+      if (probeUrl !== url) {
+        reference = await storageService.downloadImageAsBase64(probeUrl);
+        if (reference && !isImageBase64(reference)) reference = null;
+      }
+      this.placeholderRefByZoom.set(zoom, reference);
+    }
+
+    const reference = this.placeholderRefByZoom.get(zoom);
+    if (reference) return base64 === reference;
+
+    // No reference available — fall back to the size floor for upgraded
+    // renditions only (small originals are normal at zoom=1).
+    if (parseInt(zoom, 10) >= 2) {
+      return base64.length * 0.75 < MIN_UPGRADED_COVER_BYTES;
+    }
+    return false;
+  }
+
+  /**
+   * Look for another record of the same book (matching title + author,
+   * case-insensitively) that already has a high-quality cached cover, so
+   * duplicate records end up with one canonical cover image instead of
+   * each running its own Google Books fetch (which can pick different
+   * editions).
+   */
+  private async findSharedCover(
+    book: Pick<Book, 'book_id' | 'title' | 'author'>
+  ): Promise<string | null> {
+    const title = (book.title || '').trim();
+    const author = (book.author || '').trim();
+    if (!title) return null;
+
+    // Escape LIKE wildcards so ilike performs a case-insensitive equality match.
+    const escapeLike = (value: string) => value.replace(/[\\%_]/g, (m) => `\\${m}`);
+
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.BOOKS)
+        .select('cover_image_url')
+        .neq('id', book.book_id)
+        .ilike('title', escapeLike(title))
+        .ilike('author', escapeLike(author))
+        .not('cover_image_url', 'is', null)
+        .limit(10);
+
+      if (error || !data) return null;
+      // Only reuse covers produced by the current pipeline — legacy URLs may
+      // be low-quality or cached placeholders.
+      const match = data.find(
+        (row) => row.cover_image_url && !needsCoverUpgrade(row.cover_image_url)
+      );
+      return match?.cover_image_url ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   private buildSearchQueries(title: string, author: string): string[] {
     // Strip embedded quotes so the terms can be safely quoted below.
     const cleanTitle = (title || '').replace(/"/g, ' ').trim();
@@ -398,6 +522,11 @@ class GoogleBooksService {
    * Fetch the book cover from Google Books, upload it to the Supabase
    * `book-covers` bucket, and persist the URL on the books table.
    *
+   * Covers cached by the old low-resolution pipeline (no version marker in
+   * the URL) are re-fetched and overwritten in place; up-to-date covers
+   * return immediately. Duplicate records of the same title/author copy the
+   * already-cached cover instead of each querying Google separately.
+   *
    * Returns the public Supabase URL of the cached cover, or null if
    * no cover was found.
    *
@@ -418,11 +547,45 @@ class GoogleBooksService {
         .eq('id', book.book_id)
         .maybeSingle();
 
-      if (!existingBookError && existingBook?.cover_image_url) {
-        return { data: existingBook.cover_image_url, error: null };
+      const existingUrl =
+        (!existingBookError && existingBook?.cover_image_url) || null;
+      if (existingUrl && !needsCoverUpgrade(existingUrl)) {
+        return { data: existingUrl, error: null };
       }
 
-      // 1. Search Google Books for a cover image URL
+      // 1. Reuse the high-quality cover another record of the same
+      //    title/author already cached: copy its bytes into this book's own
+      //    file instead of hitting the Google Books API again. Copying
+      //    (rather than pointing both records at one file) keeps storage
+      //    lifecycles independent — account deletion removes a book's own
+      //    cover file, which must not blank out other users' books.
+      const sharedUrl = await this.findSharedCover(book);
+      if (sharedUrl) {
+        const base64 = await storageService.downloadImageAsBase64(sharedUrl);
+        if (base64 && isImageBase64(base64)) {
+          const uploadResult = await storageService.uploadBookCoverBase64(
+            base64,
+            book.book_id
+          );
+          if (uploadResult.data) {
+            const markedCoverUrl = markCoverUrl(uploadResult.data);
+            const { error: shareError } = await supabase.rpc('set_book_cover_url', {
+              p_book_id: book.book_id,
+              p_cover_url: markedCoverUrl,
+            });
+            if (shareError) {
+              console.warn(
+                'Failed to persist shared cover_image_url:',
+                shareError.message
+              );
+            }
+            return { data: markedCoverUrl, error: null };
+          }
+        }
+        // Copying failed — fall through to a fresh Google Books fetch.
+      }
+
+      // 2. Search Google Books for a cover image URL
       const googleCoverUrl = await this.searchCoverUrl(
         book.title,
         book.author,
@@ -430,58 +593,72 @@ class GoogleBooksService {
       );
 
       if (!googleCoverUrl) {
+        // Keep showing the legacy cover (if any) until a re-fetch succeeds.
+        if (existingUrl) return { data: existingUrl, error: null };
         return {
           data: null,
           error: { message: 'No cover image found on Google Books' },
         };
       }
 
-      // 2. Try to download and upload to Supabase storage. Try the
-      //    high-quality rendition first; volumes that don't serve the
-      //    higher zoom level fall back to the API-provided thumbnail.
+      // 3. Download, validate and upload to Supabase storage. Try the
+      //    high-quality renditions first; volumes that don't serve a higher
+      //    zoom level fall back to the API-provided thumbnail. Candidates
+      //    that aren't a real image (HTML error pages) or that are Google's
+      //    "image not available" placeholder are rejected — the placeholder
+      //    is served with HTTP 200, so a status check alone would cache it.
       const candidateUrls = [
-        ...new Set([upgradeGoogleCoverUrl(googleCoverUrl), googleCoverUrl]),
+        ...new Set([
+          upgradeGoogleCoverUrl(googleCoverUrl, 3),
+          upgradeGoogleCoverUrl(googleCoverUrl, 2),
+          googleCoverUrl,
+        ]),
       ];
 
-      let uploadResult: { data: string | null; error: { message: string } | null } = {
-        data: null,
-        error: { message: 'No cover URL candidates' },
-      };
+      let supabaseCoverUrl: string | null = null;
+      let lastFailure = 'No cover URL candidates';
       for (const candidateUrl of candidateUrls) {
         try {
-          uploadResult = await storageService.uploadBookCover(
-            candidateUrl,
+          const base64 = await storageService.downloadImageAsBase64(candidateUrl);
+          if (!base64 || !isImageBase64(base64)) {
+            lastFailure = 'Downloaded data is not an image';
+            continue;
+          }
+          if (await this.isGooglePlaceholder(base64, candidateUrl)) {
+            lastFailure = 'Google served the "image not available" placeholder';
+            continue;
+          }
+          const uploadResult = await storageService.uploadBookCoverBase64(
+            base64,
             book.book_id
           );
+          if (uploadResult.data) {
+            supabaseCoverUrl = uploadResult.data;
+            break;
+          }
+          lastFailure = uploadResult.error?.message ?? 'upload returned no URL';
         } catch (uploadError) {
-          uploadResult = {
-            data: null,
-            error: {
-              message:
-                uploadError instanceof Error ? uploadError.message : String(uploadError),
-            },
-          };
+          lastFailure =
+            uploadError instanceof Error ? uploadError.message : String(uploadError);
         }
-        if (uploadResult.data) break;
       }
 
-      if (uploadResult.error || !uploadResult.data) {
+      if (!supabaseCoverUrl) {
         // If caching fails, still use the direct Google image URL for display.
-        console.warn(
-          `Failed to cache cover for book ${book.book_id}:`,
-          uploadResult.error?.message ?? 'upload returned no URL'
-        );
+        console.warn(`Failed to cache cover for book ${book.book_id}:`, lastFailure);
         return { data: googleCoverUrl, error: null };
       }
 
-      const supabaseCoverUrl = uploadResult.data;
+      // The marker records that the current pipeline produced this cover and
+      // doubles as a cache-buster now that overwrites are possible.
+      const markedCoverUrl = markCoverUrl(supabaseCoverUrl);
 
-      // 3. Persist the cover URL on the global books record.
+      // 4. Persist the cover URL on the global books record.
       //    Uses an RPC with SECURITY DEFINER so any authenticated user can
       //    set the cover, not just the original uploader.
       const { error: updateError } = await supabase.rpc('set_book_cover_url', {
         p_book_id: book.book_id,
-        p_cover_url: supabaseCoverUrl,
+        p_cover_url: markedCoverUrl,
       });
 
       if (updateError) {
@@ -490,7 +667,7 @@ class GoogleBooksService {
         console.warn('Failed to persist cover_image_url:', updateError.message);
       }
 
-      return { data: supabaseCoverUrl, error: null };
+      return { data: markedCoverUrl, error: null };
     } catch (error) {
       return {
         data: null,
@@ -500,7 +677,9 @@ class GoogleBooksService {
   }
 
   /**
-   * Pre-fetch and cache covers for a list of books that don't have one yet.
+   * Pre-fetch and cache covers for a list of books that don't have a
+   * high-quality one yet — no cover at all, or one cached by the old
+   * low-resolution pipeline (which gets overwritten in place).
    * Runs in the background and calls `onCached` for each book as it completes
    * so the caller can update local state incrementally.
    *
@@ -511,7 +690,7 @@ class GoogleBooksService {
     books: Pick<Book, 'book_id' | 'title' | 'author' | 'cover_image_url'>[],
     onCached: (bookId: string, coverUrl: string) => void
   ): Promise<void> {
-    const uncached = books.filter((b) => !b.cover_image_url);
+    const uncached = books.filter((b) => needsCoverUpgrade(b.cover_image_url));
     if (uncached.length === 0) return;
 
     // Process sequentially with a gap between books to avoid hammering the API

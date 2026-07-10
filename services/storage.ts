@@ -137,34 +137,44 @@ class StorageService {
   }
 
   /**
-   * Upload a book cover image fetched from a remote URL to Supabase Storage.
+   * Download a remote image and return its contents as base64, or null when
+   * the download fails or answers with a non-200 status. Lets the cover
+   * pipeline inspect the bytes (image magic numbers, placeholder detection)
+   * before anything is uploaded to storage.
+   */
+  async downloadImageAsBase64(remoteUrl: string): Promise<string | null> {
+    const tmpPath = `${FileSystem.cacheDirectory}img_${Date.now()}_${Math.random()
+      .toString(36)
+      .slice(2)}.img`;
+    try {
+      const downloadResult = await FileSystem.downloadAsync(remoteUrl, tmpPath);
+      if (downloadResult.status !== 200) return null;
+      return await FileSystem.readAsStringAsync(tmpPath, { encoding: 'base64' });
+    } catch {
+      return null;
+    } finally {
+      FileSystem.deleteAsync(tmpPath, { idempotent: true }).catch(() => {});
+    }
+  }
+
+  /**
+   * Upload already-downloaded book cover bytes to Supabase Storage.
    *
-   * @param remoteUrl - Remote image URL (e.g. from Google Books API)
+   * The path is always `<bookId>/cover.jpg` with upsert enabled, so a book
+   * only ever has a single cover file and re-fetches overwrite it in place.
+   *
+   * @param base64 - Image contents as base64 (from downloadImageAsBase64)
    * @param bookId - Global book ID used to organise the file path
    * @returns Public URL of the uploaded cover image
    */
-  async uploadBookCover(
-    remoteUrl: string,
+  async uploadBookCoverBase64(
+    base64: string,
     bookId: string
   ): Promise<ApiResponse<string>> {
     try {
-      // Download the image to a temporary local file
-      const tmpPath = `${FileSystem.cacheDirectory}cover_${bookId}_${Date.now()}.jpg`;
-      const downloadResult = await FileSystem.downloadAsync(remoteUrl, tmpPath);
-
-      if (downloadResult.status !== 200) {
-        throw new Error(`Failed to download cover image (HTTP ${downloadResult.status})`);
-      }
-
-      // Read the downloaded file as base64
-      const base64 = await FileSystem.readAsStringAsync(tmpPath, {
-        encoding: 'base64',
-      });
-
       const fileName = `${bookId}/cover.jpg`;
-      const contentType = 'image/jpeg';
+      const contentType = this.sniffImageContentType(base64);
 
-      // Upload to the book-covers bucket (upsert so re-fetches overwrite)
       const { data, error } = await supabase.storage
         .from(STORAGE_BUCKETS.BOOK_COVERS)
         .upload(fileName, decode(base64), {
@@ -174,15 +184,11 @@ class StorageService {
 
       if (error) throw error;
 
-      // Get the public URL
       const {
         data: { publicUrl },
       } = supabase.storage
         .from(STORAGE_BUCKETS.BOOK_COVERS)
         .getPublicUrl(data.path);
-
-      // Clean up temp file (fire-and-forget)
-      FileSystem.deleteAsync(tmpPath, { idempotent: true }).catch(() => {});
 
       return { data: publicUrl, error: null };
     } catch (error) {
@@ -191,6 +197,17 @@ class StorageService {
         error: { message: handleSupabaseError(error) },
       };
     }
+  }
+
+  /**
+   * Detect the content type of base64 image data from its magic bytes.
+   * Google serves covers as JPEG, PNG, GIF or WebP depending on the volume.
+   */
+  private sniffImageContentType(base64: string): string {
+    if (base64.startsWith('iVBOR')) return 'image/png';
+    if (base64.startsWith('R0lGOD')) return 'image/gif';
+    if (base64.startsWith('UklGR')) return 'image/webp';
+    return 'image/jpeg';
   }
 
   /**
