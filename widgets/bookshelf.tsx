@@ -211,7 +211,7 @@ function SpineRow({
           spacing={0}
           alignment="bottom"
           modifiers={[
-            padding({ horizontal: 3 }),
+            padding({ horizontal: 4 }),
           ]}
         >
           {spines}
@@ -226,7 +226,7 @@ function SpineRow({
           alignment="bottom"
           modifiers={[
             background(shelfBackColor),
-            padding({ horizontal: 8 }),
+            padding({ horizontal: 12 }),
           ]}
         >
           {spines}
@@ -238,7 +238,7 @@ function SpineRow({
       {shelfStyle === 'bottom' && (
         <VStack
           modifiers={[
-            frame({ height: 8 }),
+            frame({ height: 12 }),
             background(shelfColor),
           ]}
         />
@@ -266,8 +266,11 @@ const BookshelfWidget = (
   const maxBooks = maxBooksForFamily(family);
   const visibleBooks = books.slice(0, maxBooks);
 
-  const spineWidth = 36;
-  const spineHeight = family === 'systemMedium' ? 108 : 124;
+  // The native widget now fills the whole widget edge to edge (no outer
+  // margin, system content margins disabled), so spines and the cabinet
+  // frame are proportionally larger than before.
+  const spineWidth = 44;
+  const spineHeight = family === 'systemMedium' ? 130 : 154;
   // Shelf colors derived from the bookshelf cover color, matching the
   // in-app cabinet (utils/shelfColors.ts)
   const palette = getWidgetShelfPalette(coverColor);
@@ -312,7 +315,7 @@ const BookshelfWidget = (
   // bumped to the second shelf once the first shelf has no room left.
   // The native Swift widget measures the real row width with GeometryReader;
   // this preview uses a fixed estimate of the widget's usable width.
-  const estimatedRowContentWidth = 300;
+  const estimatedRowContentWidth = 305;
   const spineData: SpineData[] = visibleBooks.map((book) => {
     const scale = imageHeightFactor(book.id, book.title);
     return {
@@ -334,13 +337,15 @@ const BookshelfWidget = (
         background('#fbf6ec'),
       ]}
     >
-      {/* Cabinet: rounded wood frame around all rows (full style only),
-          matching the in-app EditableBookshelfGrid cabinet. The native
-          widget also strokes a 1px lighter frame edge around it. */}
+      {/* Cabinet: wood frame around all rows (full style only), matching
+          the in-app EditableBookshelfGrid cabinet. It fills the entire
+          widget — in the native widget it's clipped to the widget's own
+          rounded shape (ContainerRelativeShape) and stroked with a 1px
+          lighter frame edge. */}
       <VStack
         modifiers={
           shelfStyle === 'full'
-            ? [padding({ bottom: 8 }), background(palette.frame), cornerRadius(12)]
+            ? [padding({ bottom: 12 }), background(palette.frame), cornerRadius(12)]
             : []
         }
       >

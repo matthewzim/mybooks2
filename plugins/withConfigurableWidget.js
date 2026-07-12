@@ -237,31 +237,32 @@ struct BookshelfWidgetView: View {
     family == .systemMedium ? 108 : 124
   }
 
-  private var shelfThickness: CGFloat { 8 }
-
-  /// Cabinet corner rounding matching the in-app cabinet (BorderRadius.lg).
-  private var cabinetCornerRadius: CGFloat { 12 }
+  /// Cabinet frame thickness. The bookshelf now fills the whole widget
+  /// edge to edge, so the frame is thicker than the in-app cabinet's to
+  /// stay proportional to the larger shelves.
+  private var shelfThickness: CGFloat { 12 }
 
   @ViewBuilder
   private var bookshelfContent: some View {
     GeometryReader { geo in
-      let margin: CGFloat = 8
-      let availableWidth = geo.size.width - 2 * margin
+      // The bookshelf fills the entire widget: no outer margin, and the
+      // widget's content margins are disabled in the configuration below.
+      let availableWidth = geo.size.width
       // A row also spends width on the shelf's side padding; without
       // subtracting it, a full row of max-width spines overflows the shelf
-      // past the widget's right margin.
-      let rowSidePadding: CGFloat = isBottomStyle ? 3 : shelfThickness
+      // past the widget's right edge.
+      let rowSidePadding: CGFloat = isBottomStyle ? 4 : shelfThickness
       let rowContentWidth = availableWidth - 2 * rowSidePadding
-      let baseSpineWidth = min(42, max(20, rowContentWidth / 7))
+      let baseSpineWidth = min(52, max(24, rowContentWidth / 7))
 
-      // Compute spine height so shelves fill the widget with equal margins
-      // on all sides. Each full-style row carries a frame strip on top (like
-      // the in-app cabinet rows) and the cabinet adds one frame strip at the
-      // bottom; bottom-style rows add a little headroom plus the plank.
-      let perShelfOverhead: CGFloat = isBottomStyle ? 6 + shelfThickness : shelfThickness
+      // Compute spine height so shelves fill the widget exactly. Each
+      // full-style row carries a frame strip on top (like the in-app
+      // cabinet rows) and the cabinet adds one frame strip at the bottom;
+      // bottom-style rows add a little headroom plus the plank.
+      let perShelfOverhead: CGFloat = isBottomStyle ? 8 + shelfThickness : shelfThickness
       let cabinetBottomExtra: CGFloat = isBottomStyle ? 0 : shelfThickness
       let shelfCount: CGFloat = family == .systemLarge ? 2 : 1
-      let rowSpineHeight: CGFloat = (geo.size.height - 2 * margin - shelfCount * perShelfOverhead - cabinetBottomExtra) / shelfCount
+      let rowSpineHeight: CGFloat = (geo.size.height - shelfCount * perShelfOverhead - cabinetBottomExtra) / shelfCount
 
       // Rows fill by actual spine width, not a fixed count: a book only
       // moves to the second shelf once the first shelf has no room left.
@@ -280,8 +281,10 @@ struct BookshelfWidgetView: View {
             }
           }
         } else {
-          // Classic cabinet: rounded wood frame around all rows, matching
-          // the in-app EditableBookshelfGrid cabinet.
+          // Classic cabinet: wood frame around all rows, matching the
+          // in-app EditableBookshelfGrid cabinet. The cabinet fills the
+          // whole widget, so it's clipped to the widget's own rounded
+          // shape (ContainerRelativeShape) instead of a fixed radius.
           VStack(alignment: .leading, spacing: 0) {
             cabinetRow(layouts: rows[0], rowSpineHeight: rowSpineHeight)
 
@@ -297,14 +300,13 @@ struct BookshelfWidgetView: View {
               endPoint: .bottom
             )
           )
-          .clipShape(RoundedRectangle(cornerRadius: cabinetCornerRadius))
+          .clipShape(ContainerRelativeShape())
           .overlay(
-            RoundedRectangle(cornerRadius: cabinetCornerRadius)
+            ContainerRelativeShape()
               .stroke(palette.frameEdge, lineWidth: 1)
           )
         }
       }
-      .padding(margin)
     }
   }
 
@@ -351,8 +353,8 @@ struct BookshelfWidgetView: View {
         }
         Spacer(minLength: 0)
       }
-      .padding(.horizontal, 3)
-      .frame(height: rowSpineHeight + 6, alignment: .bottom)
+      .padding(.horizontal, 4)
+      .frame(height: rowSpineHeight + 8, alignment: .bottom)
       // Confine each spine's cast shadow to the row so it no longer bleeds
       // down onto the shelf plank's border line.
       .clipped()
@@ -371,7 +373,7 @@ struct BookshelfWidgetView: View {
         endPoint: .bottom
       )
       ShelfPalette.plankHighlight
-        .frame(height: 1.5)
+        .frame(height: 2)
     }
     .frame(height: shelfThickness)
     .cornerRadius(2)
@@ -390,8 +392,8 @@ struct BookshelfWidgetView: View {
   /// so the image fills its frame exactly and adjacent spines touch with no
   /// letterboxing gaps.
   private func spineLayouts(for books: [[String: Any]], baseSpineWidth: CGFloat, rowSpineHeight: CGFloat) -> [SpineLayout] {
-    let minSpineWidth: CGFloat = 12
-    let maxSpineWidth: CGFloat = 42
+    let minSpineWidth: CGFloat = 15
+    let maxSpineWidth: CGFloat = 52
 
     return books.map { book in
       let bookId = book["id"] as? String ?? ""
@@ -658,7 +660,7 @@ private func buildBookshelfEntry(selectedId: String?) -> BookshelfEntry {
 /// extension has a hard memory ceiling around 30MB; full-resolution spine
 /// photos (multi-MB JPEGs that decode to tens of MB of bitmap) get the
 /// process killed by the system, leaving the widget stuck on its redacted
-/// placeholder.  Spines render at most ~42pt wide, so 400px is plenty.
+/// placeholder.  Spines render at most ~52pt wide, so 400px is plenty.
 private func downsampledImageData(_ data: Data, maxPixelSize: CGFloat) -> Data? {
   let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
   guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else { return nil }
@@ -798,6 +800,10 @@ struct BookshelfWidget: Widget {
       .configurationDisplayName("${displayName}")
       .description("${description}")
       .supportedFamilies([.${families}])
+      // The bookshelf draws edge to edge; without this the system inserts
+      // its default content margins and the container background shows as
+      // a border around the cabinet.
+      .contentMarginsDisabled()
     } else {
       return StaticConfiguration(
         kind: kind,
@@ -809,6 +815,7 @@ struct BookshelfWidget: Widget {
       .configurationDisplayName("${displayName}")
       .description("${description}")
       .supportedFamilies([.${families}])
+      .contentMarginsDisabled()
     }
   }
 }
