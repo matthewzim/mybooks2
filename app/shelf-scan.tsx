@@ -4,7 +4,7 @@
  * Add many books at once from a photo of a real bookshelf:
  * 1. Take a photo of a bookshelf (or upload an existing one)
  * 2. OCR reads the title/author text off the spines
- * 3. Each spine is matched to a real book via the Google Books API
+ * 3. Each spine is matched to a real book via the ISBNdb API
  * 4. Review the matches, then add them all to the shelf — books with
  *    community spine images get them, the rest get placeholder spines
  */

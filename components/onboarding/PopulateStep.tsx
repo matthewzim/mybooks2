@@ -28,7 +28,7 @@ import { ScanShelfPanel } from './ScanShelfPanel';
 import { BookSpine as BookSpineConstants } from '@/constants/theme';
 import { supabase, TABLES } from '@/services/supabase';
 import { getCoverImageUrl, getSpineImageUrl } from '@/services/storage';
-import { searchBookVolumes } from '@/services/googleBooks';
+import { searchBookVolumes } from '@/services/isbndb';
 
 function getBookColor(title?: string | null): string {
   const colors = BookSpineConstants.colors;
@@ -185,7 +185,7 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
         setResults(localResults);
       }
 
-      // 2. Always supplement with the Google Books API so searching a
+      // 2. Always supplement with the ISBNdb API so searching a
       // prolific author surfaces their whole catalog, not just the few
       // titles other users happen to own.
       const apiVolumes = await searchBookVolumes(trimmed, 12);

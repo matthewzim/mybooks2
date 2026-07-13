@@ -29,6 +29,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { booksService, storageService } from '@/services';
+import { isbndbConfigured, lookupBookByIsbn, normalizeIsbn } from '@/services/isbndb';
 import { Button, Input } from '@/components/ui';
 import {
   Colors,
@@ -48,10 +49,37 @@ export default function AddBookScreen() {
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [isbn, setIsbn] = useState('');
+  const [isbnLookupState, setIsbnLookupState] = useState<'idle' | 'loading' | 'notfound'>('idle');
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [shareWithCommunity, setShareWithCommunity] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ title?: string; author?: string }>({});
+
+  const canLookupIsbn = isbndbConfigured() && normalizeIsbn(isbn) !== null;
+
+  /**
+   * Look the ISBN up on ISBNdb and auto-fill title/author. User-entered
+   * values are never overwritten (same rule as the image auto-fill).
+   */
+  const handleIsbnLookup = async () => {
+    const normalized = normalizeIsbn(isbn);
+    if (!normalized || isbnLookupState === 'loading') return;
+
+    setIsbnLookupState('loading');
+    try {
+      const result = await lookupBookByIsbn(normalized);
+      if (!result) {
+        setIsbnLookupState('notfound');
+        return;
+      }
+      if (!title.trim()) setTitle(result.title);
+      if (!author.trim() && result.author) setAuthor(result.author);
+      if (result.isbn13) setIsbn(result.isbn13);
+      setIsbnLookupState('idle');
+    } catch {
+      setIsbnLookupState('notfound');
+    }
+  };
 
   const tryAutoFillBookMetadata = async (asset: ImagePicker.ImagePickerAsset) => {
     // Don't overwrite user-entered values
@@ -291,8 +319,25 @@ export default function AddBookScreen() {
                 label="ISBN"
                 placeholder="Enter ISBN (optional)"
                 value={isbn}
-                onChangeText={setIsbn}
+                onChangeText={(value) => {
+                  setIsbn(value);
+                  if (isbnLookupState === 'notfound') setIsbnLookupState('idle');
+                }}
                 leftIcon="barcode-outline"
+                rightIcon={
+                  isbnLookupState === 'loading'
+                    ? 'hourglass-outline'
+                    : canLookupIsbn
+                      ? 'search'
+                      : undefined
+                }
+                onRightIconPress={handleIsbnLookup}
+                error={
+                  isbnLookupState === 'notfound'
+                    ? 'No book found for this ISBN'
+                    : undefined
+                }
+                hint={canLookupIsbn ? 'Tap search to auto-fill title and author' : undefined}
                 keyboardType="number-pad"
               />
 

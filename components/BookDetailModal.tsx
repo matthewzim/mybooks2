@@ -29,7 +29,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { booksService } from '@/services/books';
-import { googleBooksService, needsCoverUpgrade } from '@/services/googleBooks';
+import { isbndbService, needsCoverUpgrade } from '@/services/isbndb';
 import { getCoverImageUrl, storageService } from '@/services/storage';
 import { CommunitySpineBrowserModal } from '@/components/CommunitySpineBrowserModal';
 import { Button, Rating } from '@/components/ui';
@@ -161,7 +161,7 @@ export function BookDetailModal({
 
   // Fetch cover image when the modal opens.
   // If the caller has stale data, the service re-checks Supabase for an existing cached cover
-  // before calling Google Books again.
+  // before calling ISBNdb again.
   useEffect(() => {
     if (!visible || !book) return;
 
@@ -202,7 +202,7 @@ export function BookDetailModal({
       setIsCoverLoading(true);
     }
 
-    googleBooksService
+    isbndbService
       .fetchAndCacheCover(
         {
           book_id: book.book_id,
@@ -216,11 +216,10 @@ export function BookDetailModal({
       .then(async (result) => {
         if (cancelled) return;
         if (result.data) {
-          // If the returned URL is a direct external URL (e.g. Google Books),
-          // use it directly instead of running through Supabase URL resolution.
-          const isExternalUrl =
-            result.data.startsWith('https://books.google.com') ||
-            result.data.startsWith('https://encrypted-tbn');
+          // If the returned URL is a direct external URL (ISBNdb's image
+          // host, when caching to Supabase failed), use it directly instead
+          // of running through Supabase URL resolution.
+          const isExternalUrl = result.data.startsWith('https://images.isbndb.com');
           const resolved = isExternalUrl
             ? result.data
             : await getCoverImageUrl(result.data);

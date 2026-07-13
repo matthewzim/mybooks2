@@ -4,8 +4,8 @@
  * Turns a photo of a real bookshelf into books on a virtual shelf:
  * 1. Google Cloud Vision OCR extracts text blocks from the photo — each
  *    block usually corresponds to one spine (or part of one)
- * 2. Each block of spine text is matched against the Google Books API to
- *    recover a canonical title/author (same source the Goodreads import uses)
+ * 2. Each block of spine text is matched against the ISBNdb API to
+ *    recover a canonical title/author
  * 3. Matches are checked against the Supabase books table so existing
  *    community spine images are reused; the rest get placeholder spines
  *
@@ -20,13 +20,11 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase, TABLES, handleSupabaseError } from './supabase';
 import { booksService } from './books';
 import { getSpineImageUrl } from './storage';
-import { bookDedupeKey } from './googleBooks';
+import { bookDedupeKey, searchBooksForSpineText } from './isbndb';
 import type { ApiResponse } from '@/types';
 
 const GOOGLE_VISION_API_KEY =
   process.env.EXPO_PUBLIC_GOOGLE_CLOUD_VISION_API_KEY || '';
-const GOOGLE_BOOKS_API = 'https://www.googleapis.com/books/v1/volumes';
-const GOOGLE_BOOKS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY || '';
 
 /**
  * Longest edge (px) we downscale a shelf photo to before OCR. Full-resolution
@@ -36,19 +34,13 @@ const GOOGLE_BOOKS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY || '';
  */
 const MAX_OCR_IMAGE_DIMENSION = 1600;
 
-/** Minimum delay between Google Books lookups while matching a whole shelf. */
-const MATCH_REQUEST_GAP_MS = 350;
-
-/** Back-off before the single retry after a 429. */
-const MATCH_BACKOFF_MS = 2500;
-
-/** A shelf-photo book candidate after OCR + Google Books matching. */
+/** A shelf-photo book candidate after OCR + ISBNdb matching. */
 export interface ShelfScanMatch {
   /** Dedupe key (normalized title|author) */
   key: string;
   title: string;
   author: string;
-  /** Canonical ISBN (13 preferred) from Google Books, when available */
+  /** Canonical ISBN (13 preferred) from ISBNdb, when available */
   isbn: string | null;
   /** The raw OCR text this match came from (shown for transparency) */
   detectedText: string;
@@ -58,7 +50,7 @@ export interface ShelfScanMatch {
   spineImagePath: string | null;
   /** Resolved, displayable spine image URL */
   resolvedSpineUrl: string | null;
-  /** Google Books cover thumbnail for the review list */
+  /** ISBNdb cover image for the review list */
   coverUrl: string | null;
 }
 
@@ -86,25 +78,11 @@ interface VisionPage {
   blocks?: VisionBlock[];
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /** Significant lowercase word tokens used for match scoring. */
 function tokenize(text: string): string[] {
   return (text.toLowerCase().match(/[a-z0-9]+/g) || []).filter(
     (token) => token.length >= 3
   );
-}
-
-/** Pick a canonical ISBN from a volume's identifiers, preferring ISBN-13. */
-function pickIsbn(
-  ids?: { type?: string; identifier?: string }[]
-): string | null {
-  if (!ids) return null;
-  const isbn13 = ids.find((id) => id.type === 'ISBN_13')?.identifier;
-  const isbn10 = ids.find((id) => id.type === 'ISBN_10')?.identifier;
-  return isbn13 || isbn10 || null;
 }
 
 function blockToText(block: VisionBlock): string {
@@ -251,13 +229,16 @@ class ShelfScanService {
   }
 
   /**
-   * Match OCR spine texts against the Google Books API.
+   * Match OCR spine texts against the ISBNdb API.
    *
-   * For each detected block, the top few volumes are scored by how much of
+   * For each detected block, the top few results are scored by how much of
    * their title (and author) actually appears in the detected text; weak
    * matches are discarded so random shelf text doesn't become a book.
    * Matches are then checked against Supabase so existing community spine
    * images can be reused.
+   *
+   * Lookups are paced by the shared ISBNdb rate limiter, so a large shelf
+   * takes roughly one second per spine on the Basic tier.
    *
    * @param texts - Candidate spine texts from detectSpineTexts
    * @param onProgress - Called with (processed, total) as blocks complete
@@ -279,7 +260,6 @@ class ShelfScanService {
         // A single unmatched spine shouldn't fail the whole scan
       }
       onProgress?.(i + 1, texts.length);
-      if (i < texts.length - 1) await sleep(MATCH_REQUEST_GAP_MS);
     }
 
     const matches = Array.from(matchesByKey.values());
@@ -290,7 +270,7 @@ class ShelfScanService {
   /**
    * Identify a single book from a photo of one spine.
    *
-   * Runs OCR on the spine, then matches the text against Google Books to
+   * Runs OCR on the spine, then matches the text against ISBNdb to
    * recover a canonical title/author/ISBN. The whole spine's text is tried as
    * one query first (title + author together give the strongest match); the
    * longest single block is a fallback when the combined text is too noisy.
@@ -324,7 +304,6 @@ class ShelfScanService {
         match = null;
       }
       if (match) break;
-      if (i < candidates.length - 1) await sleep(MATCH_REQUEST_GAP_MS);
     }
 
     if (match) {
@@ -362,6 +341,7 @@ class ShelfScanService {
         : await booksService.createBook({
             title: match.title,
             author: match.author,
+            isbn: match.isbn || undefined,
             shelf_id: shelfId,
             is_community: false,
           });
@@ -376,12 +356,12 @@ class ShelfScanService {
     return { added, placeholders };
   }
 
-  /** Match one OCR text block to a Google Books volume, or null. */
+  /** Match one OCR text block to an ISBNdb book, or null. */
   private async matchSingleText(detectedText: string): Promise<ShelfScanMatch | null> {
     const detectedTokens = new Set(tokenize(detectedText));
     if (detectedTokens.size === 0) return null;
 
-    const volumes = await this.fetchVolumesThrottled(detectedText);
+    const books = await searchBooksForSpineText(detectedText);
 
     let best: {
       score: number;
@@ -391,9 +371,9 @@ class ShelfScanService {
       coverUrl: string | null;
     } | null = null;
 
-    for (const volume of volumes) {
-      const title = volume.volumeInfo?.title || '';
-      const author = volume.volumeInfo?.authors?.[0] || '';
+    for (const book of books) {
+      const title = book.title || '';
+      const author = book.authors?.[0] || '';
       if (!title) continue;
 
       const titleTokens = tokenize(title);
@@ -413,16 +393,12 @@ class ShelfScanService {
 
       const score = titleRatio * 2 + authorRatio;
       if (!best || score > best.score) {
-        const rawThumbnail =
-          volume.volumeInfo?.imageLinks?.thumbnail ||
-          volume.volumeInfo?.imageLinks?.smallThumbnail ||
-          null;
         best = {
           score,
           title,
           author: author || 'Unknown Author',
-          isbn: pickIsbn(volume.volumeInfo?.industryIdentifiers),
-          coverUrl: rawThumbnail ? rawThumbnail.replace('http://', 'https://') : null,
+          isbn: book.isbn13 || book.isbn || null,
+          coverUrl: book.image || null,
         };
       }
     }
@@ -440,33 +416,6 @@ class ShelfScanService {
       resolvedSpineUrl: null,
       coverUrl: best.coverUrl,
     };
-  }
-
-  /** Google Books lookup with a small gap and one retry on rate limiting. */
-  private async fetchVolumesThrottled(query: string): Promise<
-    {
-      volumeInfo?: {
-        title?: string;
-        authors?: string[];
-        imageLinks?: { thumbnail?: string; smallThumbnail?: string };
-        industryIdentifiers?: { type?: string; identifier?: string }[];
-      };
-    }[]
-  > {
-    const keyParam = GOOGLE_BOOKS_API_KEY ? `&key=${GOOGLE_BOOKS_API_KEY}` : '';
-    const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=5&printType=books${keyParam}`;
-
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const response = await fetch(url);
-      if (response.status === 429) {
-        await sleep(MATCH_BACKOFF_MS);
-        continue;
-      }
-      if (!response.ok) return [];
-      const data = await response.json();
-      return data?.items || [];
-    }
-    return [];
   }
 
   /**

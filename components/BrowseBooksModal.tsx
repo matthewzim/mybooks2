@@ -30,11 +30,15 @@ import { BorderRadius, Spacing, Typography } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase, TABLES } from '@/services/supabase';
 import { getCoverImageUrl, getSpineImageUrl } from '@/services/storage';
-import { searchBookVolumes } from '@/services/googleBooks';
+import { searchBookVolumes } from '@/services/isbndb';
 import type { Book, CommunityBookSpine } from '@/types';
 
 /** Search result with a resolved cover image URL for the results list */
-type BookSearchResult = CommunityBookSpine & { cover_url?: string | null };
+type BookSearchResult = CommunityBookSpine & {
+  cover_url?: string | null;
+  /** Canonical ISBN from the API supplement, persisted when the add creates a new record */
+  isbn13?: string | null;
+};
 
 /** Key used to collapse duplicate editions/records of the same book */
 function bookKey(title: string, author: string): string {
@@ -130,7 +134,7 @@ export function BrowseBooksModal({
     }
   }, [visible, overlayOpacity, cardOpacity, cardTranslateY, cardScale]);
 
-  // Debounced search: Supabase first, then Google Books API for additional results
+  // Debounced search: Supabase first, then the ISBNdb API for additional results
   useEffect(() => {
     const trimmedQuery = searchQuery.trim();
 
@@ -200,7 +204,7 @@ export function BrowseBooksModal({
           setBookSearchResults(localResults);
         }
 
-        // 2. Always supplement with the Google Books API so searching a
+        // 2. Always supplement with the ISBNdb API so searching a
         // prolific author lists their whole catalog, not only the titles
         // other users happen to own already.
         const apiVolumes = await searchBookVolumes(trimmedQuery, 20);
@@ -213,6 +217,7 @@ export function BrowseBooksModal({
             author: volume.author,
             image_url: null,
             cover_url: volume.thumbnail,
+            isbn13: volume.isbn13,
             uploaded_by_user_id: '',
             uploader_name: null,
             times_added: 0,
@@ -303,7 +308,7 @@ export function BrowseBooksModal({
     });
   };
 
-  const addBookToShelf = async (book: CommunityBookSpine, isExistingBook: boolean) => {
+  const addBookToShelf = async (book: BookSearchResult, isExistingBook: boolean) => {
     setIsAdding(book.id);
     try {
       const result = isExistingBook
@@ -311,6 +316,7 @@ export function BrowseBooksModal({
         : await booksService.createBook({
             title: book.title,
             author: book.author,
+            isbn: book.isbn13 || undefined,
             shelf_id: shelfId,
             is_community: false,
           });
@@ -373,7 +379,7 @@ export function BrowseBooksModal({
     }
   };
 
-  const handleAddBook = async (book: CommunityBookSpine) => {
+  const handleAddBook = async (book: BookSearchResult) => {
     // If the book has an existing Supabase ID (matched from community), reference it
     // Otherwise create a new book record
     const isExistingBook = book.uploaded_by_user_id !== '';

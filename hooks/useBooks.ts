@@ -11,7 +11,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { booksService } from '@/services/books';
 import { bookshelvesService } from '@/services/bookshelves';
-import { googleBooksService } from '@/services/googleBooks';
+import { isbndbService } from '@/services/isbndb';
 import { widgetManager } from '@/utils';
 import type { Book, CreateBookInput, UpdateBookInput, LoadingState } from '@/types';
 
@@ -278,7 +278,7 @@ export function useBooks(shelfId: string): UseBooksReturn {
     fetchBooks();
   }, [fetchBooks]);
 
-  // Pre-fetch and cache Google Books covers in the background for books
+  // Pre-fetch and cache ISBNdb covers in the background for books
   // that don't have a high-quality cover yet (none at all, or one cached by
   // the old low-resolution pipeline). Updates local state as each cover is
   // cached so the BookDetailModal can display them instantly.
@@ -303,7 +303,7 @@ export function useBooks(shelfId: string): UseBooksReturn {
     if (prefetchStartedRef.current === key) return;
     prefetchStartedRef.current = key;
 
-    googleBooksService.prefetchCovers(books, (bookId, coverUrl) => {
+    isbndbService.prefetchCovers(books, (bookId, coverUrl) => {
       if (prefetchCancelledRef.current) return;
       setBooks((prev) =>
         prev.map((b) =>

@@ -8,7 +8,7 @@
  *    (canonical title/author/ISBN) so the user doesn't have to type it in
  * 4. Confirm/adjust the details, upload the spine, and add the book
  *
- * Saving the canonical Google Books title/author (and ISBN) alongside the
+ * Saving the canonical ISBNdb title/author (and ISBN) alongside the
  * uploaded spine is what lets other users' scans of the same book find and
  * reuse this spine image (see shelfScanService.attachExistingSpines and
  * booksService.getAlternativeSpines, which match on title/author/ISBN).
