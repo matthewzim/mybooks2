@@ -11,7 +11,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { booksService } from '@/services/books';
 import { bookshelvesService } from '@/services/bookshelves';
-import { googleBooksService } from '@/services/googleBooks';
+import { isbndbService } from '@/services/isbndb';
 import { widgetManager } from '@/utils';
 import type { Book, CreateBookInput, UpdateBookInput, LoadingState } from '@/types';
 
@@ -303,7 +303,7 @@ export function useBooks(shelfId: string): UseBooksReturn {
     if (prefetchStartedRef.current === key) return;
     prefetchStartedRef.current = key;
 
-    googleBooksService.prefetchCovers(books, (bookId, coverUrl) => {
+    isbndbService.prefetchCovers(books, (bookId, coverUrl) => {
       if (prefetchCancelledRef.current) return;
       setBooks((prev) =>
         prev.map((b) =>
