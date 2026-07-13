@@ -355,7 +355,9 @@ npm test
 | `EXPO_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key |
 | `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` | RevenueCat public SDK key for iOS (`appl_...`) |
-| `EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY` | Optional Google Books key for cover lookups |
+| `EXPO_PUBLIC_ISBNDB_API_KEY` | ISBNdb key for book search and cover lookups (required for those features) |
+| `EXPO_PUBLIC_ISBNDB_BASE_URL` | Optional ISBNdb base URL override for Premium/Pro tiers (default `https://api2.isbndb.com`) |
+| `EXPO_PUBLIC_ISBNDB_REQUESTS_PER_SECOND` | Optional ISBNdb rate limit matching the subscription tier (default `1`) |
 | `EXPO_PUBLIC_GOOGLE_CLOUD_VISION_API_KEY` | Optional Vision key for spine OCR auto-fill |
 
 ## API Services
@@ -402,7 +404,7 @@ done from your accounts. Work through these in order.
 ### 2. Backend & services
 
 - [ ] **Apply the new Supabase migration**: `supabase/migrations/20260706_add_moderation.sql` (report + block tables). Run it via `supabase db push` or paste into the SQL editor. Reports land in the `content_reports` table — check it periodically; Apple expects reports to be acted on within 24 hours.
-- [ ] **RevenueCat production key**: set `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` to your `appl_...` key as an EAS secret: `eas env:create --name EXPO_PUBLIC_REVENUECAT_IOS_API_KEY --value appl_xxx --environment production` (do the same for the Supabase URL/anon key and any Google API keys — EAS builds do not read your local `.env`).
+- [ ] **RevenueCat production key**: set `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` to your `appl_...` key as an EAS secret: `eas env:create --name EXPO_PUBLIC_REVENUECAT_IOS_API_KEY --value appl_xxx --environment production` (do the same for the Supabase URL/anon key, the ISBNdb API key, and any Google API keys — EAS builds do not read your local `.env`).
 - [ ] **App Store Connect IAP**: create the app in App Store Connect, add the auto-renewable subscriptions (`monthly`, `yearly`) in a subscription group, and connect them in the RevenueCat dashboard (bundle ID must match). Products must be in "Ready to Submit" state and the paid-apps agreement signed, or the paywall will be empty.
 - [ ] **RevenueCat paywall legal links**: in the RevenueCat paywall editor, add footer links to your Privacy Policy and Terms of Use — Apple checks for these on the paywall itself (Guideline 3.1.2).
 

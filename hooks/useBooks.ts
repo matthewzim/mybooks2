@@ -278,7 +278,7 @@ export function useBooks(shelfId: string): UseBooksReturn {
     fetchBooks();
   }, [fetchBooks]);
 
-  // Pre-fetch and cache Google Books covers in the background for books
+  // Pre-fetch and cache ISBNdb covers in the background for books
   // that don't have a high-quality cover yet (none at all, or one cached by
   // the old low-resolution pipeline). Updates local state as each cover is
   // cached so the BookDetailModal can display them instantly.

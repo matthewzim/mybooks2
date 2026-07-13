@@ -62,9 +62,9 @@ only the minimum data needed to do its job:
   details, billing address, or Apple ID. RevenueCat receives your anonymous
   account ID and purchase receipt information from Apple in order to manage
   your subscription entitlement.
-- **Google Books API** (book lookup): when you search for a book, your
-  search text (title/author/ISBN) is sent to Google to fetch book details
-  and cover images.
+- **ISBNdb** (book lookup): when you search for a book, your search text
+  (title/author/ISBN) is sent to ISBNdb to fetch book details and cover
+  images.
 - **Google Cloud Vision API** (optional spine text recognition): if you use
   the auto-fill feature when adding a book, the spine image you selected is
   sent to Google for text recognition so the App can suggest the title and
