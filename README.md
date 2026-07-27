@@ -127,7 +127,16 @@ Go to [supabase.com](https://supabase.com) and create a new project.
 
 ### 2. Run the database migrations
 
-Create the following tables in your Supabase SQL editor:
+**Quickest path:** paste [`supabase/combined_schema.sql`](supabase/combined_schema.sql)
+into the SQL Editor and run it. That single file is every migration folded into
+its final state, and it is idempotent — it works on a brand-new project, on one
+that is several migrations behind, and on one that is already current, so you
+never have to work out which migrations a project has seen. Use it whenever a
+project has drifted; use the individual files in `supabase/migrations/` when you
+want the step-by-step history.
+
+The original table definitions below are kept for historical reference — they
+predate the migrations, so don't run them on a new project:
 
 ```sql
 -- Users table (extends auth.users)
