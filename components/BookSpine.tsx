@@ -23,7 +23,11 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BookSpine as BookSpineConstants, getSerifFontFamily } from '@/constants/theme';
+import {
+  BookSpine as BookSpineConstants,
+  getSerifFontFamily,
+  FIXED_GEOMETRY_MAX_FONT_SCALE,
+} from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { getSpineCloth } from '@/utils/spineCloth';
@@ -45,7 +49,7 @@ export const SPINE_SHEEN_COLORS = [
 ] as const;
 export const SPINE_SHEEN_LOCATIONS = [0, 0.24, 0.72, 1] as const;
 
-export function BookSpine({
+function BookSpineComponent({
   book,
   onPress,
   width = BookSpineConstants.width,
@@ -122,6 +126,7 @@ export function BookSpine({
               ]}
               numberOfLines={2}
               ellipsizeMode="tail"
+              maxFontSizeMultiplier={FIXED_GEOMETRY_MAX_FONT_SCALE}
             >
               {displayTitle}
             </Text>
@@ -131,6 +136,29 @@ export function BookSpine({
     </Pressable>
   );
 }
+
+/**
+ * Memoised on the fields that affect what is drawn.
+ *
+ * The grid measures every spine image asynchronously and stores the result in
+ * state, so a shelf of N books re-renders N times while loading. Without this
+ * that is O(N²) spine renders — each one re-running the image-URL effect and
+ * re-decoding into `expo-image` — which is what makes a large shelf stutter
+ * on an iPhone as it opens.
+ */
+export const BookSpine = React.memo(
+  BookSpineComponent,
+  (prev, next) =>
+    prev.width === next.width &&
+    prev.height === next.height &&
+    prev.onPress === next.onPress &&
+    prev.book.id === next.book.id &&
+    prev.book.image_url === next.book.image_url &&
+    prev.book.title === next.book.title &&
+    prev.book.author === next.book.author
+);
+
+BookSpine.displayName = 'BookSpine';
 
 const styles = StyleSheet.create({
   container: {

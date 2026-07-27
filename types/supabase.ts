@@ -109,7 +109,7 @@ export interface Database {
           author: string;
           image_url: string | null;
           cover_image_url: string | null;
-          uploaded_by_user_id: string;
+          uploaded_by_user_id: string | null;
           is_community: boolean;
           isbn: string | null;
           created_at: string;
@@ -121,7 +121,7 @@ export interface Database {
           author: string;
           image_url?: string | null;
           cover_image_url?: string | null;
-          uploaded_by_user_id: string;
+          uploaded_by_user_id?: string | null;
           is_community?: boolean;
           isbn?: string | null;
           created_at?: string;
@@ -133,7 +133,7 @@ export interface Database {
           author?: string;
           image_url?: string | null;
           cover_image_url?: string | null;
-          uploaded_by_user_id?: string;
+          uploaded_by_user_id?: string | null;
           is_community?: boolean;
           isbn?: string | null;
           created_at?: string;
@@ -387,6 +387,33 @@ export interface Database {
       delete_my_account: {
         Args: Record<string, never>;
         Returns: undefined;
+      };
+      reset_my_data: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
+      shared_book_ids: {
+        Args: Record<string, never>;
+        Returns: { book_id: string }[];
+      };
+      reorder_bookshelf_items: {
+        Args: {
+          p_shelf_id: string;
+          p_item_ids: string[];
+        };
+        Returns: undefined;
+      };
+      reorder_bookshelves: {
+        Args: {
+          p_shelf_ids: string[];
+        };
+        Returns: undefined;
+      };
+      random_public_bookshelves: {
+        Args: {
+          p_limit?: number;
+        };
+        Returns: Database['public']['Tables']['bookshelves']['Row'][];
       };
     };
     Enums: {

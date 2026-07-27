@@ -11,7 +11,13 @@
  * const { data, error } = await bookshelvesService.getUserBookshelves();
  */
 
-import { supabase, TABLES, handleSupabaseError } from './supabase';
+import {
+  supabase,
+  TABLES,
+  handleSupabaseError,
+  ilikeFilter,
+  isMissingFunctionError,
+} from './supabase';
 import type {
   Bookshelf,
   Book,
@@ -20,6 +26,51 @@ import type {
   ApiResponse,
   BOOKSHELF_COLORS,
 } from '@/types';
+
+/**
+ * Columns selected when a shelf's books are only being *previewed* (home
+ * screen, Explore tab, another user's profile).
+ *
+ * `bookshelf_items(*, book:books(*))` pulls the full review text for every
+ * book on every shelf — the single largest field in the schema and unused by
+ * every preview surface. Naming columns instead keeps a library-sized
+ * response proportional to what is actually rendered.
+ */
+const PREVIEW_ITEM_SELECT = `
+  id,
+  book_id,
+  shelf_id,
+  position,
+  rating,
+  is_stacked,
+  stack_id,
+  stack_position,
+  created_at,
+  updated_at,
+  book:books(
+    id,
+    title,
+    author,
+    image_url,
+    cover_image_url,
+    isbn,
+    uploaded_by_user_id,
+    is_community
+  )
+`;
+
+/**
+ * Public shelves sampled for the Explore tab carry at most this many books —
+ * far more than the single row a preview card renders, but bounded so one
+ * user with a 2,000-book shelf can't dominate the response.
+ */
+const PREVIEW_BOOKS_PER_SHELF = 40;
+
+/**
+ * A shelf with a bounded slice of its books plus the true total, so the count
+ * badge stays honest even though only `PREVIEW_BOOKS_PER_SHELF` were fetched.
+ */
+export type PreviewShelf = Bookshelf & { books: Book[]; book_count: number };
 
 /**
  * Transform a bookshelf_items row (with nested book) into the combined Book type.
@@ -66,6 +117,43 @@ function shelfWithBooks(raw: any): Bookshelf & { books: Book[] } {
  * Provides methods for managing user bookshelves
  */
 class BookshelvesService {
+
+  /**
+   * Fetch the preview books for a set of shelves, one bounded request each.
+   *
+   * `count: 'exact'` is scoped to the shelf's own rows (an indexed count on
+   * `bookshelf_items(shelf_id)`), so the caller gets the true book total for
+   * the count badge in the same round trip as the capped preview rows — the
+   * cap must not make a 200-book shelf advertise itself as a 40-book one.
+   */
+  private async fetchPreviewBooks(
+    shelfIds: string[]
+  ): Promise<Map<string, { books: Book[]; total: number }>> {
+    const byShelf = new Map<string, { books: Book[]; total: number }>();
+    if (shelfIds.length === 0) return byShelf;
+
+    const results = await Promise.all(
+      shelfIds.map((shelfId) =>
+        supabase
+          .from(TABLES.BOOKSHELF_ITEMS)
+          .select(PREVIEW_ITEM_SELECT, { count: 'exact' })
+          .eq('shelf_id', shelfId)
+          .order('position', { ascending: true })
+          .limit(PREVIEW_BOOKS_PER_SHELF)
+      )
+    );
+
+    results.forEach((result, index) => {
+      if (result.error) return;
+      const books = (result.data || []).map(itemToBook);
+      byShelf.set(shelfIds[index], {
+        books,
+        total: result.count ?? books.length,
+      });
+    });
+
+    return byShelf;
+  }
 
   private shuffleArray<T>(items: T[]): T[] {
     const shuffled = [...items];
@@ -155,17 +243,22 @@ class BookshelvesService {
         throw new Error('Not authenticated');
       }
 
-      // Get bookshelves with their bookshelf_items and nested book data
-      const { data, error } = await supabase
+      // Get bookshelves with their bookshelf_items and nested book data.
+      // When a preview limit is given, apply it to the embedded items so the
+      // rows are trimmed by Postgres rather than downloaded and sliced here.
+      let query = supabase
         .from(TABLES.BOOKSHELVES)
-        .select(
-          `
-          *,
-          bookshelf_items(*, book:books(*))
-        `
-        )
+        .select(`*, bookshelf_items(${PREVIEW_ITEM_SELECT})`)
         .eq('user_id', session.session.user.id)
         .order('position', { ascending: true });
+
+      if (previewLimit !== null) {
+        query = query
+          .order('position', { referencedTable: 'bookshelf_items', ascending: true })
+          .limit(previewLimit, { referencedTable: 'bookshelf_items' });
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -312,15 +405,31 @@ class BookshelvesService {
    */
   async reorderBookshelves(orderedIds: string[]): Promise<ApiResponse<null>> {
     try {
-      // Update each bookshelf's position based on array index
-      const updates = orderedIds.map((id, index) =>
-        supabase
-          .from(TABLES.BOOKSHELVES)
-          .update({ position: index })
-          .eq('id', id)
-      );
+      if (orderedIds.length === 0) {
+        return { data: null, error: null };
+      }
 
-      await Promise.all(updates);
+      // One statement for the whole reorder. The previous version issued one
+      // request per shelf and threw the results away, so a partial failure
+      // left the stored order silently disagreeing with the screen.
+      const { error } = await supabase.rpc('reorder_bookshelves', {
+        p_shelf_ids: orderedIds,
+      });
+
+      if (error && !isMissingFunctionError(error)) throw error;
+
+      if (error) {
+        // RPC not deployed yet — fall back to per-row updates, but surface
+        // failures instead of swallowing them.
+        const results = await Promise.all(
+          orderedIds.map((id, index) =>
+            supabase.from(TABLES.BOOKSHELVES).update({ position: index }).eq('id', id)
+          )
+        );
+
+        const failure = results.find((result) => result.error);
+        if (failure?.error) throw failure.error;
+      }
 
       return { data: null, error: null };
     } catch (error) {
@@ -340,7 +449,7 @@ class BookshelvesService {
    */
   async getPublicBookshelvesForUser(
     userId: string
-  ): Promise<ApiResponse<{ user: { id: string; name: string | null; public_username: string | null }; bookshelves: (Bookshelf & { books: Book[] })[] }>> {
+  ): Promise<ApiResponse<{ user: { id: string; name: string | null; public_username: string | null }; bookshelves: PreviewShelf[] }>> {
     try {
       // First, attempt to get the user by id
       const { data: userById, error: userByIdError } = await supabase
@@ -371,22 +480,27 @@ class BookshelvesService {
 
       const targetUserId = resolvedUser?.id || userId;
 
-      // Get public bookshelves for this user with their books via bookshelf_items
+      // Get this user's public shelves, then their preview books separately.
+      // Books are capped per shelf: the profile renders one preview row per
+      // shelf, so opening a stranger with a huge library must not become a
+      // multi-megabyte download.
       const { data, error } = await supabase
         .from(TABLES.BOOKSHELVES)
-        .select(
-          `
-          *,
-          bookshelf_items(*, book:books(*))
-        `
-        )
+        .select('*')
         .eq('user_id', targetUserId)
         .eq('is_public', true)
         .order('position', { ascending: true });
 
       if (error) throw error;
 
-      const shelves = (data || []).map(shelfWithBooks);
+      const shelfRows = (data || []) as Bookshelf[];
+      const booksByShelf = await this.fetchPreviewBooks(shelfRows.map((s) => s.id));
+
+      const shelves = shelfRows.map((shelf) => ({
+        ...shelf,
+        books: booksByShelf.get(shelf.id)?.books || [],
+        book_count: booksByShelf.get(shelf.id)?.total ?? 0,
+      }));
 
       if (!resolvedUser && shelves.length === 0) {
         throw new Error('User not found');
@@ -430,48 +544,68 @@ class BookshelvesService {
       }
 
       const normalizedUsernameQuery = trimmedQuery.replace(/^@+/, '');
-      const escapedQuery = trimmedQuery.replace(/[%_]/g, (char) => `\\${char}`);
 
       // Get the current user to exclude from search results
       const { data: session } = await supabase.auth.getSession();
       const currentUserId = session.session?.user?.id;
 
-      // Limit results to discoverable users (users that have at least one public shelf)
-      const { data: publicShelfOwners, error: publicOwnersError } = await supabase
-        .from(TABLES.BOOKSHELVES)
-        .select('user_id')
-        .eq('is_public', true)
-        .limit(300);
-
-      if (publicOwnersError) throw publicOwnersError;
-
-      const ownerIds = [...new Set((publicShelfOwners || []).map((shelf) => shelf.user_id))];
-      if (ownerIds.length === 0) {
-        return { data: [], error: null };
+      // Match users first, then keep the ones who are discoverable (have at
+      // least one public shelf).
+      //
+      // This used to run the other way around — download up to 300 public
+      // shelf rows, then filter users by that id list. That capped
+      // discoverability at whichever arbitrary 300 shelves Postgres returned
+      // (users beyond them became unsearchable once the corpus grew) and put
+      // 300 UUIDs into the request URL. Matching first keeps both queries
+      // bounded by `limit` no matter how large the corpus gets.
+      const searchClauses = [
+        ilikeFilter('name', trimmedQuery),
+        ilikeFilter('public_username', trimmedQuery),
+      ];
+      if (normalizedUsernameQuery) {
+        searchClauses.push(ilikeFilter('public_username', normalizedUsernameQuery, 'exact'));
       }
 
-      // Search users by name or public_username (case-insensitive)
-      const searchFilter = normalizedUsernameQuery
-        ? `name.ilike.%${escapedQuery}%,public_username.ilike.%${escapedQuery}%,public_username.ilike.${normalizedUsernameQuery}`
-        : `name.ilike.%${escapedQuery}%,public_username.ilike.%${escapedQuery}%`;
+      // Over-fetch a little: some matches will be filtered out for having no
+      // public shelf, and we still want to fill `limit` when possible.
+      const candidateLimit = Math.min(limit * 5, 100);
 
       let queryBuilder = supabase
         .from(TABLES.USERS)
         .select('id, name, public_username')
-        .in('id', ownerIds)
-        .or(searchFilter)
-        .limit(limit);
+        .or(searchClauses.join(','))
+        .limit(candidateLimit);
 
       // Exclude current user from results
       if (currentUserId) {
         queryBuilder = queryBuilder.neq('id', currentUserId);
       }
 
-      const { data, error } = await queryBuilder;
+      const { data: candidates, error } = await queryBuilder;
 
       if (error) throw error;
 
-      return { data: data as { id: string; name: string | null; public_username: string | null }[], error: null };
+      const candidateIds = (candidates || []).map((candidate) => candidate.id);
+      if (candidateIds.length === 0) {
+        return { data: [], error: null };
+      }
+
+      const { data: publicShelfOwners, error: publicOwnersError } = await supabase
+        .from(TABLES.BOOKSHELVES)
+        .select('user_id')
+        .eq('is_public', true)
+        .in('user_id', candidateIds);
+
+      if (publicOwnersError) throw publicOwnersError;
+
+      const discoverable = new Set((publicShelfOwners || []).map((shelf) => shelf.user_id));
+
+      return {
+        data: (candidates || [])
+          .filter((candidate) => discoverable.has(candidate.id))
+          .slice(0, limit),
+        error: null,
+      };
     } catch (error) {
       return {
         data: null,
@@ -484,31 +618,62 @@ class BookshelvesService {
    * Get a random selection of public bookshelves from other users.
    * Includes bookshelf preview books and basic owner info.
    */
+  /**
+   * Pick `limit` public shelves at random.
+   *
+   * Prefers a server-side sample; falls back to fetching a bounded window of
+   * shelf rows (no books) and shuffling locally when the RPC isn't deployed
+   * yet. Either way only shelf rows cross the wire here — the books for the
+   * chosen few are fetched separately.
+   */
+  private async sampleRandomPublicShelves(limit: number): Promise<Bookshelf[]> {
+    const { data, error } = await supabase.rpc('random_public_bookshelves', {
+      p_limit: limit,
+    });
+
+    if (!error) {
+      return (data || []) as Bookshelf[];
+    }
+    if (!isMissingFunctionError(error)) {
+      throw error;
+    }
+
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from(TABLES.BOOKSHELVES)
+      .select('*')
+      .eq('is_public', true)
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (fallbackError) throw fallbackError;
+
+    return this.shuffleArray((fallbackData || []) as Bookshelf[]).slice(0, limit);
+  }
+
   async getRandomPublicBookshelfPreviews(
     limit: number = 6
-  ): Promise<ApiResponse<({ owner: { id: string; name: string | null; public_username: string | null } } & Bookshelf & { books: Book[] })[]>> {
+  ): Promise<ApiResponse<({ owner: { id: string; name: string | null; public_username: string | null } } & PreviewShelf)[]>> {
     try {
-      // Fetch all public bookshelves (including current user's) for a random assortment
-      const { data, error } = await supabase
-        .from(TABLES.BOOKSHELVES)
-        .select(
-          `
-          *,
-          bookshelf_items(*, book:books(*))
-        `
-        )
-        .eq('is_public', true)
-        .limit(60);
-
-      if (error) throw error;
-
-      const shelves = (data || []).map(shelfWithBooks);
-      if (shelves.length === 0) {
+      // Sample the shelves first, then fetch books only for the handful that
+      // will actually be rendered.
+      //
+      // The previous version downloaded 60 public shelves *with every book on
+      // every one of them*, shuffled on the phone and displayed 6. At a few
+      // hundred users with real libraries that is megabytes of JSON parsed on
+      // the main thread every time the Explore tab opens or is pulled to
+      // refresh — and because the query had no ORDER BY, it was the same
+      // arbitrary 60 shelves every time, so most users were never discoverable.
+      const selectedShelves = await this.sampleRandomPublicShelves(limit);
+      if (selectedShelves.length === 0) {
         return { data: [], error: null };
       }
 
-      const selectedShelves = this.shuffleArray(shelves).slice(0, limit);
+      const shelfIds = selectedShelves.map((shelf) => shelf.id);
       const userIds = [...new Set(selectedShelves.map((shelf) => shelf.user_id))];
+
+      // One bounded request per selected shelf: a single flat query would let
+      // one huge shelf consume the entire row budget and starve the others.
+      const booksByShelf = await this.fetchPreviewBooks(shelfIds);
 
       const { data: usersData, error: usersError } = await supabase
         .from(TABLES.USERS)
@@ -521,6 +686,8 @@ class BookshelvesService {
 
       const shelvesWithOwners = selectedShelves.map((shelf) => ({
         ...shelf,
+        books: booksByShelf.get(shelf.id)?.books || [],
+        book_count: booksByShelf.get(shelf.id)?.total ?? 0,
         owner: {
           id: shelf.user_id,
           name: usersById.get(shelf.user_id)?.name || null,

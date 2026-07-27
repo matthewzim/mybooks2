@@ -20,6 +20,7 @@ import {
   BookshelfDimensions,
   getFontFamily,
   getSerifFontFamily,
+  FIXED_GEOMETRY_MAX_FONT_SCALE,
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
@@ -52,16 +53,22 @@ interface BookshelfPreviewProps {
   books: Book[];
   onPress: (bookshelf: Bookshelf) => void;
   containerStyle?: ViewStyle;
+  /**
+   * True number of books on the shelf. Community surfaces fetch only a capped
+   * slice of a stranger's shelf, so `books.length` would understate it on the
+   * count badge; defaults to `books.length` when the caller has them all.
+   */
+  totalBooks?: number;
   /** When provided, renders an owner row (avatar + handle) under the shelf */
   owner?: BookshelfOwner;
 }
 
-export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, owner }: BookshelfPreviewProps) {
+export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, totalBooks: totalBooksProp, owner }: BookshelfPreviewProps) {
   const { colors } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const scale = useRef(new Animated.Value(1)).current;
   const shelfStyle = bookshelf.shelf_style || 'full';
-  const totalBooks = books.length;
+  const totalBooks = totalBooksProp ?? books.length;
   const shelfColors = getShelfColors(bookshelf.cover_color);
 
   const cardInnerWidth = screenWidth - Spacing.md * 4;
@@ -127,11 +134,19 @@ export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, ow
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [books, imageDimensions, shelfInnerWidth]);
 
+  // Books whose natural size has already been requested. A ref rather than
+  // effect state because measuring a book updates `imageDimensions`, which
+  // re-runs this effect: keying off state alone re-requested every book that
+  // hadn't resolved yet on each measurement, so an N-book row issued O(N²)
+  // URL resolutions and RNImage.getSize calls.
+  const measureRequestedRef = useRef(new Set<string>());
+
   useEffect(() => {
     let cancelled = false;
 
     firstRowBooks.forEach(({ book }) => {
-      if (!book.image_url || imageDimensions[book.id]) return;
+      if (!book.image_url || measureRequestedRef.current.has(book.id)) return;
+      measureRequestedRef.current.add(book.id);
 
       getSpineImageUrl(book.image_url).then((url) => {
         if (!url || cancelled) return;
@@ -155,7 +170,7 @@ export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, ow
     return () => {
       cancelled = true;
     };
-  }, [firstRowBooks, imageDimensions]);
+  }, [firstRowBooks]);
 
   const animateScale = (toValue: number) => {
     Animated.timing(scale, {
@@ -314,6 +329,7 @@ function BookPreviewSpine({ book, width, height }: BookPreviewSpineProps) {
               ]}
               numberOfLines={1}
               ellipsizeMode="tail"
+              maxFontSizeMultiplier={FIXED_GEOMETRY_MAX_FONT_SCALE}
             >
               {book.title?.trim() || 'Untitled'}
             </Text>

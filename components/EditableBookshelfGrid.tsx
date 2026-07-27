@@ -37,6 +37,7 @@ import {
   BookSpine as BookSpineConstants,
   BookshelfDimensions,
   Wood,
+  FIXED_GEOMETRY_MAX_FONT_SCALE,
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
@@ -116,12 +117,18 @@ export function EditableBookshelfGrid({
     }
   }, [books, draggingIndex]);
 
+  // Books already queued for measurement. Tracked in a ref because
+  // `imageDimensions` is captured stale here (it is deliberately not a
+  // dependency), so reading it cannot tell us what is already in flight.
+  const measureRequestedRef = React.useRef(new Set<string>());
+
   // Fetch natural image dimensions for all books with images
   useEffect(() => {
     let cancelled = false;
 
     localBooks.forEach((book) => {
-      if (book.image_url && !imageDimensions[book.id]) {
+      if (book.image_url && !measureRequestedRef.current.has(book.id)) {
+        measureRequestedRef.current.add(book.id);
         getSpineImageUrl(book.image_url).then((url) => {
           if (cancelled || !url) return;
           RNImage.getSize(
@@ -736,6 +743,7 @@ function StackedBookSpine({
           <Text
             style={[styles.stackedTitle, { color: cloth.titleColor }]}
             numberOfLines={1}
+            maxFontSizeMultiplier={FIXED_GEOMETRY_MAX_FONT_SCALE}
           >
             {displayTitle}
           </Text>

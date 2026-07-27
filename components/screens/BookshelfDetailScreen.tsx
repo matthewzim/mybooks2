@@ -100,16 +100,18 @@ export default function BookshelfDetailScreen() {
   }, []);
 
   /**
-   * Open book detail modal
+   * Open book detail modal.
+   * Stable identity so the memoised spines in the grid aren't invalidated on
+   * every render of this screen.
    */
-  const handleBookPress = (book: Book) => {
+  const handleBookPress = useCallback((book: Book) => {
     if (clearSelectedBookTimerRef.current) {
       clearTimeout(clearSelectedBookTimerRef.current);
       clearSelectedBookTimerRef.current = null;
     }
     setSelectedBook(book);
     setIsBookModalVisible(true);
-  };
+  }, []);
 
   /**
    * Close book detail modal
@@ -141,7 +143,7 @@ export default function BookshelfDetailScreen() {
   /**
    * Show add book options
    */
-  const handleAddBook = () => {
+  const handleAddBook = useCallback(() => {
     Alert.alert('Add Book', 'How would you like to add a book?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -157,7 +159,7 @@ export default function BookshelfDetailScreen() {
         onPress: () => setIsBrowseModalVisible(true),
       },
     ]);
-  };
+  }, [id]);
 
   /**
    * Open edit bookshelf modal

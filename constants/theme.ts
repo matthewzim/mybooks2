@@ -541,6 +541,21 @@ export const BookshelfDimensions = {
   backColor: '#e9dcc2',
 } as const;
 
+/**
+ * Cap on iOS Dynamic Type scaling for text drawn inside fixed geometry.
+ *
+ * Spine labels, count pills and tab labels live in containers sized in
+ * pixels, and their text is often rotated inside a spine only ~20-100pt wide.
+ * iOS accessibility text sizes go up to 310%, which turns those labels into
+ * overlapping blocks that spill across the shelf. Capping the multiplier
+ * keeps the shelf legible at large text sizes while still honouring the
+ * setting; prose (descriptions, reviews, empty states) scales freely.
+ */
+export const FIXED_GEOMETRY_MAX_FONT_SCALE = 1.3;
+
+/** Slightly more headroom for chrome that can absorb a bit of growth. */
+export const CHROME_MAX_FONT_SCALE = 1.5;
+
 // Animation durations
 export const Animations = {
   fast: 150,

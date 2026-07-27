@@ -37,6 +37,8 @@ interface UserData {
 
 interface BookshelfWithBooks extends Bookshelf {
   books: Book[];
+  /** True shelf size; `books` holds only the capped slice used for the preview */
+  book_count: number;
 }
 
 export default function UserProfileScreen() {
@@ -297,6 +299,7 @@ export default function UserProfileScreen() {
                   key={bookshelf.id}
                   bookshelf={bookshelf}
                   books={bookshelf.books}
+                  totalBooks={bookshelf.book_count}
                   onPress={handleBookshelfPress}
                 />
               ))}

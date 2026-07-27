@@ -37,8 +37,10 @@ import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { RevenueCatProvider } from '@/contexts/RevenueCatContext';
 import { getSerifFontFamily } from '@/constants/theme';
 
-// Prevent splash screen from auto-hiding
-SplashScreen.preventAutoHideAsync();
+// Prevent splash screen from auto-hiding. This rejects if the splash screen
+// has already gone (fast reload, or the module initialising twice); an
+// unhandled rejection here is fatal in release builds on iOS.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 /**
  * Inner layout component that uses theme context
@@ -178,7 +180,7 @@ function RootLayoutContent() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,
     PlusJakartaSans_600SemiBold,
@@ -190,12 +192,23 @@ export default function RootLayout() {
     Newsreader_600SemiBold,
   });
 
-  // Hide splash screen when fonts are loaded
+  // A font that fails to load must not leave the app on the splash screen
+  // forever. `getFontFamily` falls back to the system face when a family is
+  // missing, so rendering unstyled beats never rendering at all.
+  const fontsReady = fontsLoaded || Boolean(fontError);
+
   useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
+    if (fontError) {
+      console.warn('Font loading failed; falling back to system fonts:', fontError);
     }
-  }, [fontsLoaded]);
+  }, [fontError]);
+
+  // Hide splash screen once fonts have resolved one way or the other
+  useEffect(() => {
+    if (fontsReady) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [fontsReady]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') {
@@ -243,7 +256,7 @@ export default function RootLayout() {
   }, []);
 
   // Show nothing while fonts are loading
-  if (!fontsLoaded) {
+  if (!fontsReady) {
     return null;
   }
 
