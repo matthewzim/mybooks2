@@ -72,13 +72,14 @@ export default function UserProfileScreen() {
       }
 
       if (result.data) {
+        const { user: loadedUser, bookshelves: loadedBookshelves } = result.data;
         setUser((previousUser) => ({
-          ...result.data.user,
-          name: result.data.user.name ?? previousUser?.name ?? null,
+          ...loadedUser,
+          name: loadedUser.name ?? previousUser?.name ?? null,
           public_username:
-            result.data.user.public_username ?? previousUser?.public_username ?? null,
+            loadedUser.public_username ?? previousUser?.public_username ?? null,
         }));
-        setBookshelves(result.data.bookshelves);
+        setBookshelves(loadedBookshelves);
       }
     } catch (err) {
       console.error('Failed to load user profile:', err);

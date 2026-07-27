@@ -129,6 +129,14 @@ async function isbndbFetch<T>(
         return null;
       }
 
+      // The API answered something other than 429, so it is serving us again.
+      // Clear any cooldown a previous 429 set: without this, a rate-limit that
+      // recovered on retry would still silently skip every background request
+      // (and make prefetchCovers sleep) for the rest of the 30s window.
+      // Requests are serialized through the shared queue, so this can't race
+      // with another caller's in-flight back-off.
+      cooldownUntil = 0;
+
       // ISBNdb answers 404 for lookups with no result (e.g. an unknown
       // ISBN) — a clean miss, not an error worth logging.
       if (response.status === 404) return null;
@@ -431,6 +439,43 @@ function authorMatches(
   return tokens.every((token) => haystack.includes(token));
 }
 
+/**
+ * Books ISBNdb has no usable cover for, keyed by title|author with the time
+ * of the miss.
+ *
+ * A miss leaves `cover_image_url` null, which is exactly what marks a book as
+ * needing a cover — so without this, every shelf open re-runs the same
+ * two-request search for the same permanently coverless books, which is the
+ * fastest way to exhaust a 1-request/second quota. Only background prefetches
+ * consult it; an on-demand fetch (`bypassCooldown`, i.e. the user is looking
+ * at the book) always gets a fresh attempt.
+ *
+ * Session-scoped and bounded: entries expire so a book that ISBNdb indexes
+ * later is picked up, and the map can't grow without limit on a long session.
+ */
+const coverMisses = new Map<string, number>();
+const COVER_MISS_TTL_MS = 6 * 60 * 60 * 1000;
+const COVER_MISS_MAX_ENTRIES = 500;
+
+function hasRecentCoverMiss(key: string): boolean {
+  const missedAt = coverMisses.get(key);
+  if (missedAt === undefined) return false;
+  if (Date.now() - missedAt > COVER_MISS_TTL_MS) {
+    coverMisses.delete(key);
+    return false;
+  }
+  return true;
+}
+
+function recordCoverMiss(key: string): void {
+  // Map iteration is insertion-ordered, so this evicts the oldest entry.
+  if (coverMisses.size >= COVER_MISS_MAX_ENTRIES) {
+    const oldest = coverMisses.keys().next();
+    if (!oldest.done) coverMisses.delete(oldest.value);
+  }
+  coverMisses.set(key, Date.now());
+}
+
 class IsbndbCoverService {
   /**
    * Look for another record of the same book (matching title + author,
@@ -498,6 +543,12 @@ class IsbndbCoverService {
    * deprioritised: a title collision ("It" matching "It Ends with Us")
    * must not produce a wrong cover — missing is better than wrong.
    *
+   * When the author is *not* known ("Unknown Author" is the fallback in
+   * several add-book flows) there is no signal left to break such a
+   * collision, so the subtitle/prefix tolerance is dropped and only an exact
+   * title match counts. Without that, a book stored as "It" with no author
+   * silently picks up the cover of "It Ends with Us".
+   *
    * Among the surviving books, prefer exact title matches over
    * subtitle/prefix matches (reprints, summaries and omnibus editions
    * tend to carry junk imagery), then the most recently published edition
@@ -524,11 +575,17 @@ class IsbndbCoverService {
           ? book.title_long || ''
           : null;
       if (matchedTitle === null) continue;
-      if (authorKnown && !authorMatches(author, book.authors)) continue;
+
+      const isExactTitle = normalizeForMatch(matchedTitle) === wantedTitle;
+      if (authorKnown) {
+        if (!authorMatches(author, book.authors)) continue;
+      } else if (!isExactTitle) {
+        // No author to disambiguate with — a prefix match is a coin flip.
+        continue;
+      }
 
       const year = parseInt((book.date_published || '').slice(0, 4), 10) || 0;
-      const score =
-        (normalizeForMatch(matchedTitle) === wantedTitle ? 1_000_000 : 0) + year;
+      const score = (isExactTitle ? 1_000_000 : 0) + year;
       if (score > bestScore) {
         bestScore = score;
         bestUrl = rawUrl;
@@ -634,7 +691,25 @@ class IsbndbCoverService {
         // Copying failed — fall through to a fresh ISBNdb fetch.
       }
 
-      // 2. Search ISBNdb for a cover image URL
+      // 2. Search ISBNdb for a cover image URL. A background prefetch skips
+      //    books ISBNdb already failed to match this session rather than
+      //    spending two more requests re-confirming the miss.
+      const bypassCooldown = options?.bypassCooldown ?? false;
+      const missKey = bookDedupeKey(book.title, book.author);
+
+      const noCoverFound = (): ApiResponse<string> => {
+        // Keep showing the legacy cover (if any) until a re-fetch succeeds.
+        if (existingUrl) return { data: existingUrl, error: null };
+        return {
+          data: null,
+          error: { message: 'No cover image found on ISBNdb' },
+        };
+      };
+
+      if (!bypassCooldown && hasRecentCoverMiss(missKey)) {
+        return noCoverFound();
+      }
+
       const isbndbCoverUrl = await this.searchCoverUrl(
         book.title,
         book.author,
@@ -642,12 +717,13 @@ class IsbndbCoverService {
       );
 
       if (!isbndbCoverUrl) {
-        // Keep showing the legacy cover (if any) until a re-fetch succeeds.
-        if (existingUrl) return { data: existingUrl, error: null };
-        return {
-          data: null,
-          error: { message: 'No cover image found on ISBNdb' },
-        };
+        // Only remember a miss that the API actually answered. A null while
+        // unconfigured or mid-cooldown means the search was skipped, not that
+        // the book has no cover.
+        if (isbndbConfigured() && Date.now() >= cooldownUntil) {
+          recordCoverMiss(missKey);
+        }
+        return noCoverFound();
       }
 
       // 3. Download, validate and upload to Supabase storage. ISBNdb serves
