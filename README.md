@@ -360,6 +360,43 @@ npm test
 | `EXPO_PUBLIC_ISBNDB_REQUESTS_PER_SECOND` | Optional ISBNdb rate limit matching the subscription tier (default `1`) |
 | `EXPO_PUBLIC_GOOGLE_CLOUD_VISION_API_KEY` | Optional Vision key for spine OCR auto-fill |
 
+### Environment variables in EAS builds
+
+EAS builds never read your local `.env` — every variable above has to exist on
+the EAS servers, and the build profile has to say **which** EAS environment to
+read them from. Each profile in `eas.json` is bound explicitly:
+
+| Build profile | EAS environment |
+|---------------|-----------------|
+| `development` | `development` |
+| `preview` | `preview` |
+| `production` | `production` |
+
+Without that `environment` field the build falls back to implicit defaults and
+can silently produce a binary with the variables unset — which surfaces at
+runtime as `ISBNdb API key is not configured` (or the equivalent Supabase /
+RevenueCat warning) rather than as a build failure.
+
+Two consequences worth remembering:
+
+- **`EXPO_PUBLIC_*` values are inlined into the JS bundle at build time.**
+  Adding or changing a variable in the EAS dashboard does nothing to builds
+  that already exist — you must rebuild (or ship a new update) to pick it up.
+- **`eas update` needs its own environment.** On SDK 55+ pass it explicitly,
+  e.g. `eas update --branch production --environment production`; otherwise the
+  update bundle is built with different values than the binary it patches.
+
+Set `Sensitive` (or `Plain text`) visibility for `EXPO_PUBLIC_*` variables.
+`Secret` variables are not readable by the bundler, so a secret-scoped
+`EXPO_PUBLIC_*` value ends up `undefined` in the app.
+
+Check what a profile actually resolves to before building:
+
+```bash
+eas env:list --environment production
+eas build --platform ios --profile production   # logs the variables it loaded
+```
+
 ## API Services
 
 ### Authentication (`services/auth.ts`)
@@ -424,6 +461,7 @@ eas submit --platform ios --latest              # uploads the build to App Store
 ```
 
 - Build numbers auto-increment (`autoIncrement` + remote app version source in `eas.json`).
+- Each build profile is bound to the matching EAS environment (see [Environment variables in EAS builds](#environment-variables-in-eas-builds)). If you add or rotate a key in the EAS dashboard, rebuild — `EXPO_PUBLIC_*` values are baked into the bundle at build time.
 - In App Store Connect → TestFlight, add yourself as an internal tester. Internal testing needs no review; external tester groups require a short beta review.
 - Smoke-test on device: onboarding, add/scan a book, widget setup, **a sandbox purchase and Restore Purchases**, community browse, report/block a user, account deletion.
 
