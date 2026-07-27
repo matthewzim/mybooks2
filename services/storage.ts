@@ -211,6 +211,28 @@ class StorageService {
   }
 
   /**
+   * Resolve a stored image reference to its path inside `bucket`, or null
+   * when it doesn't belong to that bucket. Used by the account sweep to
+   * recognise files that must be preserved.
+   */
+  getStoragePath(
+    imageUrlOrPath: string | null | undefined,
+    bucket: string
+  ): string | null {
+    if (!imageUrlOrPath) return null;
+
+    const isFullUrl =
+      imageUrlOrPath.startsWith('http://') || imageUrlOrPath.startsWith('https://');
+
+    if (!isFullUrl) return imageUrlOrPath;
+
+    return (
+      extractStoragePathFromUrl(imageUrlOrPath, bucket) ??
+      this.extractPathFromUrl(imageUrlOrPath, bucket)
+    );
+  }
+
+  /**
    * Delete a file from storage
    *
    * @param bucket - Storage bucket name
@@ -397,8 +419,14 @@ export const storageService = new StorageService();
 // In-memory URL resolution cache
 // Avoids repeated Supabase `createSignedUrl` network calls when reopening a
 // bookshelf. Entries are kept for 50 minutes (signed URLs expire in 60).
+//
+// Bounded so a long session that browses many community shelves can't grow the
+// map without limit; Map iteration is insertion-ordered, so this evicts oldest
+// first. The cap is generous relative to a shelf (two entries per book at
+// most) so eviction never causes re-signing within one screen.
 // ---------------------------------------------------------------------------
 const URL_CACHE_TTL_MS = 50 * 60 * 1000;
+const URL_CACHE_MAX_ENTRIES = 2000;
 const urlCache = new Map<string, { url: string; expiry: number }>();
 
 function getCachedUrl(key: string): string | null {
@@ -409,7 +437,124 @@ function getCachedUrl(key: string): string | null {
 }
 
 function setCachedUrl(key: string, url: string): void {
+  if (urlCache.size >= URL_CACHE_MAX_ENTRIES) {
+    const oldest = urlCache.keys().next();
+    if (!oldest.done) urlCache.delete(oldest.value);
+  }
   urlCache.set(key, { url, expiry: Date.now() + URL_CACHE_TTL_MS });
+}
+
+// ---------------------------------------------------------------------------
+// Signed-URL batching
+//
+// Every spine and cover on screen resolves its own URL, and each resolution
+// used to be its own `createSignedUrl` round trip: opening a 200-book shelf
+// fired 200 requests, and two components showing the same book fired two more
+// because nothing was cached until the first one came back.
+//
+// Requests for the same bucket are now collected for a tick and sent as a
+// single `createSignedUrls` call, and concurrent callers asking for the same
+// path share one in-flight promise. A 200-book shelf becomes a handful of
+// batched requests.
+// ---------------------------------------------------------------------------
+const SIGNED_URL_EXPIRY_SECONDS = 3600;
+/** Supabase rejects very large batches; keep each request comfortably small. */
+const SIGN_BATCH_MAX = 100;
+
+interface PendingSign {
+  resolve: (url: string | null) => void;
+}
+
+const signQueues = new Map<string, Map<string, PendingSign[]>>();
+const signScheduled = new Set<string>();
+
+async function flushSignQueue(bucket: string): Promise<void> {
+  signScheduled.delete(bucket);
+  const queue = signQueues.get(bucket);
+  if (!queue || queue.size === 0) return;
+  signQueues.delete(bucket);
+
+  const entries = [...queue.entries()];
+
+  for (let i = 0; i < entries.length; i += SIGN_BATCH_MAX) {
+    const chunk = entries.slice(i, i + SIGN_BATCH_MAX);
+    const paths = chunk.map(([path]) => path);
+    const signedByPath = new Map<string, string>();
+
+    try {
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .createSignedUrls(paths, SIGNED_URL_EXPIRY_SECONDS);
+
+      if (!error && data) {
+        for (const item of data) {
+          if (item.path && item.signedUrl && !item.error) {
+            signedByPath.set(item.path, item.signedUrl);
+          }
+        }
+      }
+    } catch {
+      // Leave the batch unsigned; every waiter falls back below.
+    }
+
+    for (const [path, waiters] of chunk) {
+      const signed = signedByPath.get(path) ?? null;
+      for (const waiter of waiters) waiter.resolve(signed);
+    }
+  }
+}
+
+/**
+ * Sign one storage path, coalescing it with every other request made in the
+ * same tick. Resolves to null when the path could not be signed, so callers
+ * can fall back to a public URL.
+ */
+function signPathBatched(bucket: string, path: string): Promise<string | null> {
+  let queue = signQueues.get(bucket);
+  if (!queue) {
+    queue = new Map();
+    signQueues.set(bucket, queue);
+  }
+
+  const existing = queue.get(path);
+  if (existing) {
+    return new Promise((resolve) => existing.push({ resolve }));
+  }
+
+  const promise = new Promise<string | null>((resolve) => {
+    queue!.set(path, [{ resolve }]);
+  });
+
+  if (!signScheduled.has(bucket)) {
+    signScheduled.add(bucket);
+    // A macrotask (rather than a microtask) so a whole render pass worth of
+    // mounting spines lands in the same batch.
+    setTimeout(() => {
+      flushSignQueue(bucket).catch(() => {});
+    }, 0);
+  }
+
+  return promise;
+}
+
+/**
+ * Resolve a bucket path to a displayable URL, sharing one in-flight request
+ * between concurrent callers asking for the same path.
+ */
+const inFlightResolutions = new Map<string, Promise<string | null>>();
+
+function resolveOnce(
+  cacheKey: string,
+  resolver: () => Promise<string | null>
+): Promise<string | null> {
+  const pending = inFlightResolutions.get(cacheKey);
+  if (pending) return pending;
+
+  const promise = resolver().finally(() => {
+    inFlightResolutions.delete(cacheKey);
+  });
+  inFlightResolutions.set(cacheKey, promise);
+  return promise;
 }
 
 /**
@@ -442,114 +587,68 @@ function extractStoragePathFromUrl(
   }
 }
 
-export async function getCoverImageUrl(
+/**
+ * Resolve a stored image reference (full URL or bucket-relative path) into a
+ * URL the app can render, signing it so private buckets work too.
+ *
+ * Shared by the cover and spine resolvers, which differ only in bucket and
+ * cache namespace. Resolution is cached, deduplicated across concurrent
+ * callers, and batched with every other signing request in the same tick.
+ */
+async function resolveBucketImageUrl(
+  bucket: string,
+  namespace: string,
   imageUrlOrPath: string | null | undefined
 ): Promise<string | null> {
   if (!imageUrlOrPath) {
     return null;
   }
 
-  const cached = getCachedUrl(`cover:${imageUrlOrPath}`);
+  const cacheKey = `${namespace}:${imageUrlOrPath}`;
+  const cached = getCachedUrl(cacheKey);
   if (cached) return cached;
 
-  const isFullUrl =
-    imageUrlOrPath.startsWith('http://') || imageUrlOrPath.startsWith('https://');
+  return resolveOnce(cacheKey, async () => {
+    const isFullUrl =
+      imageUrlOrPath.startsWith('http://') || imageUrlOrPath.startsWith('https://');
 
-  if (isFullUrl) {
-    const extractedPath = extractStoragePathFromUrl(
-      imageUrlOrPath,
-      STORAGE_BUCKETS.BOOK_COVERS
-    );
+    // Non-Supabase absolute URL (e.g. an external CDN) is used as-is.
+    const path = isFullUrl
+      ? extractStoragePathFromUrl(imageUrlOrPath, bucket)
+      : imageUrlOrPath;
 
-    if (!extractedPath) {
+    if (!path) {
       return imageUrlOrPath;
     }
 
-    const { data, error } = await supabase.storage
-      .from(STORAGE_BUCKETS.BOOK_COVERS)
-      .createSignedUrl(extractedPath, 3600);
-
-    if (!error && data?.signedUrl) {
-      setCachedUrl(`cover:${imageUrlOrPath}`, data.signedUrl);
-      return data.signedUrl;
+    const signed = await signPathBatched(bucket, path);
+    if (signed) {
+      setCachedUrl(cacheKey, signed);
+      return signed;
     }
 
-    return imageUrlOrPath;
-  }
+    // Signing failed (or the bucket is public and unsigned reads work): keep
+    // the original URL when we had one, otherwise derive the public URL.
+    if (isFullUrl) return imageUrlOrPath;
 
-  const { data: signedData, error: signedError } = await supabase.storage
-    .from(STORAGE_BUCKETS.BOOK_COVERS)
-    .createSignedUrl(imageUrlOrPath, 3600);
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(bucket).getPublicUrl(path);
 
-  if (!signedError && signedData?.signedUrl) {
-    setCachedUrl(`cover:${imageUrlOrPath}`, signedData.signedUrl);
-    return signedData.signedUrl;
-  }
-
-  const {
-    data: { publicUrl },
-  } = supabase.storage
-    .from(STORAGE_BUCKETS.BOOK_COVERS)
-    .getPublicUrl(imageUrlOrPath);
-
-  return publicUrl;
+    return publicUrl;
+  });
 }
 
-export async function getSpineImageUrl(
+export function getCoverImageUrl(
   imageUrlOrPath: string | null | undefined
 ): Promise<string | null> {
-  if (!imageUrlOrPath) {
-    return null;
-  }
+  return resolveBucketImageUrl(STORAGE_BUCKETS.BOOK_COVERS, 'cover', imageUrlOrPath);
+}
 
-  const cached = getCachedUrl(`spine:${imageUrlOrPath}`);
-  if (cached) return cached;
-
-  const isFullUrl =
-    imageUrlOrPath.startsWith('http://') || imageUrlOrPath.startsWith('https://');
-
-  // Non-Supabase absolute URL (e.g. external CDN) can be used as-is.
-  if (isFullUrl) {
-    const extractedPath = extractStoragePathFromUrl(
-      imageUrlOrPath,
-      STORAGE_BUCKETS.BOOK_SPINES
-    );
-
-    if (!extractedPath) {
-      return imageUrlOrPath;
-    }
-
-    // Use a signed URL so private buckets still render correctly.
-    const { data, error } = await supabase.storage
-      .from(STORAGE_BUCKETS.BOOK_SPINES)
-      .createSignedUrl(extractedPath, 3600);
-
-    if (!error && data?.signedUrl) {
-      setCachedUrl(`spine:${imageUrlOrPath}`, data.signedUrl);
-      return data.signedUrl;
-    }
-
-    // Fall back to the existing URL for public buckets.
-    return imageUrlOrPath;
-  }
-
-  // Relative path in the bucket → prefer signed URL, then public URL fallback.
-  const { data: signedData, error: signedError } = await supabase.storage
-    .from(STORAGE_BUCKETS.BOOK_SPINES)
-    .createSignedUrl(imageUrlOrPath, 3600);
-
-  if (!signedError && signedData?.signedUrl) {
-    setCachedUrl(`spine:${imageUrlOrPath}`, signedData.signedUrl);
-    return signedData.signedUrl;
-  }
-
-  const {
-    data: { publicUrl },
-  } = supabase.storage
-    .from(STORAGE_BUCKETS.BOOK_SPINES)
-    .getPublicUrl(imageUrlOrPath);
-
-  return publicUrl;
+export function getSpineImageUrl(
+  imageUrlOrPath: string | null | undefined
+): Promise<string | null> {
+  return resolveBucketImageUrl(STORAGE_BUCKETS.BOOK_SPINES, 'spine', imageUrlOrPath);
 }
 
 /**

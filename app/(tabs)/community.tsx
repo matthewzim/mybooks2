@@ -4,7 +4,7 @@
  * Discover other readers and browse public bookshelves.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -36,6 +36,8 @@ const HERO_MINI_SPINES = [
 
 interface PublicBookshelfPreview extends Bookshelf {
   books: Book[];
+  /** True shelf size; only a capped slice of `books` is fetched for the preview */
+  book_count: number;
   owner: {
     id: string;
     name: string | null;
@@ -57,11 +59,25 @@ export default function CommunityScreen() {
 
   const canAccessCommunity = user?.is_premium || FREE_TIER_LIMITS.CAN_ACCESS_COMMUNITY;
 
+  // The block list is stable for the whole session unless the user blocks
+  // somebody, so it is fetched once and reused rather than re-queried on
+  // every keystroke-batch of the search box.
+  const blockedIdsRef = useRef<Promise<string[]> | null>(null);
+  const getBlockedIds = useCallback(() => {
+    if (!blockedIdsRef.current) {
+      blockedIdsRef.current = moderationService.getBlockedUserIds();
+    }
+    return blockedIdsRef.current;
+  }, []);
+
   const loadPublicBookshelfPreviews = useCallback(async () => {
     try {
+      // Pull-to-refresh is also how a user expects a fresh block list to
+      // take effect, so drop the cached one first.
+      blockedIdsRef.current = null;
       const [result, blockedIds] = await Promise.all([
         bookshelvesService.getRandomPublicBookshelfPreviews(PUBLIC_PREVIEW_LIMIT),
-        moderationService.getBlockedUserIds(),
+        getBlockedIds(),
       ]);
       if (result.data) {
         const blocked = new Set(blockedIds);
@@ -75,7 +91,7 @@ export default function CommunityScreen() {
       setIsLoadingPublicBookshelves(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [getBlockedIds]);
 
   useEffect(() => {
     if (canAccessCommunity) {
@@ -85,29 +101,50 @@ export default function CommunityScreen() {
     }
   }, [canAccessCommunity, loadPublicBookshelfPreviews]);
 
-  useEffect(() => {
-    const searchUsers = async () => {
-      if (!userSearchQuery.trim()) {
-        setUserSearchResults([]);
-        setIsSearchingUsers(false);
-        return;
-      }
+  // Monotonic token so a slow request for an earlier query can never
+  // overwrite the results of a later one. Without it, typing "tolkien" and
+  // pausing mid-word leaves whichever response happens to land last on
+  // screen — which on a flaky connection is regularly the wrong one.
+  const searchRunIdRef = useRef(0);
 
-      setIsSearchingUsers(true);
-      const [result, blockedIds] = await Promise.all([
-        bookshelvesService.searchUsers(userSearchQuery),
-        moderationService.getBlockedUserIds(),
-      ]);
-      if (result.data) {
-        const blocked = new Set(blockedIds);
-        setUserSearchResults(result.data.filter((u) => !blocked.has(u.id)));
-      }
+  useEffect(() => {
+    const trimmed = userSearchQuery.trim();
+
+    if (!trimmed) {
+      searchRunIdRef.current += 1;
+      setUserSearchResults([]);
       setIsSearchingUsers(false);
+      return;
+    }
+
+    const runId = ++searchRunIdRef.current;
+    setIsSearchingUsers(true);
+
+    const searchUsers = async () => {
+      try {
+        const [result, blockedIds] = await Promise.all([
+          bookshelvesService.searchUsers(trimmed),
+          getBlockedIds(),
+        ]);
+
+        if (runId !== searchRunIdRef.current) return;
+
+        const blocked = new Set(blockedIds);
+        setUserSearchResults(result.data?.filter((u) => !blocked.has(u.id)) ?? []);
+      } catch (error) {
+        if (runId !== searchRunIdRef.current) return;
+        console.error('User search failed:', error);
+        setUserSearchResults([]);
+      } finally {
+        if (runId === searchRunIdRef.current) {
+          setIsSearchingUsers(false);
+        }
+      }
     };
 
     const timeoutId = setTimeout(searchUsers, 500);
     return () => clearTimeout(timeoutId);
-  }, [userSearchQuery]);
+  }, [userSearchQuery, getBlockedIds]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -248,6 +285,7 @@ export default function CommunityScreen() {
                 key={bookshelf.id}
                 bookshelf={bookshelf}
                 books={bookshelf.books}
+                totalBooks={bookshelf.book_count}
                 onPress={() => handlePublicBookshelfPress(bookshelf)}
                 containerStyle={styles.previewCard}
                 owner={bookshelf.owner}

@@ -24,7 +24,11 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { Shadows, getSerifFontFamily } from '@/constants/theme';
+import {
+  Shadows,
+  getSerifFontFamily,
+  FIXED_GEOMETRY_MAX_FONT_SCALE,
+} from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { getSpineCloth } from '@/utils/spineCloth';
@@ -234,6 +238,7 @@ export function DraggableBookSpine({
             <Text
               style={[styles.placeholderTitle, { color: cloth.titleColor }]}
               numberOfLines={2}
+              maxFontSizeMultiplier={FIXED_GEOMETRY_MAX_FONT_SCALE}
             >
               {displayTitle}
             </Text>

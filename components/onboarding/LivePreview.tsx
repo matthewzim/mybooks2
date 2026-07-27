@@ -22,6 +22,7 @@ import {
   BookshelfDimensions,
   getFontFamily,
   getSerifFontFamily,
+  FIXED_GEOMETRY_MAX_FONT_SCALE,
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getShelfColors } from '@/utils/shelfColors';
@@ -126,6 +127,7 @@ export function MiniSpine({
               ]}
               numberOfLines={1}
               ellipsizeMode="tail"
+              maxFontSizeMultiplier={FIXED_GEOMETRY_MAX_FONT_SCALE}
             >
               {book.title?.trim() || 'Untitled'}
             </Text>

@@ -28,7 +28,6 @@ import { CommunitySpineBrowserModal } from '@/components/CommunitySpineBrowserMo
 import { Input } from '@/components/ui';
 import { BorderRadius, Spacing, Typography } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
-import { supabase, TABLES } from '@/services/supabase';
 import { getCoverImageUrl, getSpineImageUrl } from '@/services/storage';
 import { searchBookVolumes } from '@/services/isbndb';
 import type { Book, CommunityBookSpine } from '@/types';
@@ -134,11 +133,17 @@ export function BrowseBooksModal({
     }
   }, [visible, overlayOpacity, cardOpacity, cardTranslateY, cardScale]);
 
-  // Debounced search: Supabase first, then the ISBNdb API for additional results
+  // Debounced search: Supabase first, then the ISBNdb API for additional
+  // results. `searchRunIdRef` discards responses from a superseded query —
+  // the Supabase and ISBNdb legs finish at very different speeds, so without
+  // it a slow earlier search regularly lands on top of a newer one.
+  const searchRunIdRef = useRef(0);
+
   useEffect(() => {
     const trimmedQuery = searchQuery.trim();
 
     if (!trimmedQuery) {
+      searchRunIdRef.current += 1;
       setBookSearchResults([]);
       setIsSearching(false);
       return;
@@ -146,14 +151,12 @@ export function BrowseBooksModal({
 
     setIsSearching(true);
 
+    const runId = ++searchRunIdRef.current;
+
     const timeoutId = setTimeout(async () => {
       try {
         // 1. Search Supabase for existing books first (free, fast)
-        const { data: localBooks } = await supabase
-          .from(TABLES.BOOKS)
-          .select('id, title, author, image_url, cover_image_url, uploaded_by_user_id, created_at')
-          .or(`title.ilike.%${trimmedQuery}%,author.ilike.%${trimmedQuery}%`)
-          .limit(40);
+        const { data: localBooks } = await booksService.searchBooks(trimmedQuery, 40);
 
         // Collapse duplicate records of the same book (many users can own the
         // same title), merging in spine/cover images from later duplicates.
@@ -200,6 +203,7 @@ export function BrowseBooksModal({
         );
 
         // Show local results immediately while the API supplement loads
+        if (runId !== searchRunIdRef.current) return;
         if (localResults.length > 0) {
           setBookSearchResults(localResults);
         }
@@ -224,49 +228,45 @@ export function BrowseBooksModal({
             created_at: new Date().toISOString(),
           }));
 
-        // Resolve spine images for API results that exist in Supabase
+        // Resolve spine images for API results that exist in Supabase.
+        // One batched lookup for the whole page of results — this used to be
+        // a separate query per result, i.e. up to 20 round trips per search.
+        const existingByKey = await booksService.findExistingBooksWithSpines(dedupedApiItems);
+
         const apiItemsWithImages = await Promise.all(
           dedupedApiItems.map(async (item) => {
-            try {
-              const { data } = await supabase
-                .from(TABLES.BOOKS)
-                .select('id, image_url, cover_image_url, uploaded_by_user_id')
-                .eq('title', item.title)
-                .eq('author', item.author)
-                .not('image_url', 'is', null)
-                .limit(1)
-                .maybeSingle();
-              const matchedBook = data as Pick<
-                LocalBookRow,
-                'id' | 'image_url' | 'cover_image_url' | 'uploaded_by_user_id'
-              > | null;
+            const matchedBook = existingByKey.get(bookKey(item.title, item.author));
+            if (!matchedBook?.image_url) return item;
 
-              if (matchedBook?.image_url) {
-                const resolvedUrl = await getSpineImageUrl(matchedBook.image_url);
-                let coverUrl = item.cover_url;
-                if (!coverUrl && matchedBook.cover_image_url) {
-                  coverUrl = await getCoverImageUrl(matchedBook.cover_image_url);
-                }
-                // Carry uploaded_by_user_id so handleAddBook treats this as an
-                // existing book and references its row — otherwise the add
-                // creates a fresh record without the spine image.
-                return {
-                  ...item,
-                  id: matchedBook.id,
-                  uploaded_by_user_id: matchedBook.uploaded_by_user_id,
-                  image_url: resolvedUrl,
-                  cover_url: coverUrl,
-                };
+            try {
+              const resolvedUrl = await getSpineImageUrl(matchedBook.image_url);
+              let coverUrl = item.cover_url;
+              if (!coverUrl && matchedBook.cover_image_url) {
+                coverUrl = await getCoverImageUrl(matchedBook.cover_image_url);
               }
-            } catch {}
-            return item;
+              // Carry uploaded_by_user_id so handleAddBook treats this as an
+              // existing book and references its row — otherwise the add
+              // creates a fresh record without the spine image.
+              return {
+                ...item,
+                id: matchedBook.id,
+                uploaded_by_user_id: matchedBook.uploaded_by_user_id ?? '',
+                image_url: resolvedUrl,
+                cover_url: coverUrl,
+              };
+            } catch {
+              return item;
+            }
           })
         );
 
+        if (runId !== searchRunIdRef.current) return;
         setBookSearchResults([...localResults, ...apiItemsWithImages]);
       } catch {
+        if (runId !== searchRunIdRef.current) return;
         setBookSearchResults([]);
       }
+      if (runId !== searchRunIdRef.current) return;
       setIsSearching(false);
     }, 500);
 

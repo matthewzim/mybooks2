@@ -17,7 +17,14 @@
  * const { data, error } = await booksService.getBooksByShelf(shelfId);
  */
 
-import { supabase, TABLES, handleSupabaseError } from './supabase';
+import {
+  supabase,
+  TABLES,
+  handleSupabaseError,
+  ilikeFilter,
+  isMissingFunctionError,
+} from './supabase';
+import { bookDedupeKey } from './isbndb';
 import type {
   Book,
   CommunityBookSpine,
@@ -26,6 +33,24 @@ import type {
   ApiResponse,
   PaginatedResponse,
 } from '@/types';
+
+/** A global books row as returned by the search helpers below. */
+export interface ExistingBookRow {
+  id: string;
+  title: string;
+  author: string;
+  image_url: string | null;
+  cover_image_url: string | null;
+  uploaded_by_user_id: string | null;
+  created_at: string;
+}
+
+/**
+ * How many candidate book rows the alternate-spine picker will scan. Rows are
+ * deduplicated by image URL afterwards, so this bounds the request without
+ * meaningfully reducing the choices offered.
+ */
+const ALTERNATIVE_SPINE_SCAN_LIMIT = 100;
 
 /**
  * Transform a joined bookshelf_items + books row into the combined Book type.
@@ -40,7 +65,7 @@ function toBook(row: any): Book {
     image_url: book.image_url ?? row.image_url ?? null,
     cover_image_url: book.cover_image_url ?? row.cover_image_url ?? null,
     isbn: book.isbn ?? row.isbn ?? null,
-    uploaded_by_user_id: book.uploaded_by_user_id ?? row.uploaded_by_user_id,
+    uploaded_by_user_id: book.uploaded_by_user_id ?? row.uploaded_by_user_id ?? '',
     is_community: book.is_community ?? row.is_community ?? false,
     shelf_id: row.shelf_id,
     position: row.position,
@@ -153,18 +178,25 @@ class BooksService {
         bookId = newBook.id;
       }
 
-      // Get the current max position on this shelf
-      const { data: existingItems } = await supabase
-        .from(TABLES.BOOKSHELF_ITEMS)
-        .select('position')
-        .eq('shelf_id', input.shelf_id)
-        .order('position', { ascending: false })
-        .limit(1);
+      // Only look up the next position when the caller didn't supply one.
+      // Bulk adds (onboarding, shelf scan) pass explicit positions, and this
+      // query was running once per book anyway — an extra round trip per
+      // book that also can't produce a correct answer when several inserts
+      // are in flight at once, since they all read the same maximum.
+      let position = input.position;
+      if (position === undefined) {
+        const { data: existingItems } = await supabase
+          .from(TABLES.BOOKSHELF_ITEMS)
+          .select('position')
+          .eq('shelf_id', input.shelf_id)
+          .order('position', { ascending: false })
+          .limit(1);
 
-      const nextPosition =
-        existingItems && existingItems.length > 0
-          ? existingItems[0].position + 1
-          : 0;
+        position =
+          existingItems && existingItems.length > 0
+            ? existingItems[0].position + 1
+            : 0;
+      }
 
       // Create the bookshelf_item linking the book to the shelf
       const { data: item, error: itemError } = await supabase
@@ -172,7 +204,7 @@ class BooksService {
         .insert({
           book_id: bookId,
           shelf_id: input.shelf_id,
-          position: input.position ?? nextPosition,
+          position,
           review: input.review || null,
           rating: input.rating || null,
           is_stacked: input.is_stacked ?? false,
@@ -385,15 +417,37 @@ class BooksService {
     orderedIds: string[]
   ): Promise<ApiResponse<null>> {
     try {
-      const updates = orderedIds.map((id, index) =>
-        supabase
-          .from(TABLES.BOOKSHELF_ITEMS)
-          .update({ position: index })
-          .eq('id', id)
-          .eq('shelf_id', shelfId)
-      );
+      if (orderedIds.length === 0) {
+        return { data: null, error: null };
+      }
 
-      await Promise.all(updates);
+      // A single set-based UPDATE. Reordering used to fire one HTTP request
+      // per book with `await Promise.all(updates)` discarding every result:
+      // a 200-book shelf opened 200 connections at once, and any that failed
+      // (rate limit, dropped connection) left the shelf permanently out of
+      // order with no error shown.
+      const { error } = await supabase.rpc('reorder_bookshelf_items', {
+        p_shelf_id: shelfId,
+        p_item_ids: orderedIds,
+      });
+
+      if (error && !isMissingFunctionError(error)) throw error;
+
+      if (error) {
+        // RPC not deployed yet — keep the old path but check the results.
+        const results = await Promise.all(
+          orderedIds.map((id, index) =>
+            supabase
+              .from(TABLES.BOOKSHELF_ITEMS)
+              .update({ position: index })
+              .eq('id', id)
+              .eq('shelf_id', shelfId)
+          )
+        );
+
+        const failure = results.find((result) => result.error);
+        if (failure?.error) throw failure.error;
+      }
 
       return { data: null, error: null };
     } catch (error) {
@@ -430,45 +484,52 @@ class BooksService {
           uploaded_by_user_id,
           created_at,
           users!uploaded_by_user_id(name)
-        `,
-          { count: 'exact' }
+        `
         )
         .eq('is_community', true);
 
       if (searchQuery) {
         query = query.or(
-          `title.ilike.%${searchQuery}%,author.ilike.%${searchQuery}%`
+          [ilikeFilter('title', searchQuery), ilikeFilter('author', searchQuery)].join(',')
         );
       }
 
+      // Fetch one row past the page to learn whether another page exists.
+      // `{ count: 'exact' }` made every page request also run a COUNT(*) over
+      // the entire community corpus — a full scan that grows with the user
+      // base while answering a question this one extra row answers exactly.
       const from = page * pageSize;
-      const to = from + pageSize - 1;
+      const to = from + pageSize;
       query = query.range(from, to).order('created_at', { ascending: false });
 
-      const { data, error, count } = await query;
+      const { data, error } = await query;
 
       if (error) throw error;
 
-      const communityBooks: CommunityBookSpine[] = (data || []).map(
-        (book: any) => ({
+      const rows = data || [];
+      const hasMore = rows.length > pageSize;
+
+      const communityBooks: CommunityBookSpine[] = rows
+        .slice(0, pageSize)
+        .map((book: any) => ({
           id: book.id,
           title: book.title,
           author: book.author,
           image_url: book.image_url,
-          uploaded_by_user_id: book.uploaded_by_user_id,
+          uploaded_by_user_id: book.uploaded_by_user_id ?? '',
           uploader_name: book.users?.name || null,
           times_added: 0,
           created_at: book.created_at,
-        })
-      );
+        }));
 
       return {
         data: {
           data: communityBooks,
-          count: count || 0,
+          // Total is no longer queried; callers use `hasMore` for paging.
+          count: from + communityBooks.length,
           page,
           pageSize,
-          hasMore: (count || 0) > (page + 1) * pageSize,
+          hasMore,
         },
         error: null,
       };
@@ -478,6 +539,80 @@ class BooksService {
         error: { message: handleSupabaseError(error) },
       };
     }
+  }
+
+  /**
+   * Free-text search over the global books table (title or author).
+   *
+   * Centralised so the search surfaces don't hand-build PostgREST `or`
+   * filters out of raw user input — a query containing a comma or a
+   * parenthesis silently changed which filters ran.
+   *
+   * @param searchQuery - Raw, user-supplied search text
+   * @param limit - Maximum rows to return
+   */
+  async searchBooks(
+    searchQuery: string,
+    limit: number = 40
+  ): Promise<ApiResponse<ExistingBookRow[]>> {
+    try {
+      const trimmed = searchQuery.trim();
+      if (!trimmed) return { data: [], error: null };
+
+      const { data, error } = await supabase
+        .from(TABLES.BOOKS)
+        .select('id, title, author, image_url, cover_image_url, uploaded_by_user_id, created_at')
+        .or([ilikeFilter('title', trimmed), ilikeFilter('author', trimmed)].join(','))
+        .limit(limit);
+
+      if (error) throw error;
+
+      return { data: (data || []) as ExistingBookRow[], error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: { message: handleSupabaseError(error) },
+      };
+    }
+  }
+
+  /**
+   * Look up which of the given title/author pairs already exist in the books
+   * table with a spine image, in one request.
+   *
+   * The search screens used to run this as a separate query per API result —
+   * up to 20 round trips per search, on every search, from every user. One
+   * `in (...)` over the titles answers all of them.
+   *
+   * @returns Map keyed by `bookDedupeKey(title, author)`
+   */
+  async findExistingBooksWithSpines(
+    items: { title: string; author: string }[]
+  ): Promise<Map<string, ExistingBookRow>> {
+    const byKey = new Map<string, ExistingBookRow>();
+
+    const titles = [...new Set(items.map((item) => item.title).filter(Boolean))];
+    if (titles.length === 0) return byKey;
+
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.BOOKS)
+        .select('id, title, author, image_url, cover_image_url, uploaded_by_user_id, created_at')
+        .in('title', titles)
+        .not('image_url', 'is', null);
+
+      if (error || !data) return byKey;
+
+      for (const row of data as ExistingBookRow[]) {
+        const key = bookDedupeKey(row.title || '', row.author || '');
+        // Keep the first match per book, mirroring the previous `.limit(1)`.
+        if (!byKey.has(key)) byKey.set(key, row);
+      }
+    } catch {
+      // A failed lookup just means no spine images are attached.
+    }
+
+    return byKey;
   }
 
   /**
@@ -536,6 +671,11 @@ class BooksService {
     book: Pick<Book, 'book_id' | 'title' | 'author' | 'isbn' | 'image_url'>
   ): Promise<ApiResponse<CommunityBookSpine[]>> {
     try {
+      // Bounded: a popular title accumulates a books row per user who added
+      // it, and this query has no user filter at all — without a limit the
+      // spine picker downloads every copy in the system. The rows are then
+      // deduplicated by image URL, so the distinct spines a user can choose
+      // between are far fewer than the rows scanned.
       let query = supabase
         .from(TABLES.BOOKS)
         .select(`
@@ -548,7 +688,8 @@ class BooksService {
           users!uploaded_by_user_id(name)
         `)
         .not('image_url', 'is', null)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(ALTERNATIVE_SPINE_SCAN_LIMIT);
 
       if (book.isbn) {
         query = query.eq('isbn', book.isbn);
@@ -574,7 +715,7 @@ class BooksService {
           title: row.title,
           author: row.author,
           image_url: row.image_url,
-          uploaded_by_user_id: row.uploaded_by_user_id,
+          uploaded_by_user_id: row.uploaded_by_user_id ?? '',
           uploader_name: row.users?.name || null,
           times_added: 0,
           created_at: row.created_at,

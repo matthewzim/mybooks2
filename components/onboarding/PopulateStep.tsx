@@ -26,6 +26,7 @@ import { useOnboarding, SAMPLE_BOOKS, type PreviewBook } from './OnboardingConte
 import { LivePreview } from './LivePreview';
 import { ScanShelfPanel } from './ScanShelfPanel';
 import { BookSpine as BookSpineConstants } from '@/constants/theme';
+import { booksService } from '@/services/books';
 import { supabase, TABLES } from '@/services/supabase';
 import { getCoverImageUrl, getSpineImageUrl } from '@/services/storage';
 import { searchBookVolumes } from '@/services/isbndb';
@@ -131,11 +132,7 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
 
     try {
       // 1. Search Supabase for existing books first (free, fast)
-      const { data: localBooks } = await supabase
-        .from(TABLES.BOOKS)
-        .select('id, title, author, image_url, cover_image_url')
-        .or(`title.ilike.%${trimmed}%,author.ilike.%${trimmed}%`)
-        .limit(24);
+      const { data: localBooks } = await booksService.searchBooks(trimmed, 24);
 
       // Collapse duplicate records of the same book (many users can own the
       // same title), merging in spine/cover images from later duplicates.
@@ -213,25 +210,23 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
         newApiItems.push(item);
       }
 
-      // Resolve spine images for API results that exist in Supabase
+      // Resolve spine images for API results that exist in Supabase.
+      // Batched into one lookup: this was previously a query per result,
+      // fired on every search during onboarding — the very first thing a new
+      // user does, and the moment the app can least afford to feel slow.
+      const existingByKey = await booksService.findExistingBooksWithSpines(newApiItems);
+
       const apiItemsWithImages = await Promise.all(
         newApiItems.map(async (item) => {
-          try {
-            const { data: matchedBook } = await supabase
-              .from(TABLES.BOOKS)
-              .select('image_url')
-              .eq('title', item.title)
-              .eq('author', item.author)
-              .not('image_url', 'is', null)
-              .limit(1)
-              .maybeSingle();
+          const matchedBook = existingByKey.get(bookKey(item.title, item.author));
+          if (!matchedBook?.image_url) return item;
 
-            if (matchedBook?.image_url) {
-              const resolvedUrl = await getSpineImageUrl(matchedBook.image_url);
-              return { ...item, image_url: resolvedUrl, source_image_url: matchedBook.image_url };
-            }
-          } catch {}
-          return item;
+          try {
+            const resolvedUrl = await getSpineImageUrl(matchedBook.image_url);
+            return { ...item, image_url: resolvedUrl, source_image_url: matchedBook.image_url };
+          } catch {
+            return item;
+          }
         })
       );
 

@@ -6,10 +6,40 @@
 
 import React from 'react';
 import { Tabs } from 'expo-router';
+import { Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
-import { BorderRadius, Spacing, Typography, getFontFamily, getSerifFontFamily } from '@/constants/theme';
+import {
+  BorderRadius,
+  Spacing,
+  Typography,
+  getFontFamily,
+  getSerifFontFamily,
+  CHROME_MAX_FONT_SCALE,
+} from '@/constants/theme';
+
+/**
+ * Tab labels are rendered explicitly so the Dynamic Type multiplier can be
+ * capped. The tab bar has a fixed height, and at iOS's largest accessibility
+ * text sizes an uncapped 10pt label grows past 30pt and pushes the icon out
+ * of the bar entirely.
+ */
+function TabLabel({ color, children }: { color: string; children: string }) {
+  return (
+    <Text
+      numberOfLines={1}
+      maxFontSizeMultiplier={CHROME_MAX_FONT_SCALE}
+      style={{
+        color,
+        fontFamily: getFontFamily('semibold'),
+        fontSize: Typography.sizes.xs,
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
 
 export default function TabsLayout() {
   const { colors } = useTheme();
@@ -35,10 +65,6 @@ export default function TabsLayout() {
         tabBarItemStyle: {
           borderRadius: BorderRadius.lg,
         },
-        tabBarLabelStyle: {
-          fontFamily: getFontFamily('semibold'),
-          fontSize: Typography.sizes.xs,
-        },
         headerStyle: {
           backgroundColor: colors.background,
         },
@@ -55,7 +81,7 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: '',
-          tabBarLabel: 'Home',
+          tabBarLabel: ({ color }: { color: string }) => <TabLabel color={color}>Home</TabLabel>,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="library-outline" size={size} color={color} />
           ),
@@ -66,7 +92,7 @@ export default function TabsLayout() {
         name="community"
         options={{
           title: '',
-          tabBarLabel: 'Explore',
+          tabBarLabel: ({ color }: { color: string }) => <TabLabel color={color}>Explore</TabLabel>,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="compass-outline" size={size} color={color} />
           ),
@@ -77,7 +103,7 @@ export default function TabsLayout() {
         name="settings"
         options={{
           title: '',
-          tabBarLabel: 'Settings',
+          tabBarLabel: ({ color }: { color: string }) => <TabLabel color={color}>Settings</TabLabel>,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings-outline" size={size} color={color} />
           ),

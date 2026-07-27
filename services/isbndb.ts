@@ -457,6 +457,16 @@ const coverMisses = new Map<string, number>();
 const COVER_MISS_TTL_MS = 6 * 60 * 60 * 1000;
 const COVER_MISS_MAX_ENTRIES = 500;
 
+/**
+ * Ceiling on how many covers one shelf open will prefetch in the background.
+ *
+ * At the Basic tier's one request per second, 40 books is already up to ~80
+ * seconds of queued API traffic; anything beyond that is still running when
+ * the user has moved on, and it competes with the on-demand fetch for the
+ * book they actually opened.
+ */
+const PREFETCH_MAX_BOOKS = 40;
+
 function hasRecentCoverMiss(key: string): boolean {
   const missedAt = coverMisses.get(key);
   if (missedAt === undefined) return false;
@@ -804,7 +814,15 @@ class IsbndbCoverService {
   ): Promise<void> {
     if (!isbndbConfigured()) return;
 
-    const uncached = books.filter((b) => needsCoverUpgrade(b.cover_image_url));
+    // Bounded per shelf open. Every book here costs at least one Supabase
+    // round trip and, on a miss, two ISBNdb requests against a quota shared
+    // by the entire install base — so a 600-book shelf must not queue 600
+    // background fetches every time it is opened. The remainder is picked up
+    // on demand when the user opens a book, and on subsequent shelf opens as
+    // the front of the queue fills in.
+    const uncached = books
+      .filter((b) => needsCoverUpgrade(b.cover_image_url))
+      .slice(0, PREFETCH_MAX_BOOKS);
     if (uncached.length === 0) return;
 
     // The shared queue already paces requests; this short gap between books
