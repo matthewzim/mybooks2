@@ -32,6 +32,7 @@ function itemToBook(item: any): Book {
     title: book.title ?? '',
     author: book.author ?? '',
     image_url: book.image_url ?? null,
+    cover_image_url: book.cover_image_url ?? null,
     isbn: book.isbn ?? null,
     uploaded_by_user_id: book.uploaded_by_user_id ?? '',
     is_community: book.is_community ?? false,

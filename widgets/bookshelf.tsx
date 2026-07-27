@@ -1,4 +1,4 @@
-import { Text, VStack, HStack, Section } from '@expo/ui/swift-ui';
+import { Text, VStack, HStack, Section, Spacer } from '@expo/ui/swift-ui';
 import {
   font,
   foregroundStyle,
@@ -241,7 +241,11 @@ function SpineRow({
             frame({ height: 12 }),
             background(shelfColor),
           ]}
-        />
+        >
+          {/* The ledge is a bare colored plank; Spacer gives the stack the
+              child SwiftUI requires without drawing anything itself. */}
+          <Spacer />
+        </VStack>
       )}
     </VStack>
   );

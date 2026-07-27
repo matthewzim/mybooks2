@@ -1,7 +1,17 @@
 /**
  * Supabase Database Types
- * This file defines the database schema types for Supabase
+ *
+ * Describes the schema so `createClient<Database>` can type every query.
  * In production, you would generate this using: npx supabase gen types typescript
+ *
+ * IMPORTANT: every table and view must carry a `Relationships` array and every
+ * function an `Args`/`Returns` pair. postgrest-js structurally matches this
+ * shape against its `GenericSchema`; if any member is missing the whole schema
+ * silently resolves to `never`, which erases type checking on every `.from()`,
+ * `.insert()` and `.update()` call in the app rather than raising an error
+ * here. Keep the relationship entries in sync with the foreign keys in
+ * supabase/migrations — embedded selects (`bookshelf_items(*, book:books(*))`,
+ * `users!uploaded_by_user_id(name)`) are typed from them.
  */
 
 export type Json =
@@ -43,6 +53,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       bookshelves: {
         Row: {
@@ -81,6 +92,15 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'bookshelves_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       books: {
         Row: {
@@ -119,6 +139,15 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'books_uploaded_by_user_id_fkey';
+            columns: ['uploaded_by_user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       bookshelf_items: {
         Row: {
@@ -160,6 +189,107 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'bookshelf_items_book_id_fkey';
+            columns: ['book_id'];
+            isOneToOne: false;
+            referencedRelation: 'books';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'bookshelf_items_shelf_id_fkey';
+            columns: ['shelf_id'];
+            isOneToOne: false;
+            referencedRelation: 'bookshelves';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      content_reports: {
+        Row: {
+          id: string;
+          reporter_id: string;
+          reported_user_id: string;
+          bookshelf_id: string | null;
+          reason: string;
+          details: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          reporter_id: string;
+          reported_user_id: string;
+          bookshelf_id?: string | null;
+          reason: string;
+          details?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          reporter_id?: string;
+          reported_user_id?: string;
+          bookshelf_id?: string | null;
+          reason?: string;
+          details?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'content_reports_reporter_id_fkey';
+            columns: ['reporter_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'content_reports_reported_user_id_fkey';
+            columns: ['reported_user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'content_reports_bookshelf_id_fkey';
+            columns: ['bookshelf_id'];
+            isOneToOne: false;
+            referencedRelation: 'bookshelves';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      blocked_users: {
+        Row: {
+          blocker_id: string;
+          blocked_id: string;
+          created_at: string;
+        };
+        Insert: {
+          blocker_id: string;
+          blocked_id: string;
+          created_at?: string;
+        };
+        Update: {
+          blocker_id?: string;
+          blocked_id?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'blocked_users_blocker_id_fkey';
+            columns: ['blocker_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'blocked_users_blocked_id_fkey';
+            columns: ['blocked_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       subscriptions: {
         Row: {
@@ -195,27 +325,45 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'subscriptions_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
       };
     };
     Views: {
       community_book_spines: {
         Row: {
-          id: string;
-          title: string;
-          author: string;
-          image_url: string;
-          uploaded_by_user_id: string;
+          id: string | null;
+          title: string | null;
+          author: string | null;
+          image_url: string | null;
+          uploaded_by_user_id: string | null;
           uploader_name: string | null;
-          times_added: number;
-          created_at: string;
+          times_added: number | null;
+          created_at: string | null;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'books_uploaded_by_user_id_fkey';
+            columns: ['uploaded_by_user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
       };
     };
     Functions: {
       get_community_books: {
         Args: {
-          page_num: number;
-          page_size: number;
+          page_num?: number;
+          page_size?: number;
           search_query?: string;
         };
         Returns: {
@@ -236,10 +384,15 @@ export interface Database {
         };
         Returns: undefined;
       };
+      delete_my_account: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
     };
     Enums: {
       subscription_status: 'active' | 'canceled' | 'past_due' | 'trialing';
     };
+    CompositeTypes: Record<string, never>;
   };
 }
 

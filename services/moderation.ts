@@ -47,7 +47,7 @@ class ModerationService {
     try {
       const reporterId = await this.requireUserId();
 
-      const { error } = await (supabase.from('content_reports') as any).insert({
+      const { error } = await supabase.from('content_reports').insert({
         reporter_id: reporterId,
         reported_user_id: reportedUserId,
         bookshelf_id: bookshelfId ?? null,
@@ -73,7 +73,7 @@ class ModerationService {
     try {
       const blockerId = await this.requireUserId();
 
-      const { error } = await (supabase.from('blocked_users') as any).upsert(
+      const { error } = await supabase.from('blocked_users').upsert(
         { blocker_id: blockerId, blocked_id: blockedId },
         { onConflict: 'blocker_id,blocked_id' }
       );
@@ -96,7 +96,8 @@ class ModerationService {
     try {
       const blockerId = await this.requireUserId();
 
-      const { error } = await (supabase.from('blocked_users') as any)
+      const { error } = await supabase
+        .from('blocked_users')
         .delete()
         .eq('blocker_id', blockerId)
         .eq('blocked_id', blockedId);
@@ -123,15 +124,14 @@ class ModerationService {
       const userId = session.session?.user?.id;
       if (!userId) return [];
 
-      const { data, error } = await (supabase.from('blocked_users') as any)
+      const { data, error } = await supabase
+        .from('blocked_users')
         .select('blocked_id')
         .eq('blocker_id', userId);
 
       if (error) throw error;
 
-      return ((data ?? []) as { blocked_id: string }[]).map(
-        (row) => row.blocked_id
-      );
+      return (data ?? []).map((row) => row.blocked_id);
     } catch (error) {
       console.error('Failed to load blocked users:', error);
       return [];

@@ -201,7 +201,7 @@ class StorageService {
 
   /**
    * Detect the content type of base64 image data from its magic bytes.
-   * Google serves covers as JPEG, PNG, GIF or WebP depending on the volume.
+   * ISBNdb serves covers as JPEG, PNG, GIF or WebP depending on the book.
    */
   private sniffImageContentType(base64: string): string {
     if (base64.startsWith('iVBOR')) return 'image/png';
