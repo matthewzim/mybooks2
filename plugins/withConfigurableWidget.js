@@ -30,6 +30,7 @@ import SwiftUI
 import AppIntents
 import UIKit
 import ImageIO
+import CryptoKit
 
 // MARK: - Shared UserDefaults helper (replaces internal ExpoWidgets WidgetsStorage)
 
@@ -674,13 +675,128 @@ private func downsampledImageData(_ data: Data, maxPixelSize: CGFloat) -> Data? 
   return UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.85)
 }
 
-/// Downloads book spine images for display in the widget.
-/// Uses a per-image timeout so one slow download doesn't block the whole widget.
-/// Fetches in small batches and downsamples each image as soon as it arrives
-/// so only a few full-size payloads are ever in memory at once.
+// MARK: - On-disk cache for downsampled spine images
+
+/// Persists downsampled spine images in the shared app group container.
+///
+/// WidgetKit rebuilds the timeline on its own schedule (and again for every
+/// snapshot, gallery preview and configuration change), and each rebuild used
+/// to re-download every spine at full resolution before downsampling it.  For
+/// a single shelf that is tens of megabytes of Storage egress per refresh, per
+/// installed widget — the cost of which grows linearly with the user base
+/// while the images themselves almost never change.  Cached bytes are the
+/// already-downsampled JPEGs, so a warm refresh does no network work at all.
+private enum SpineImageCache {
+  /// Roughly two full large-widget shelves worth of spines.
+  static let maxEntries = 80
+  /// Long enough to span many refreshes, short enough that a replaced spine
+  /// image can't be served indefinitely.
+  static let maxAge: TimeInterval = 30 * 24 * 60 * 60
+
+  private static let directory: URL? = {
+    guard let container = FileManager.default.containerURL(
+      forSecurityApplicationGroupIdentifier: WidgetDataStore.suiteName
+    ) else { return nil }
+    let dir = container.appendingPathComponent("SpineImageCache", isDirectory: true)
+    if !FileManager.default.fileExists(atPath: dir.path) {
+      try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    }
+    return dir
+  }()
+
+  /// Cache identity is the URL's host and path only.  Widget spine URLs are
+  /// signed and carry a fresh token query on every sync, so keying on the full
+  /// URL would miss on every refresh and defeat the cache entirely.  Spine
+  /// uploads are written to timestamped paths, so a replaced spine image
+  /// naturally lands on a different key.
+  private static func fileURL(for urlString: String) -> URL? {
+    guard let directory,
+          let components = URLComponents(string: urlString) else { return nil }
+    let identity = (components.host ?? "") + components.path
+    guard !identity.isEmpty else { return nil }
+    let digest = SHA256.hash(data: Data(identity.utf8))
+    let name = digest.map { String(format: "%02x", $0) }.joined()
+    return directory.appendingPathComponent(name).appendingPathExtension("jpg")
+  }
+
+  static func load(_ urlString: String) -> Data? {
+    guard let fileURL = fileURL(for: urlString),
+          let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+          let modified = attributes[.modificationDate] as? Date else { return nil }
+
+    if Date().timeIntervalSince(modified) > maxAge {
+      try? FileManager.default.removeItem(at: fileURL)
+      return nil
+    }
+
+    guard let data = try? Data(contentsOf: fileURL) else { return nil }
+
+    // Touch the file so pruning evicts genuinely cold spines rather than
+    // whichever shelf happens to have been written least recently.
+    try? FileManager.default.setAttributes(
+      [.modificationDate: Date()], ofItemAtPath: fileURL.path
+    )
+    return data
+  }
+
+  static func store(_ data: Data, for urlString: String) {
+    guard let fileURL = fileURL(for: urlString) else { return }
+    try? data.write(to: fileURL, options: .atomic)
+  }
+
+  /// Keeps the cache bounded — a user who browses many shelves through the
+  /// widget's picker would otherwise accumulate every spine they ever showed.
+  static func prune() {
+    guard let directory,
+          let files = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+          ) else { return }
+
+    guard files.count > maxEntries else { return }
+
+    let sorted = files.sorted { lhs, rhs in
+      let lhsDate = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]))?
+        .contentModificationDate ?? .distantPast
+      let rhsDate = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]))?
+        .contentModificationDate ?? .distantPast
+      return lhsDate > rhsDate
+    }
+
+    for file in sorted.dropFirst(maxEntries) {
+      try? FileManager.default.removeItem(at: file)
+    }
+  }
+}
+
+/// Resolves book spine images for display in the widget.
+/// Cached spines are served from the shared container; only the misses go to
+/// the network, with a per-image timeout so one slow download doesn't block the
+/// whole widget.  Misses are fetched in small batches and downsampled as soon
+/// as they arrive so only a few full-size payloads are ever in memory at once.
 private func downloadBookImages(for books: [[String: Any]], limit: Int) async -> [String: Data] {
   var result: [String: Data] = [:]
-  let booksToFetch = Array(books.prefix(limit))
+  var pending: [(id: String, urlString: String, url: URL)] = []
+
+  for book in books.prefix(limit) {
+    guard let id = book["id"] as? String,
+          let urlString = book["resolvedImageUrl"] as? String,
+          !urlString.isEmpty,
+          let url = URL(string: urlString) else { continue }
+
+    if let cached = SpineImageCache.load(urlString) {
+      result[id] = cached
+    } else {
+      pending.append((id, urlString, url))
+    }
+  }
+
+  guard !pending.isEmpty else {
+    SpineImageCache.prune()
+    return result
+  }
+
   let config = URLSessionConfiguration.default
   config.timeoutIntervalForRequest = 8
   config.timeoutIntervalForResource = 12
@@ -688,33 +804,32 @@ private func downloadBookImages(for books: [[String: Any]], limit: Int) async ->
 
   let batchSize = 4
   var index = 0
-  while index < booksToFetch.count {
-    let batch = booksToFetch[index..<min(index + batchSize, booksToFetch.count)]
-    await withTaskGroup(of: (String, Data?).self) { group in
-      for book in batch {
-        guard let id = book["id"] as? String,
-              let urlString = book["resolvedImageUrl"] as? String,
-              !urlString.isEmpty,
-              let url = URL(string: urlString) else { continue }
+  while index < pending.count {
+    let batch = pending[index..<min(index + batchSize, pending.count)]
+    await withTaskGroup(of: (String, String, Data?).self) { group in
+      for item in batch {
         group.addTask {
           do {
-            let (data, response) = try await session.data(from: url)
+            let (data, response) = try await session.data(from: item.url)
             if let httpResponse = response as? HTTPURLResponse,
                httpResponse.statusCode == 200 {
-              return (id, downsampledImageData(data, maxPixelSize: 400))
+              return (item.id, item.urlString, downsampledImageData(data, maxPixelSize: 400))
             }
           } catch {}
-          return (id, nil)
+          return (item.id, item.urlString, nil)
         }
       }
-      for await (id, data) in group {
+      for await (id, urlString, data) in group {
         if let data = data {
           result[id] = data
+          SpineImageCache.store(data, for: urlString)
         }
       }
     }
     index += batchSize
   }
+
+  SpineImageCache.prune()
   return result
 }
 

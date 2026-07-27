@@ -436,12 +436,12 @@ function getCachedUrl(key: string): string | null {
   return null;
 }
 
-function setCachedUrl(key: string, url: string): void {
+function setCachedUrl(key: string, url: string, ttlMs: number = URL_CACHE_TTL_MS): void {
   if (urlCache.size >= URL_CACHE_MAX_ENTRIES) {
     const oldest = urlCache.keys().next();
     if (!oldest.done) urlCache.delete(oldest.value);
   }
-  urlCache.set(key, { url, expiry: Date.now() + URL_CACHE_TTL_MS });
+  urlCache.set(key, { url, expiry: Date.now() + ttlMs });
 }
 
 // ---------------------------------------------------------------------------
@@ -699,13 +699,26 @@ export function getSpinePublicUrl(
 const WIDGET_SIGNED_URL_EXPIRY_SECONDS = 60 * 60 * 24 * 30;
 
 /**
+ * How long a widget signed URL is reused from cache. Comfortably shorter than
+ * WIDGET_SIGNED_URL_EXPIRY_SECONDS so a cached URL is never handed out close
+ * to its expiry.
+ */
+const WIDGET_URL_CACHE_TTL_MS = 20 * 24 * 60 * 60 * 1000;
+
+/**
  * Resolve spine image URLs for the home-screen widget.
  *
  * The book-spines bucket is private, so the public URLs previously pushed to
  * the widget returned 400 and every spine rendered as a lettered placeholder.
- * Signed URLs work for private and public buckets alike; all paths are signed
- * in a single batched request. External (non-Supabase) URLs pass through
- * unchanged, and any path that fails to sign falls back to its public URL.
+ * Signed URLs work for private and public buckets alike. External
+ * (non-Supabase) URLs pass through unchanged, and any path that fails to sign
+ * falls back to its public URL.
+ *
+ * Paths are deduplicated, served from the URL cache when already signed, and
+ * the remainder is signed in chunks — the widget syncs the whole library on
+ * every library fetch, so signing one request per path (or one giant request
+ * per library) is what turns an ordinary app open into a burst of Storage
+ * traffic.
  *
  * @returns One resolved URL (or null) per input, in the same order.
  */
@@ -729,28 +742,41 @@ export async function getSpineWidgetUrls(
     return { kind: 'path', path: input };
   });
 
-  const paths = [
-    ...new Set(
-      resolved.flatMap((r) => (r.kind === 'path' ? [r.path] : []))
-    ),
-  ];
-
   const signedByPath = new Map<string, string>();
-  if (paths.length > 0) {
+  const pathsToSign: string[] = [];
+  const queued = new Set<string>();
+
+  for (const r of resolved) {
+    if (r.kind !== 'path' || queued.has(r.path)) continue;
+    queued.add(r.path);
+
+    const cached = getCachedUrl(`widget:${r.path}`);
+    if (cached) {
+      signedByPath.set(r.path, cached);
+    } else {
+      pathsToSign.push(r.path);
+    }
+  }
+
+  // Supabase rejects very large batches, and a whole library can easily run to
+  // hundreds of spines, so sign in chunks rather than one unbounded request.
+  for (let i = 0; i < pathsToSign.length; i += SIGN_BATCH_MAX) {
+    const chunk = pathsToSign.slice(i, i + SIGN_BATCH_MAX);
     try {
       const { data, error } = await supabase.storage
         .from(STORAGE_BUCKETS.BOOK_SPINES)
-        .createSignedUrls(paths, WIDGET_SIGNED_URL_EXPIRY_SECONDS);
+        .createSignedUrls(chunk, WIDGET_SIGNED_URL_EXPIRY_SECONDS);
 
       if (!error && data) {
         for (const item of data) {
           if (item.path && item.signedUrl && !item.error) {
             signedByPath.set(item.path, item.signedUrl);
+            setCachedUrl(`widget:${item.path}`, item.signedUrl, WIDGET_URL_CACHE_TTL_MS);
           }
         }
       }
     } catch {
-      // Fall back to public URLs below.
+      // Leave this chunk unsigned; every path in it falls back to a public URL.
     }
   }
 

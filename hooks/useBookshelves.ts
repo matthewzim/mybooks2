@@ -66,8 +66,11 @@ export function useBookshelves(): UseBookshelvesReturn {
         const shelves = result.data || [];
         setBookshelves(shelves);
 
-        // Widget gets full shelf snapshots so all widget sizes can render enough spines.
-        await widgetManager.syncLibrarySnapshot(shelves);
+        // Widget gets full shelf snapshots so all widget sizes can render
+        // enough spines. Deliberately not awaited: the sync signs spine URLs
+        // over the network, and the library list shouldn't wait on widget
+        // upkeep to finish rendering. It swallows its own errors.
+        void widgetManager.syncLibrarySnapshot(shelves);
 
         setLoadingState('success');
       }
@@ -178,6 +181,11 @@ export function useBookshelves(): UseBookshelvesReturn {
 
       // Remove bookshelf from local state
       setBookshelves((prev) => prev.filter((shelf) => shelf.id !== id));
+
+      // Drop it from the widget snapshot too, so a deleted shelf stops showing
+      // up in the widget's shelf picker.
+      void widgetManager.removeBookshelfFromWidget(id);
+
       return true;
     } catch (err) {
       setError('Failed to delete bookshelf');

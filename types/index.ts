@@ -327,6 +327,12 @@ export interface WidgetBook {
 export interface WidgetData {
   bookshelves: WidgetBookshelf[];
   lastUpdated: string;
+  /**
+   * When the `resolved_image_url`s in this snapshot were signed. Widget spine
+   * URLs are signed for 30 days, so a later sync reuses them instead of
+   * re-signing the whole library on every library fetch.
+   */
+  resolvedAt?: string;
 }
 
 // ============================================
