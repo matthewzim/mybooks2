@@ -364,8 +364,8 @@ export async function warpPerspective(params: WarpParams): Promise<string> {
 
     // --- Full-screen quad: clip-space position + output UV (top-left origin) ---
     // aUV.y grows downward while clip y grows upward, so the sampled source
-    // matches the corner order (TL..BL); the snapshot is taken with flip:true
-    // to undo GL's bottom-up readback.
+    // matches the corner order (TL..BL): the TL corner is drawn at the top of
+    // the viewport. See the snapshot call below for how that reaches the file.
     const vertices = new Float32Array([
       -1, 1, 0, 0,
       1, 1, 1, 0,
@@ -397,10 +397,20 @@ export async function warpPerspective(params: WarpParams): Promise<string> {
     gl.flush();
     gl.endFrameEXP();
 
+    // `flip: false` is what produces an upright image here, despite the name.
+    // glReadPixels returns rows bottom-up, so the raw readback is upside down,
+    // and expo-gl's `flip` option selects whether that gets corrected:
+    //  - iOS draws the readback into a UIGraphics image context, whose CTM is
+    //    already y-flipped; CGContextDrawImage therefore un-flips the rows on
+    //    its own, and `flip: true` adds a second flip that cancels it out.
+    //  - Android applies its un-flip matrix in the `if (!flip)` branch.
+    // On both platforms `flip: true` leaves the output mirrored top-to-bottom
+    // (which read as a spine that was flipped both ways once the mirrored text
+    // was rotated), so this must stay false.
     const snapshot = await GLView.takeSnapshotAsync(gl, {
       framebuffer,
       rect: { x: 0, y: 0, width: outWidth, height: outHeight },
-      flip: true,
+      flip: false,
       format: 'jpeg',
       compress: 0.9,
     });

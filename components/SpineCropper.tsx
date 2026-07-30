@@ -340,14 +340,25 @@ export function SpineCropper({
   }, [corners, displaySize, isInitialized]);
 
   /**
-   * Calculate zoom bubble position and clipping for the magnified view
+   * Calculate zoom bubble position and clipping for the magnified view.
+   *
+   * This is computed whenever the image is ready, not just while a corner is
+   * being dragged, because the bubble stays mounted the whole time (hidden with
+   * opacity). Mounting it on drag start meant expo-image only began decoding
+   * its magnified copy of the photo at that moment, leaving the bubble empty
+   * for around a second on full-resolution gallery photos. Camera photos are
+   * pre-cropped to the guide frame, so they decoded fast enough to look
+   * instant — hence the delay showing up on the "existing photo" path only.
+   *
+   * With no active corner the bubble is parked on the first corner; nothing is
+   * visible then, and it re-positions before it fades in.
    */
   const zoomBubbleData = useMemo(() => {
-    if (activeCorner === null || !displaySize.width || !displaySize.height) {
+    if (!isInitialized || !displaySize.width || !displaySize.height) {
       return null;
     }
 
-    const corner = corners[activeCorner];
+    const corner = corners[activeCorner ?? 0];
 
     // Position the zoom bubble above the corner
     let bubbleX = corner.x - ZOOM_BUBBLE_SIZE / 2;
@@ -376,7 +387,7 @@ export function SpineCropper({
       sourceY,
       sourceSize,
     };
-  }, [activeCorner, corners, displaySize]);
+  }, [activeCorner, corners, displaySize, isInitialized]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.primary }]}>
@@ -471,7 +482,11 @@ export function SpineCropper({
                 />
               ))}
 
-              {/* Zoom bubble - shows magnified view when dragging a corner */}
+              {/* Zoom bubble - shows a magnified view while dragging a corner.
+                  It stays mounted (hidden with opacity) rather than being
+                  mounted on drag start, so the magnified copy of the photo is
+                  decoded while the user is still lining up the first corner
+                  instead of after they touch one. */}
               {zoomBubbleData && (
                 <View
                   style={[
@@ -483,6 +498,7 @@ export function SpineCropper({
                       height: ZOOM_BUBBLE_SIZE,
                       borderColor: colors.accent,
                       backgroundColor: colors.primaryDark,
+                      opacity: activeCorner === null ? 0 : 1,
                     },
                   ]}
                   pointerEvents="none"
@@ -498,6 +514,11 @@ export function SpineCropper({
                         top: -zoomBubbleData.cornerY * ZOOM_MAGNIFICATION + ZOOM_BUBBLE_SIZE / 2,
                       }}
                       contentFit="contain"
+                      // No fade-in, and keep the decoded copy around so
+                      // re-grabbing a corner never re-decodes the photo.
+                      transition={0}
+                      cachePolicy="memory-disk"
+                      priority="high"
                     />
                     {/* Crosshair to show exact corner position */}
                     <View style={[styles.crosshairHorizontal, { backgroundColor: colors.textOnDarkMuted }]} />

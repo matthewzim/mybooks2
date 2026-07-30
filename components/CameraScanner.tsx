@@ -230,6 +230,31 @@ export function CameraScanner({
   };
 
   /**
+   * Discard the current photo and go back to the start of the capture flow.
+   *
+   * In camera mode that means the live preview, which the cleared state falls
+   * back to on its own. In gallery mode there is no camera to fall back to:
+   * the render below shows a bare placeholder whenever there's no photo yet,
+   * on the assumption that the system picker is open on top of it. Nothing
+   * reopens that picker by itself (the mount effect only ever runs once), so
+   * this has to relaunch it explicitly — otherwise the screen just goes empty.
+   * Canceling the relaunched picker hands control back to the caller, the same
+   * as canceling it on entry.
+   */
+  const restartCapture = async () => {
+    setRawCapturedImage(null);
+    setCroppedImage(null);
+    setCropRect(null);
+
+    if (initialMode === 'gallery') {
+      const picked = await pickFromGallery();
+      if (!picked) {
+        onCancel();
+      }
+    }
+  };
+
+  /**
    * Handle crop completion - remember the crop region so "Adjust Crop"
    * reopens the cropper with the corners where the user left them
    */
@@ -239,11 +264,11 @@ export function CameraScanner({
   };
 
   /**
-   * Handle crop cancel - go back to camera
+   * Handle crop cancel - go back to the camera, or to the picker when this
+   * photo came from the gallery
    */
   const handleCropCancel = () => {
-    setRawCapturedImage(null);
-    setCropRect(null);
+    restartCapture();
   };
 
   /**
@@ -262,12 +287,10 @@ export function CameraScanner({
   };
 
   /**
-   * Start over - go back to camera
+   * Start over - go back to the camera, or reopen the picker for gallery uploads
    */
   const startOver = () => {
-    setRawCapturedImage(null);
-    setCroppedImage(null);
-    setCropRect(null);
+    restartCapture();
   };
 
   /**
