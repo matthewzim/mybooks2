@@ -43,6 +43,7 @@ import {
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getClothColor } from '@/utils/spineCloth';
+import { normalizeAuthorName, normalizeBookTitle } from '@/utils/bookText';
 import type { Book, CommunityBookSpine } from '@/types';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -380,8 +381,8 @@ export function BookDetailModal({
     setIsSaving(true);
     try {
       const result = await booksService.updateBook(book.id, {
-        title: title.trim(),
-        author: author.trim(),
+        title: normalizeBookTitle(title),
+        author: normalizeAuthorName(author),
         review: review.trim() || null,
         rating: rating || null,
       });
@@ -618,6 +619,9 @@ export function BookDetailModal({
                       ]}
                       value={title}
                       onChangeText={setTitle}
+                      // Re-case on blur rather than on every keystroke, which
+                      // would fight the user mid-word.
+                      onBlur={() => setTitle(normalizeBookTitle(title))}
                       placeholder="Book title"
                       placeholderTextColor={colors.textLight}
                     />
@@ -636,6 +640,7 @@ export function BookDetailModal({
                       ]}
                       value={author}
                       onChangeText={setAuthor}
+                      onBlur={() => setAuthor(normalizeAuthorName(author))}
                       placeholder="Author name"
                       placeholderTextColor={colors.textLight}
                     />

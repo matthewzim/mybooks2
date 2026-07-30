@@ -15,8 +15,14 @@
  * const coverUrl = await isbndbService.fetchAndCacheCover(book);
  */
 
-import { supabase, TABLES, handleSupabaseError } from './supabase';
+import {
+  supabase,
+  TABLES,
+  handleSupabaseError,
+  escapeLikePattern,
+} from './supabase';
 import { storageService } from './storage';
+import { normalizeAuthorName, normalizeBookTitle } from '@/utils/bookText';
 import type { Book, ApiResponse } from '@/types';
 
 const ISBNDB_API_KEY = process.env.EXPO_PUBLIC_ISBNDB_API_KEY || '';
@@ -245,8 +251,12 @@ function mapBooks(books: IsbnDbBook[]): BookVolumeResult[] {
     .filter((book) => book.title)
     .map((book) => {
       const isbn13 = book.isbn13 || book.isbn || null;
-      const title = book.title || 'Untitled';
-      const author = book.authors?.[0] || 'Unknown Author';
+      // Some ISBNdb records are catalogued in block capitals ("DUNE",
+      // "HERBERT, FRANK"). Fold those back to title case here, at the edge of
+      // the API, so nothing downstream — search results, prefilled add-book
+      // fields, stored book rows — ever carries the shouting.
+      const title = normalizeBookTitle(book.title) || 'Untitled';
+      const author = normalizeAuthorName(book.authors?.[0]) || 'Unknown Author';
       return {
         id: isbn13 || bookDedupeKey(title, author),
         title,
@@ -347,8 +357,8 @@ export async function lookupBookByIsbn(isbn: string): Promise<IsbnLookupResult |
   if (!book?.title) return null;
 
   return {
-    title: book.title,
-    author: book.authors?.[0] || '',
+    title: normalizeBookTitle(book.title),
+    author: normalizeAuthorName(book.authors?.[0]),
     isbn13: book.isbn13 || book.isbn || normalized,
     thumbnail: book.image || null,
   };
@@ -357,16 +367,20 @@ export async function lookupBookByIsbn(isbn: string): Promise<IsbnLookupResult |
 /**
  * Look up candidate books for a block of OCR'd spine text.
  *
+ * Spine text arrives as the spine printed it, which is frequently block
+ * capitals; it is title-cased and whitespace-collapsed before it becomes a
+ * query so ISBNdb is asked for the book the way its catalogue spells it.
+ *
  * `shouldMatchAll=0` keeps the search an OR-match: spine text routinely
  * carries junk tokens (publisher names, shelf labels) that would zero out
  * an AND-match. The caller's token-overlap scoring is the real noise filter.
  */
 export async function searchBooksForSpineText(text: string): Promise<IsbnDbBook[]> {
-  const trimmed = text.trim();
-  if (!trimmed) return [];
+  const query = normalizeBookTitle(text);
+  if (!query) return [];
 
   const data = await isbndbFetch<IsbnDbSearchResponse>(
-    `/books/${encodeURIComponent(trimmed)}?page=1&pageSize=5&shouldMatchAll=0`
+    `/books/${encodeURIComponent(query)}?page=1&pageSize=10&shouldMatchAll=0`
   );
   return data?.books || [];
 }
@@ -500,16 +514,15 @@ class IsbndbCoverService {
     const author = (book.author || '').trim();
     if (!title) return null;
 
-    // Escape LIKE wildcards so ilike performs a case-insensitive equality match.
-    const escapeLike = (value: string) => value.replace(/[\\%_]/g, (m) => `\\${m}`);
-
     try {
       const { data, error } = await supabase
         .from(TABLES.BOOKS)
         .select('cover_image_url')
         .neq('id', book.book_id)
-        .ilike('title', escapeLike(title))
-        .ilike('author', escapeLike(author))
+        // Escaped ilike, i.e. case-insensitive equality — it also matches rows
+        // stored in block capitals before titles were normalized.
+        .ilike('title', escapeLikePattern(title))
+        .ilike('author', escapeLikePattern(author))
         .not('cover_image_url', 'is', null)
         .limit(10);
 
@@ -529,10 +542,15 @@ class IsbndbCoverService {
    * Build the request paths tried in order when looking up a cover:
    * a title-column search first (precise), then an all-columns search on
    * title + author as the fallback for titles ISBNdb indexes differently.
+   *
+   * The title and author are re-cased before they reach the query string, so
+   * a book stored in block capitals (a spine scan from before titles were
+   * normalized, or a shouted manual entry) still searches ISBNdb the way the
+   * catalogue spells it rather than as "THE HOBBIT".
    */
   private buildCoverQueryPaths(title: string, author: string): string[] {
-    const cleanTitle = (title || '').trim();
-    const cleanAuthor = (author || '').trim();
+    const cleanTitle = normalizeBookTitle(title);
+    const cleanAuthor = normalizeAuthorName(author);
     if (!cleanTitle) return [];
 
     const paths = [

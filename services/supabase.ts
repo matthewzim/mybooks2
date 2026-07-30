@@ -104,6 +104,17 @@ export function escapeFilterValue(value: string): string {
 }
 
 /**
+ * Escape a value for a standalone `.ilike(column, pattern)` call, where the
+ * client sends the pattern as its own parameter — so only LIKE's wildcards
+ * need neutralizing, not PostgREST's `or=(...)` grammar. Use this (not
+ * {@link escapeFilterValue}) to make `.ilike()` behave as case-insensitive
+ * equality; double-escaping would leave literal backslashes in the pattern.
+ */
+export function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+/**
  * Build a single `column.ilike."%term%"` clause safe to pass to `.or()`.
  *
  * @param column - Column to match against

@@ -31,6 +31,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { booksService, storageService } from '@/services';
 import { isbndbConfigured, lookupBookByIsbn, normalizeIsbn } from '@/services/isbndb';
 import { Button, Input } from '@/components/ui';
+import { normalizeAuthorName, normalizeBookTitle } from '@/utils/bookText';
 import {
   Colors,
   Spacing,
@@ -90,8 +91,8 @@ export default function AddBookScreen() {
       const baseName = asset.fileName.replace(/\.[^.]+$/, '');
       const parts = baseName.split(/\s+-\s+/);
       if (parts.length >= 2) {
-        if (!title.trim()) setTitle(parts[0].trim());
-        if (!author.trim()) setAuthor(parts.slice(1).join(' - ').trim());
+        if (!title.trim()) setTitle(normalizeBookTitle(parts[0]));
+        if (!author.trim()) setAuthor(normalizeAuthorName(parts.slice(1).join(' - ')));
       }
     }
 
@@ -130,17 +131,17 @@ export default function AddBookScreen() {
         .map((line: string) => line.trim())
         .filter((line: string) => line.length > 1 && !/^by$/i.test(line));
 
+      // Covers and spines are routinely set in block capitals, so everything
+      // read off the image is re-cased before it lands in a field.
       if (!title.trim() && lines.length > 0) {
-        setTitle(lines[0]);
+        setTitle(normalizeBookTitle(lines[0]));
       }
 
       if (!author.trim() && lines.length > 1) {
         const byLine = lines.find((line: string) => /^by\s+/i.test(line));
-        if (byLine) {
-          setAuthor(byLine.replace(/^by\s+/i, '').trim());
-        } else {
-          setAuthor(lines[1]);
-        }
+        setAuthor(
+          normalizeAuthorName(byLine ? byLine.replace(/^by\s+/i, '') : lines[1])
+        );
       }
     } catch (error) {
       console.warn('Unable to auto-fill metadata from image:', error);
@@ -223,8 +224,8 @@ export default function AddBookScreen() {
 
       // Create the book
       const result = await booksService.createBook({
-        title: title.trim(),
-        author: author.trim(),
+        title: normalizeBookTitle(title),
+        author: normalizeAuthorName(author),
         isbn: isbn.trim() || undefined,
         image_url: uploadedImageUrl,
         shelf_id: shelfId,
@@ -301,6 +302,9 @@ export default function AddBookScreen() {
                 placeholder="Enter book title"
                 value={title}
                 onChangeText={setTitle}
+                // Re-case on blur rather than on every keystroke, which would
+                // fight the user mid-word.
+                onBlur={() => setTitle(normalizeBookTitle(title))}
                 autoFocus
                 error={errors.title}
                 leftIcon="book-outline"
@@ -311,6 +315,7 @@ export default function AddBookScreen() {
                 placeholder="Enter author name"
                 value={author}
                 onChangeText={setAuthor}
+                onBlur={() => setAuthor(normalizeAuthorName(author))}
                 error={errors.author}
                 leftIcon="person-outline"
               />
