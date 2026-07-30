@@ -25,6 +25,7 @@ import {
   isMissingFunctionError,
 } from './supabase';
 import { bookDedupeKey } from './isbndb';
+import { normalizeAuthorName, normalizeBookTitle } from '@/utils/bookText';
 import type {
   Book,
   CommunityBookSpine,
@@ -161,11 +162,16 @@ class BooksService {
 
       // If no existing book_id, create a new global book record
       if (!bookId) {
+        // Every entry point lands here — spine scan, manual entry, CSV import,
+        // community browse — so this is where SHOUTED text gets folded back to
+        // title case. Global book rows are shared across users and drive the
+        // cover-image search, so a title stored as "THE HOBBIT" would shout on
+        // every shelf that references it and query ISBNdb in capitals too.
         const { data: newBook, error: bookError } = await supabase
           .from(TABLES.BOOKS)
           .insert({
-            title: input.title,
-            author: input.author,
+            title: normalizeBookTitle(input.title),
+            author: normalizeAuthorName(input.author),
             image_url: input.image_url || null,
             isbn: input.isbn || null,
             uploaded_by_user_id: session.session.user.id,
@@ -272,9 +278,10 @@ class BooksService {
       const bookUpdates: Record<string, any> = {};
       const itemUpdates: Record<string, any> = {};
 
-      // Global book fields
-      if (updates.title !== undefined) bookUpdates.title = updates.title;
-      if (updates.author !== undefined) bookUpdates.author = updates.author;
+      // Global book fields. Title/author are re-cased on the way in for the
+      // same reason as createBook — an all-caps edit shouldn't stick.
+      if (updates.title !== undefined) bookUpdates.title = normalizeBookTitle(updates.title);
+      if (updates.author !== undefined) bookUpdates.author = normalizeAuthorName(updates.author);
       if (updates.image_url !== undefined) bookUpdates.image_url = updates.image_url;
       if (updates.cover_image_url !== undefined) bookUpdates.cover_image_url = updates.cover_image_url;
       if (updates.isbn !== undefined) bookUpdates.isbn = updates.isbn;

@@ -35,6 +35,7 @@ import { storageService, booksService } from '@/services';
 import { shelfScanService } from '@/services/shelfScan';
 import { CameraScanner } from '@/components/CameraScanner';
 import { Button, Input } from '@/components/ui';
+import { normalizeAuthorName, normalizeBookTitle } from '@/utils/bookText';
 import {
   Colors,
   Spacing,
@@ -70,6 +71,11 @@ export default function ScanScreen() {
    * Read the spine text and match it to a real book, filling in the title,
    * author and ISBN. Silently degrades to manual entry if OCR isn't
    * configured or nothing matches.
+   *
+   * The fields are always filled with the canonical, correctly-cased values —
+   * ISBNdb's title and author when the spine matched a real book, otherwise a
+   * title-cased guess from the scanned text — so the user can review and
+   * submit rather than retype what the spine shouted.
    */
   const identifyBook = async (imageUri: string) => {
     if (!shelfScanService.isConfigured()) return;
@@ -90,9 +96,11 @@ export default function ScanScreen() {
         setIsbn(data.match.isbn);
         setCoverUrl(data.match.coverUrl);
         setMatched(true);
-      } else if (data.detectedText) {
-        // No confident match — offer the raw scanned text as a starting point.
-        setTitle(data.detectedText);
+      } else {
+        // No confident match — offer the scanned text, split into a title and
+        // an author guess, as a starting point.
+        setTitle(data.suggestion.title);
+        setAuthor(data.suggestion.author);
       }
     } catch (error) {
       console.warn('Unable to identify book from spine:', error);
@@ -139,8 +147,8 @@ export default function ScanScreen() {
       }
 
       const result = await booksService.createBook({
-        title: title.trim(),
-        author: author.trim(),
+        title: normalizeBookTitle(title),
+        author: normalizeAuthorName(author),
         isbn: isbn || undefined,
         image_url: uploadResult.data || undefined,
         shelf_id: shelfId,
@@ -279,6 +287,9 @@ export default function ScanScreen() {
                   placeholder="Book title"
                   value={title}
                   onChangeText={setTitle}
+                  // Re-case on blur rather than on every keystroke, which would
+                  // fight the user mid-word.
+                  onBlur={() => setTitle(normalizeBookTitle(title))}
                   leftIcon="book-outline"
                   colors={colors}
                 />
@@ -287,6 +298,7 @@ export default function ScanScreen() {
                   placeholder="Author name"
                   value={author}
                   onChangeText={setAuthor}
+                  onBlur={() => setAuthor(normalizeAuthorName(author))}
                   leftIcon="person-outline"
                   colors={colors}
                 />

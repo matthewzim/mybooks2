@@ -50,7 +50,7 @@ import { bookshelvesService } from '@/services/bookshelves';
 import { booksService } from '@/services/books';
 import { accountService } from '@/services/account';
 import { authService } from '@/services/auth';
-import { supabase } from '@/services/supabase';
+import { supabase, escapeLikePattern } from '@/services/supabase';
 import { widgetManager } from '@/utils/widget';
 import type { Bookshelf } from '@/types';
 
@@ -246,11 +246,15 @@ export default function SettingsScreen() {
       let placeholderCount = 0;
 
       for (const csvBook of uniquePairs) {
+        // Case-insensitive equality (ilike with the wildcards escaped): stored
+        // titles are normalized to title case, while a CSV row can carry any
+        // casing, and an exact match would create a duplicate global book
+        // record instead of reusing the existing one (and its spine image).
         const { data: matchedBook, error: matchError } = await supabase
           .from('books')
           .select('id,title,author,image_url')
-          .eq('title', csvBook.title)
-          .eq('author', csvBook.author)
+          .ilike('title', escapeLikePattern(csvBook.title))
+          .ilike('author', escapeLikePattern(csvBook.author))
           .limit(1)
           .maybeSingle();
 

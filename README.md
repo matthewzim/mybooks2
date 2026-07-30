@@ -421,6 +421,18 @@ eas build --platform ios --profile production   # logs the variables it loaded
 - `deleteBook(id)` - Remove book from shelf
 - `getCommunityBooks(page, pageSize)` - Browse community books
 
+Titles and authors are normalized on the way into the `books` table:
+whitespace is collapsed, and values written entirely in capitals (as book
+spines are so often printed, and as OCR therefore reads them) are converted to
+title case. Anything containing a lowercase letter is stored exactly as
+written, so deliberate casing like "The FBI Story" survives.
+
+### Text normalization (`utils/bookText.ts`)
+- `normalizeBookTitle(value)` - Tidy a title, title-casing it if it's all caps
+- `normalizeAuthorName(value)` - Same for a name ("Simone de Beauvoir")
+- `toTitleCase(value)` / `toNameCase(value)` - Re-case unconditionally
+- `isAllCaps(value)` - Whether a string is written entirely in capitals
+
 ### Storage (`services/storage.ts`)
 - `uploadBookSpine(uri, userId)` - Upload book spine image
 - `uploadAvatar(uri, userId)` - Upload user avatar

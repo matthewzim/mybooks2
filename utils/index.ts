@@ -5,3 +5,10 @@
  */
 
 export { widgetManager } from './widget';
+export {
+  isAllCaps,
+  normalizeAuthorName,
+  normalizeBookTitle,
+  toNameCase,
+  toTitleCase,
+} from './bookText';

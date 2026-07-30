@@ -17,10 +17,16 @@
  */
 
 import * as ImageManipulator from 'expo-image-manipulator';
-import { supabase, TABLES, handleSupabaseError } from './supabase';
+import {
+  supabase,
+  TABLES,
+  handleSupabaseError,
+  escapeLikePattern,
+} from './supabase';
 import { booksService } from './books';
 import { getSpineImageUrl } from './storage';
 import { bookDedupeKey, searchBooksForSpineText } from './isbndb';
+import { normalizeAuthorName, normalizeBookTitle } from '@/utils/bookText';
 import type { ApiResponse } from '@/types';
 
 const GOOGLE_VISION_API_KEY =
@@ -54,6 +60,15 @@ export interface ShelfScanMatch {
   coverUrl: string | null;
 }
 
+/**
+ * Best-effort title/author split of a spine's raw OCR text, used to prefill
+ * the manual-entry fields when ISBNdb couldn't identify the book.
+ */
+export interface SpineTextSuggestion {
+  title: string;
+  author: string;
+}
+
 export interface ShelfScanAddResult {
   /** Books successfully added to the shelf */
   added: number;
@@ -83,6 +98,73 @@ function tokenize(text: string): string[] {
   return (text.toLowerCase().match(/[a-z0-9]+/g) || []).filter(
     (token) => token.length >= 3
   );
+}
+
+/**
+ * Publisher and imprint names that share the spine with the title. They are
+ * never the book's title, so they are skipped when guessing one.
+ */
+const PUBLISHER_TOKENS = [
+  'penguin', 'random house', 'vintage', 'anchor', 'knopf', 'doubleday',
+  'harper', 'collins', 'scribner', 'simon', 'schuster', 'macmillan',
+  'bloomsbury', 'faber', 'norton', 'houghton', 'mifflin', 'harcourt',
+  'ballantine', 'bantam', 'dell', 'tor books', 'orbit', 'del rey', 'picador',
+  'riverhead', 'crown', 'grove', 'pocket books', 'signet', 'oxford',
+  'cambridge', 'wiley', 'pearson', 'mcgraw', 'classics', 'paperback',
+];
+
+function looksLikePublisher(text: string): boolean {
+  const lower = text.toLowerCase();
+  return PUBLISHER_TOKENS.some((token) => lower.includes(token));
+}
+
+/**
+ * Whether a block reads like a person's name — 2–4 words, letters only
+ * (initials and hyphenated names allowed), no digits. Used to tell the author
+ * block apart from the title block on an unmatched spine.
+ */
+function looksLikePersonName(text: string): boolean {
+  const words = text.trim().split(/\s+/);
+  if (words.length < 2 || words.length > 4) return false;
+  const NAME_WORD = /^[A-Za-zÀ-ɏ][A-Za-zÀ-ɏ.'’-]*$/;
+  return words.every((word) => NAME_WORD.test(word));
+}
+
+/**
+ * Guess a title and author from the OCR blocks of a single spine.
+ *
+ * Publisher blocks are dropped, the author is the block that reads like a
+ * person's name (or a "by …" line), and the title is what's left. Both are
+ * re-cased, since spines are so often set in block capitals — the point is to
+ * hand the user something they can submit as-is rather than retype.
+ */
+function suggestFromSpineText(texts: string[]): SpineTextSuggestion {
+  const blocks = texts.map((text) => text.trim()).filter(Boolean);
+  if (blocks.length === 0) return { title: '', author: '' };
+
+  // Drop publisher blocks, unless that leaves nothing to work with.
+  const withoutPublishers = blocks.filter((block) => !looksLikePublisher(block));
+  const pool = withoutPublishers.length > 0 ? withoutPublishers : blocks;
+
+  const byLine = pool.find((block) => /^by\s+/i.test(block));
+  const rest = pool.filter((block) => block !== byLine);
+
+  // The title is claimed first, because a two-word title ("Fourth Wing") reads
+  // like a person's name and picking the author first would steal it. Spines
+  // print the title before the author as a rule, and where they don't
+  // ("Stephen King" above "It") the author block is the one that looks like a
+  // name — so take the first block that doesn't, falling back to document
+  // order when every block could be a name.
+  const title = rest.find((block) => !looksLikePersonName(block)) ?? rest[0] ?? pool[0];
+
+  const author = byLine
+    ? byLine.replace(/^by\s+/i, '')
+    : (rest.find((block) => block !== title && looksLikePersonName(block)) ?? '');
+
+  return {
+    title: normalizeBookTitle(title),
+    author: normalizeAuthorName(author),
+  };
 }
 
 function blockToText(block: VisionBlock): string {
@@ -272,14 +354,22 @@ class ShelfScanService {
    *
    * Runs OCR on the spine, then matches the text against ISBNdb to
    * recover a canonical title/author/ISBN. The whole spine's text is tried as
-   * one query first (title + author together give the strongest match); the
-   * longest single block is a fallback when the combined text is too noisy.
-   * The returned `detectedText` is always provided so the caller can prefill
-   * the manual-entry fields even when nothing matched.
+   * one query first (title + author together give the strongest match), then
+   * the longest individual blocks, which is what rescues a spine whose
+   * combined text is too noisy to match (publisher, series, price stickers).
+   *
+   * The returned `detectedText` is always provided so the caller can show what
+   * was read, and `suggestion` carries a best-effort title/author split of that
+   * text — already re-cased — for prefilling the fields when ISBNdb has no
+   * confident match.
    */
-  async identifySpine(
-    base64Image: string
-  ): Promise<ApiResponse<{ match: ShelfScanMatch | null; detectedText: string }>> {
+  async identifySpine(base64Image: string): Promise<
+    ApiResponse<{
+      match: ShelfScanMatch | null;
+      detectedText: string;
+      suggestion: SpineTextSuggestion;
+    }>
+  > {
     const detectResult = await this.detectSpineTexts(base64Image);
     if (detectResult.error) {
       return { data: null, error: detectResult.error };
@@ -288,13 +378,13 @@ class ShelfScanService {
     const texts = detectResult.data || [];
     const combined = texts.join(' ').replace(/\s+/g, ' ').trim();
 
-    // Try the combined text first, then fall back to the longest block.
-    const longestBlock = texts
-      .slice()
-      .sort((a, b) => b.length - a.length)[0];
-    const candidates: string[] = [];
-    if (combined) candidates.push(combined);
-    if (longestBlock && longestBlock !== combined) candidates.push(longestBlock);
+    // Try the combined text first, then the longest blocks on their own. Each
+    // candidate is one ISBNdb request, so the list is capped — a miss on all
+    // of them drops the user into manual entry, prefilled from `suggestion`.
+    const longestBlocks = texts.slice().sort((a, b) => b.length - a.length);
+    const candidates = [combined, ...longestBlocks.slice(0, 2)].filter(
+      (candidate, index, all) => candidate && all.indexOf(candidate) === index
+    );
 
     let match: ShelfScanMatch | null = null;
     for (let i = 0; i < candidates.length; i++) {
@@ -313,7 +403,10 @@ class ShelfScanService {
       await this.attachExistingSpines([match]);
     }
 
-    return { data: { match, detectedText: combined }, error: null };
+    return {
+      data: { match, detectedText: combined, suggestion: suggestFromSpineText(texts) },
+      error: null,
+    };
   }
 
   /**
@@ -395,8 +488,13 @@ class ShelfScanService {
       if (!best || score > best.score) {
         best = {
           score,
-          title,
-          author: author || 'Unknown Author',
+          // The canonical title/author from ISBNdb is what gets stored and
+          // prefilled, so re-case it here: some catalogue records are
+          // themselves in block capitals, and matching is case-insensitive
+          // (both sides are tokenized lowercase) so this can't change which
+          // book wins.
+          title: normalizeBookTitle(title),
+          author: normalizeAuthorName(author) || 'Unknown Author',
           isbn: book.isbn13 || book.isbn || null,
           coverUrl: book.image || null,
         };
@@ -426,13 +524,18 @@ class ShelfScanService {
     await Promise.all(
       matches.map(async (match) => {
         try {
+          // Case-insensitive equality (ilike with the wildcards escaped): rows
+          // added before titles were normalized are stored as the spine shouted
+          // them ("THE HOBBIT"), and an exact match would miss those and their
+          // community spine images.
+          //
           // Non-null image_url rows first so a spine is preferred over a
           // bare record when several users own the same title.
           const { data } = await supabase
             .from(TABLES.BOOKS)
             .select('id, image_url')
-            .eq('title', match.title)
-            .eq('author', match.author)
+            .ilike('title', escapeLikePattern(match.title))
+            .ilike('author', escapeLikePattern(match.author))
             .order('image_url', { ascending: false, nullsFirst: false })
             .limit(1)
             .maybeSingle();
