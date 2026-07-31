@@ -8,6 +8,8 @@
  * - Displays captured image
  * - 4 independently draggable corner handles forming an arbitrary
  *   quadrilateral, so the selection can follow a spine photographed at an angle
+ * - Corner dragging runs entirely on the UI thread (Reanimated shared values +
+ *   react-native-gesture-handler), so a drag never waits on a React re-render
  * - Visual crop boundary with darkened surroundings
  * - Defaults to a centered spine-shaped rectangle
  * - Applies a perspective (homography) warp so the quadrilateral is de-skewed
@@ -15,7 +17,7 @@
  *   with expo-image-manipulator if the warp is unavailable
  */
 
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,20 +25,26 @@ import {
   Pressable,
   Dimensions,
   ActivityIndicator,
-  PanResponder,
-  GestureResponderEvent,
-  PanResponderGestureState,
+  Image as RNImage,
 } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Ionicons } from '@expo/vector-icons';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  runOnJS,
+  useAnimatedProps,
+  useAnimatedStyle,
+  useSharedValue,
+  type SharedValue,
+} from 'react-native-reanimated';
 import {
   Spacing,
   BorderRadius,
   Typography,
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
-import Svg, { Polygon, Circle, Line, Path } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import {
   warpPerspective,
   isPerspectiveWarpAvailable,
@@ -46,6 +54,11 @@ import {
 interface Point {
   x: number;
   y: number;
+}
+
+interface Size {
+  width: number;
+  height: number;
 }
 
 /**
@@ -72,6 +85,7 @@ interface SpineCropperProps {
 
 const HANDLE_SIZE = 30;
 const HANDLE_HIT_SLOP = 20;
+const TOUCH_TARGET_SIZE = HANDLE_SIZE + HANDLE_HIT_SLOP;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Zoom bubble configuration
@@ -79,9 +93,101 @@ const ZOOM_BUBBLE_SIZE = 120;
 const ZOOM_MAGNIFICATION = 2.5;
 const ZOOM_BUBBLE_OFFSET_Y = 80; // Distance above the finger
 
+/**
+ * Longest edge we keep for the photo we display and crop from.
+ *
+ * A gallery photo arrives at full camera resolution (commonly 4000px+ on the
+ * long edge). Every pixel of that has to be decoded for the preview *and*
+ * again, at 2.5x, for the magnifier — which is what made dragging a corner
+ * crawl on the "upload a photo" path while camera captures (already cropped to
+ * the guide frame, so much smaller) felt fine.
+ *
+ * Downscaling costs nothing in output quality: the perspective warp caps its
+ * own source at the GPU texture limit (2048 on the smallest devices in common
+ * use), so it would resize to roughly this size anyway.
+ */
+const MAX_SOURCE_DIMENSION = 2048;
+
 // Calculate display dimensions for the image preview
 const IMAGE_CONTAINER_WIDTH = SCREEN_WIDTH - Spacing.lg * 2;
 const IMAGE_CONTAINER_HEIGHT = SCREEN_HEIGHT * 0.6;
+
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+
+/** Closed outline of the crop quad, in display coordinates. */
+function quadPath(corners: Point[]): string {
+  'worklet';
+  return (
+    `M${corners[0].x} ${corners[0].y}` +
+    `L${corners[1].x} ${corners[1].y}` +
+    `L${corners[2].x} ${corners[2].y}` +
+    `L${corners[3].x} ${corners[3].y}Z`
+  );
+}
+
+/** Even-odd path that darkens everything outside the crop quadrilateral. */
+function outsidePath(corners: Point[], size: Size): string {
+  'worklet';
+  return `M0 0H${size.width}V${size.height}H0Z ${quadPath(corners)}`;
+}
+
+/** The two dashed centre lines inside the crop quad. */
+function gridPath(corners: Point[]): string {
+  'worklet';
+  const topMidX = (corners[0].x + corners[1].x) / 2;
+  const topMidY = (corners[0].y + corners[1].y) / 2;
+  const bottomMidX = (corners[3].x + corners[2].x) / 2;
+  const bottomMidY = (corners[3].y + corners[2].y) / 2;
+  const leftMidX = (corners[0].x + corners[3].x) / 2;
+  const leftMidY = (corners[0].y + corners[3].y) / 2;
+  const rightMidX = (corners[1].x + corners[2].x) / 2;
+  const rightMidY = (corners[1].y + corners[2].y) / 2;
+
+  return (
+    `M${topMidX} ${topMidY}L${bottomMidX} ${bottomMidY}` +
+    `M${leftMidX} ${leftMidY}L${rightMidX} ${rightMidY}`
+  );
+}
+
+function getImageSize(uri: string): Promise<Size> {
+  return new Promise((resolve, reject) => {
+    RNImage.getSize(uri, (width, height) => resolve({ width, height }), reject);
+  });
+}
+
+/**
+ * Produce the image the cropper actually shows and crops from: the original
+ * when it is already a sane size, otherwise a downscaled copy.
+ *
+ * Resizing constrains only the longer edge so expo-image-manipulator keeps the
+ * aspect ratio itself — passing both dimensions would distort the photo if
+ * `RNImage.getSize` reported them without the EXIF rotation applied. Any
+ * failure falls back to the original, which is slower to drag but correct.
+ */
+async function prepareDisplaySource(uri: string): Promise<string> {
+  try {
+    const { width, height } = await getImageSize(uri);
+
+    if (!width || !height || Math.max(width, height) <= MAX_SOURCE_DIMENSION) {
+      return uri;
+    }
+
+    const resize =
+      width >= height
+        ? { width: MAX_SOURCE_DIMENSION }
+        : { height: MAX_SOURCE_DIMENSION };
+
+    const result = await ImageManipulator.manipulateAsync(uri, [{ resize }], {
+      compress: 0.92,
+      format: ImageManipulator.SaveFormat.JPEG,
+    });
+
+    return result.uri;
+  } catch (error) {
+    console.warn('Could not downscale photo for cropping; using the original:', error);
+    return uri;
+  }
+}
 
 export function SpineCropper({
   imageUri,
@@ -91,31 +197,78 @@ export function SpineCropper({
 }: SpineCropperProps) {
   const { colors } = useTheme();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
-  const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
+  const [imageSize, setImageSize] = useState<Size>({ width: 0, height: 0 });
+  const [displaySize, setDisplaySize] = useState<Size>({ width: 0, height: 0 });
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Initialize corner positions - will be set after image loads
-  const [corners, setCorners] = useState<Point[]>([
+  /**
+   * The photo we display and crop from — see `prepareDisplaySource`. Null while
+   * it is being prepared, so the image mounts once with its final URI rather
+   * than loading the full-resolution original first.
+   */
+  const [sourceUri, setSourceUri] = useState<string | null>(null);
+
+  /**
+   * Corner positions, in display coordinates.
+   *
+   * The shared value is what the gesture writes and what the overlay and
+   * handles render from, so a drag stays on the UI thread. The React copy is
+   * committed once per drag (on release) and is what the crop reads.
+   */
+  const cornersSV = useSharedValue<Point[]>([
     { x: 0, y: 0 },
     { x: 0, y: 0 },
     { x: 0, y: 0 },
     { x: 0, y: 0 },
   ]);
-  const [activeCorner, setActiveCorner] = useState<number | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  // Ref to track current corners for synchronous access in gesture handlers
-  const cornersRef = useRef<Point[]>(corners);
-  cornersRef.current = corners;
+  const [corners, setCorners] = useState<Point[]>(cornersSV.value);
+  const activeCornerSV = useSharedValue(-1);
+  const boundsSV = useSharedValue<Size>({ width: 0, height: 0 });
 
   /**
-   * Initialize crop region when image loads
-   * Defaults to a centered vertical rectangle (book spine shape)
+   * Corners are placed once per photo.
+   *
+   * `onLoad` can fire again for the same image (expo-image reloads whenever it
+   * re-resolves its source), and re-running the initial placement then snapped
+   * every corner back to where it started — the "the corner bounces back"
+   * symptom, which showed up on gallery uploads because a full-resolution photo
+   * takes long enough to decode that the reset landed after the drag.
    */
-  const handleImageLoad = useCallback((event: any) => {
-    const { width, height } = event.source || { width: 0, height: 0 };
+  const cornersPlacedRef = useRef(false);
 
-    if (width && height) {
+  useEffect(() => {
+    let cancelled = false;
+
+    cornersPlacedRef.current = false;
+    setIsInitialized(false);
+    setSourceUri(null);
+
+    prepareDisplaySource(imageUri).then((uri) => {
+      if (!cancelled) setSourceUri(uri);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [imageUri]);
+
+  // Stable source objects: a fresh `{ uri }` literal on every render makes
+  // expo-image re-resolve (and re-decode) the photo.
+  const imageSource = useMemo(
+    () => (sourceUri ? { uri: sourceUri } : null),
+    [sourceUri]
+  );
+
+  /**
+   * Size the preview and, the first time the photo loads, place the corners.
+   * They default to a centered vertical rectangle (book spine shape).
+   */
+  const handleImageLoad = useCallback(
+    (event: any) => {
+      const { width, height } = event.source || { width: 0, height: 0 };
+
+      if (!width || !height) return;
+
       setImageSize({ width, height });
 
       // Calculate display dimensions maintaining aspect ratio
@@ -129,6 +282,10 @@ export function SpineCropper({
       }
 
       setDisplaySize({ width: displayWidth, height: displayHeight });
+      boundsSV.value = { width: displayWidth, height: displayHeight };
+
+      if (cornersPlacedRef.current) return;
+      cornersPlacedRef.current = true;
 
       let initialCorners: Point[];
 
@@ -169,60 +326,17 @@ export function SpineCropper({
         ];
       }
 
+      cornersSV.value = initialCorners;
       setCorners(initialCorners);
       setIsInitialized(true);
-    }
-  }, [initialCrop]);
+    },
+    [initialCrop, boundsSV, cornersSV]
+  );
 
-  /**
-   * Handle corner drag.
-   *
-   * Each corner moves independently of the others, so the selection can be any
-   * quadrilateral. handleCrop then perspective-warps that quad into an upright
-   * rectangle, so every corner is honored exactly where the user placed it.
-   */
-  const createPanResponder = useCallback((cornerIndex: number) => {
-    let initialCornerPosition: Point | null = null;
-
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        // Store the initial corner position synchronously when drag starts
-        // Using ref ensures we get the current value without async state callback
-        initialCornerPosition = { ...cornersRef.current[cornerIndex] };
-        setActiveCorner(cornerIndex);
-      },
-      onPanResponderMove: (
-        _event: GestureResponderEvent,
-        gestureState: PanResponderGestureState
-      ) => {
-        if (!initialCornerPosition) return;
-
-        // Capture position values before async setCorners to avoid race condition
-        // where onPanResponderRelease sets initialCornerPosition to null
-        const initialX = initialCornerPosition.x;
-        const initialY = initialCornerPosition.y;
-
-        setCorners((prev) => {
-          const newCorners = [...prev];
-          const newX = Math.max(0, Math.min(displaySize.width, initialX + gestureState.dx));
-          const newY = Math.max(0, Math.min(displaySize.height, initialY + gestureState.dy));
-          newCorners[cornerIndex] = { x: newX, y: newY };
-          return newCorners;
-        });
-      },
-      onPanResponderRelease: () => {
-        initialCornerPosition = null;
-        setActiveCorner(null);
-      },
-    });
-  }, [displaySize]);
-
-  const panResponders = useMemo(() => {
-    if (!isInitialized) return [];
-    return [0, 1, 2, 3].map((i) => createPanResponder(i));
-  }, [createPanResponder, isInitialized]);
+  /** Called once per drag, when the finger lifts. */
+  const commitCorners = useCallback((next: Point[]) => {
+    setCorners(next.map((corner) => ({ x: corner.x, y: corner.y })));
+  }, []);
 
   /**
    * Apply the crop.
@@ -234,7 +348,13 @@ export function SpineCropper({
    * "Adjust Crop" restores exactly what the user drew.
    */
   const handleCrop = async () => {
-    if (!imageSize.width || !imageSize.height || !displaySize.width || !displaySize.height) {
+    if (
+      !sourceUri ||
+      !imageSize.width ||
+      !imageSize.height ||
+      !displaySize.width ||
+      !displaySize.height
+    ) {
       return;
     }
 
@@ -281,7 +401,7 @@ export function SpineCropper({
       if (isPerspectiveWarpAvailable()) {
         try {
           const warpedUri = await warpPerspective({
-            imageUri,
+            imageUri: sourceUri,
             imageWidth: imageSize.width,
             imageHeight: imageSize.height,
             corners: imageCorners,
@@ -295,7 +415,7 @@ export function SpineCropper({
 
       // Fallback: plain bounding-box crop.
       const result = await ImageManipulator.manipulateAsync(
-        imageUri,
+        sourceUri,
         [
           {
             crop: {
@@ -318,76 +438,35 @@ export function SpineCropper({
   };
 
   /**
-   * Generate polygon points string for SVG
-   */
-  const polygonPoints = useMemo(() => {
-    if (!isInitialized) return '';
-    return corners.map((c) => `${c.x},${c.y}`).join(' ');
-  }, [corners, isInitialized]);
-
-  /**
-   * Even-odd path that darkens everything outside the crop quadrilateral
-   */
-  const outsideOverlayPath = useMemo(() => {
-    if (!isInitialized || !displaySize.width || !displaySize.height) return '';
-    const quad = corners
-      .map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x} ${c.y}`)
-      .join('');
-    return (
-      `M0 0H${displaySize.width}V${displaySize.height}H0Z ` +
-      `${quad}Z`
-    );
-  }, [corners, displaySize, isInitialized]);
-
-  /**
-   * Calculate zoom bubble position and clipping for the magnified view.
+   * Overlay geometry.
    *
-   * This is computed whenever the image is ready, not just while a corner is
-   * being dragged, because the bubble stays mounted the whole time (hidden with
-   * opacity). Mounting it on drag start meant expo-image only began decoding
-   * its magnified copy of the photo at that moment, leaving the bubble empty
-   * for around a second on full-resolution gallery photos. Camera photos are
-   * pre-cropped to the guide frame, so they decoded fast enough to look
-   * instant — hence the delay showing up on the "existing photo" path only.
-   *
-   * With no active corner the bubble is parked on the first corner; nothing is
-   * visible then, and it re-positions before it fades in.
+   * `animatedProps` keeps these in step with the finger without a re-render;
+   * the plain `d` props render the committed state, so the overlay is still
+   * correct after every drag even on a build where animated SVG props don't
+   * take effect.
    */
-  const zoomBubbleData = useMemo(() => {
-    if (!isInitialized || !displaySize.width || !displaySize.height) {
-      return null;
-    }
+  const overlayAnimatedProps = useAnimatedProps(() => ({
+    d: outsidePath(cornersSV.value, boundsSV.value),
+  }));
+  const quadAnimatedProps = useAnimatedProps(() => ({
+    d: quadPath(cornersSV.value),
+  }));
+  const gridAnimatedProps = useAnimatedProps(() => ({
+    d: gridPath(cornersSV.value),
+  }));
 
-    const corner = corners[activeCorner ?? 0];
-
-    // Position the zoom bubble above the corner
-    let bubbleX = corner.x - ZOOM_BUBBLE_SIZE / 2;
-    let bubbleY = corner.y - ZOOM_BUBBLE_SIZE - ZOOM_BUBBLE_OFFSET_Y;
-
-    // Keep bubble within screen bounds horizontally
-    bubbleX = Math.max(10, Math.min(displaySize.width - ZOOM_BUBBLE_SIZE - 10, bubbleX));
-
-    // If bubble would go above image, position it below the corner instead
-    if (bubbleY < 10) {
-      bubbleY = corner.y + ZOOM_BUBBLE_OFFSET_Y;
-    }
-
-    // Calculate the portion of the image to show in the magnified view
-    // The source region in the original display coordinates
-    const sourceSize = ZOOM_BUBBLE_SIZE / ZOOM_MAGNIFICATION;
-    const sourceX = corner.x - sourceSize / 2;
-    const sourceY = corner.y - sourceSize / 2;
-
-    return {
-      bubbleX,
-      bubbleY,
-      cornerX: corner.x,
-      cornerY: corner.y,
-      sourceX,
-      sourceY,
-      sourceSize,
-    };
-  }, [activeCorner, corners, displaySize, isInitialized]);
+  const staticOverlayPath = useMemo(
+    () => (isInitialized ? outsidePath(corners, displaySize) : ''),
+    [corners, displaySize, isInitialized]
+  );
+  const staticQuadPath = useMemo(
+    () => (isInitialized ? quadPath(corners) : ''),
+    [corners, isInitialized]
+  );
+  const staticGridPath = useMemo(
+    () => (isInitialized ? gridPath(corners) : ''),
+    [corners, isInitialized]
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.primary }]}>
@@ -405,80 +484,68 @@ export function SpineCropper({
             { width: displaySize.width || IMAGE_CONTAINER_WIDTH, height: displaySize.height || IMAGE_CONTAINER_HEIGHT, backgroundColor: colors.primaryDark },
           ]}
         >
-          <Image
-            source={{ uri: imageUri }}
-            style={styles.image}
-            contentFit="contain"
-            onLoad={handleImageLoad}
-          />
+          {imageSource ? (
+            <Image
+              source={imageSource}
+              style={styles.image}
+              contentFit="contain"
+              transition={0}
+              cachePolicy="memory-disk"
+              onLoad={handleImageLoad}
+            />
+          ) : (
+            <View style={styles.sourceLoading}>
+              <ActivityIndicator size="large" color={colors.accent} />
+            </View>
+          )}
 
           {/* Crop overlay */}
-          {isInitialized && displaySize.width > 0 && (
+          {isInitialized && displaySize.width > 0 && imageSource && (
             <View style={StyleSheet.absoluteFill}>
-              <Svg width={displaySize.width} height={displaySize.height}>
+              <Svg
+                width={displaySize.width}
+                height={displaySize.height}
+                pointerEvents="none"
+              >
                 {/* Darkened overlay outside crop area */}
-                <Path
-                  d={outsideOverlayPath}
+                <AnimatedPath
+                  d={staticOverlayPath}
+                  animatedProps={overlayAnimatedProps}
                   fill={colors.overlay}
                   fillRule="evenodd"
                 />
 
                 {/* Crop region boundary */}
-                <Polygon
-                  points={polygonPoints}
+                <AnimatedPath
+                  d={staticQuadPath}
+                  animatedProps={quadAnimatedProps}
                   fill="none"
                   stroke={colors.accent}
                   strokeWidth={2}
                 />
 
                 {/* Grid lines inside crop region */}
-                <Line
-                  x1={(corners[0].x + corners[1].x) / 2}
-                  y1={(corners[0].y + corners[1].y) / 2}
-                  x2={(corners[3].x + corners[2].x) / 2}
-                  y2={(corners[3].y + corners[2].y) / 2}
+                <AnimatedPath
+                  d={staticGridPath}
+                  animatedProps={gridAnimatedProps}
+                  fill="none"
                   stroke={colors.textOnDarkMuted}
                   strokeWidth={1}
                   strokeDasharray="5,5"
                 />
-                <Line
-                  x1={(corners[0].x + corners[3].x) / 2}
-                  y1={(corners[0].y + corners[3].y) / 2}
-                  x2={(corners[1].x + corners[2].x) / 2}
-                  y2={(corners[1].y + corners[2].y) / 2}
-                  stroke={colors.textOnDarkMuted}
-                  strokeWidth={1}
-                  strokeDasharray="5,5"
-                />
-
-                {/* Corner handles */}
-                {corners.map((corner, index) => (
-                  <Circle
-                    key={index}
-                    cx={corner.x}
-                    cy={corner.y}
-                    r={HANDLE_SIZE / 2}
-                    fill={activeCorner === index ? colors.accent : colors.textInverse}
-                    stroke={colors.accent}
-                    strokeWidth={3}
-                  />
-                ))}
               </Svg>
 
-              {/* Draggable touch targets */}
-              {corners.map((corner, index) => (
-                <View
+              {/* Draggable corner handles */}
+              {[0, 1, 2, 3].map((index) => (
+                <CornerHandle
                   key={index}
-                  {...panResponders[index]?.panHandlers}
-                  style={[
-                    styles.cornerHandle,
-                    {
-                      left: corner.x - (HANDLE_SIZE + HANDLE_HIT_SLOP) / 2,
-                      top: corner.y - (HANDLE_SIZE + HANDLE_HIT_SLOP) / 2,
-                      width: HANDLE_SIZE + HANDLE_HIT_SLOP,
-                      height: HANDLE_SIZE + HANDLE_HIT_SLOP,
-                    },
-                  ]}
+                  index={index}
+                  corners={cornersSV}
+                  activeCorner={activeCornerSV}
+                  bounds={boundsSV}
+                  onCommit={commitCorners}
+                  accentColor={colors.accent}
+                  idleColor={colors.textInverse}
                 />
               ))}
 
@@ -487,47 +554,16 @@ export function SpineCropper({
                   mounted on drag start, so the magnified copy of the photo is
                   decoded while the user is still lining up the first corner
                   instead of after they touch one. */}
-              {zoomBubbleData && (
-                <View
-                  style={[
-                    styles.zoomBubble,
-                    {
-                      left: zoomBubbleData.bubbleX,
-                      top: zoomBubbleData.bubbleY,
-                      width: ZOOM_BUBBLE_SIZE,
-                      height: ZOOM_BUBBLE_SIZE,
-                      borderColor: colors.accent,
-                      backgroundColor: colors.primaryDark,
-                      opacity: activeCorner === null ? 0 : 1,
-                    },
-                  ]}
-                  pointerEvents="none"
-                >
-                  <View style={styles.zoomBubbleInner}>
-                    <Image
-                      source={{ uri: imageUri }}
-                      style={{
-                        width: displaySize.width * ZOOM_MAGNIFICATION,
-                        height: displaySize.height * ZOOM_MAGNIFICATION,
-                        position: 'absolute',
-                        left: -zoomBubbleData.cornerX * ZOOM_MAGNIFICATION + ZOOM_BUBBLE_SIZE / 2,
-                        top: -zoomBubbleData.cornerY * ZOOM_MAGNIFICATION + ZOOM_BUBBLE_SIZE / 2,
-                      }}
-                      contentFit="contain"
-                      // No fade-in, and keep the decoded copy around so
-                      // re-grabbing a corner never re-decodes the photo.
-                      transition={0}
-                      cachePolicy="memory-disk"
-                      priority="high"
-                    />
-                    {/* Crosshair to show exact corner position */}
-                    <View style={[styles.crosshairHorizontal, { backgroundColor: colors.textOnDarkMuted }]} />
-                    <View style={[styles.crosshairVertical, { backgroundColor: colors.textOnDarkMuted }]} />
-                    {/* Corner indicator dot */}
-                    <View style={[styles.zoomCornerDot, { backgroundColor: colors.accent, borderColor: colors.textInverse }]} />
-                  </View>
-                </View>
-              )}
+              <ZoomBubble
+                source={imageSource}
+                corners={cornersSV}
+                activeCorner={activeCornerSV}
+                displaySize={displaySize}
+                borderColor={colors.accent}
+                backgroundColor={colors.primaryDark}
+                crosshairColor={colors.textOnDarkMuted}
+                dotBorderColor={colors.textInverse}
+              />
             </View>
           )}
         </View>
@@ -560,6 +596,194 @@ export function SpineCropper({
         </Pressable>
       </View>
     </View>
+  );
+}
+
+interface CornerHandleProps {
+  index: number;
+  corners: SharedValue<Point[]>;
+  activeCorner: SharedValue<number>;
+  bounds: SharedValue<Size>;
+  onCommit: (corners: Point[]) => void;
+  accentColor: string;
+  idleColor: string;
+}
+
+/**
+ * One draggable corner.
+ *
+ * The gesture writes straight into the shared corner list, so the handle, the
+ * crop outline and the magnifier all follow the finger on the UI thread. The
+ * only React work in a drag is the single commit when the finger lifts.
+ */
+function CornerHandle({
+  index,
+  corners,
+  activeCorner,
+  bounds,
+  onCommit,
+  accentColor,
+  idleColor,
+}: CornerHandleProps) {
+  const dragStart = useSharedValue<Point>({ x: 0, y: 0 });
+
+  const gesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .maxPointers(1)
+        .minDistance(0)
+        .onBegin(() => {
+          'worklet';
+          dragStart.value = corners.value[index];
+          activeCorner.value = index;
+        })
+        .onUpdate((event) => {
+          'worklet';
+          const { width, height } = bounds.value;
+          const x = Math.max(0, Math.min(width, dragStart.value.x + event.translationX));
+          const y = Math.max(0, Math.min(height, dragStart.value.y + event.translationY));
+          corners.value = corners.value.map((corner, i) =>
+            i === index ? { x, y } : corner
+          );
+        })
+        .onFinalize(() => {
+          'worklet';
+          activeCorner.value = -1;
+          runOnJS(onCommit)(corners.value);
+        }),
+    [index, corners, activeCorner, bounds, dragStart, onCommit]
+  );
+
+  const containerStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: corners.value[index].x - TOUCH_TARGET_SIZE / 2 },
+      { translateY: corners.value[index].y - TOUCH_TARGET_SIZE / 2 },
+    ],
+  }));
+
+  const dotStyle = useAnimatedStyle(() => ({
+    backgroundColor: activeCorner.value === index ? accentColor : idleColor,
+  }));
+
+  return (
+    <GestureDetector gesture={gesture}>
+      <Animated.View style={[styles.cornerHandle, containerStyle]}>
+        <Animated.View
+          style={[styles.cornerHandleDot, { borderColor: accentColor }, dotStyle]}
+        />
+      </Animated.View>
+    </GestureDetector>
+  );
+}
+
+interface ZoomBubbleProps {
+  source: { uri: string };
+  corners: SharedValue<Point[]>;
+  activeCorner: SharedValue<number>;
+  displaySize: Size;
+  borderColor: string;
+  backgroundColor: string;
+  crosshairColor: string;
+  dotBorderColor: string;
+}
+
+/**
+ * Magnified view of the corner being dragged.
+ *
+ * Both the bubble and the photo inside it move by transform rather than by
+ * `left`/`top`: a layout change would re-lay-out (and make expo-image
+ * re-resample) a view 2.5x the size of the preview on every touch event.
+ *
+ * With no active corner the bubble is parked on the first corner and hidden;
+ * it re-positions before it fades in.
+ */
+function ZoomBubble({
+  source,
+  corners,
+  activeCorner,
+  displaySize,
+  borderColor,
+  backgroundColor,
+  crosshairColor,
+  dotBorderColor,
+}: ZoomBubbleProps) {
+  const bubbleStyle = useAnimatedStyle(() => {
+    const corner = corners.value[activeCorner.value < 0 ? 0 : activeCorner.value];
+
+    // Position the zoom bubble above the corner, kept within the preview
+    let bubbleX = corner.x - ZOOM_BUBBLE_SIZE / 2;
+    bubbleX = Math.max(
+      10,
+      Math.min(displaySize.width - ZOOM_BUBBLE_SIZE - 10, bubbleX)
+    );
+
+    // If the bubble would go above the image, put it below the corner instead
+    let bubbleY = corner.y - ZOOM_BUBBLE_SIZE - ZOOM_BUBBLE_OFFSET_Y;
+    if (bubbleY < 10) {
+      bubbleY = corner.y + ZOOM_BUBBLE_OFFSET_Y;
+    }
+
+    return {
+      opacity: activeCorner.value < 0 ? 0 : 1,
+      transform: [{ translateX: bubbleX }, { translateY: bubbleY }],
+    };
+  });
+
+  // Slide the magnified photo so the active corner sits under the crosshair
+  const magnifiedStyle = useAnimatedStyle(() => {
+    const corner = corners.value[activeCorner.value < 0 ? 0 : activeCorner.value];
+
+    return {
+      transform: [
+        { translateX: -corner.x * ZOOM_MAGNIFICATION + ZOOM_BUBBLE_SIZE / 2 },
+        { translateY: -corner.y * ZOOM_MAGNIFICATION + ZOOM_BUBBLE_SIZE / 2 },
+      ],
+    };
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.zoomBubble,
+        {
+          width: ZOOM_BUBBLE_SIZE,
+          height: ZOOM_BUBBLE_SIZE,
+          borderColor,
+          backgroundColor,
+        },
+        bubbleStyle,
+      ]}
+      pointerEvents="none"
+    >
+      <View style={styles.zoomBubbleInner}>
+        <Animated.View
+          style={[
+            styles.magnifiedImage,
+            {
+              width: displaySize.width * ZOOM_MAGNIFICATION,
+              height: displaySize.height * ZOOM_MAGNIFICATION,
+            },
+            magnifiedStyle,
+          ]}
+        >
+          <Image
+            source={source}
+            style={styles.image}
+            contentFit="contain"
+            // No fade-in, and keep the decoded copy around so
+            // re-grabbing a corner never re-decodes the photo.
+            transition={0}
+            cachePolicy="memory-disk"
+            priority="high"
+          />
+        </Animated.View>
+        {/* Crosshair to show exact corner position */}
+        <View style={[styles.crosshairHorizontal, { backgroundColor: crosshairColor }]} />
+        <View style={[styles.crosshairVertical, { backgroundColor: crosshairColor }]} />
+        {/* Corner indicator dot */}
+        <View style={[styles.zoomCornerDot, { backgroundColor: borderColor, borderColor: dotBorderColor }]} />
+      </View>
+    </Animated.View>
   );
 }
 
@@ -596,9 +820,26 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  sourceLoading: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   cornerHandle: {
     position: 'absolute',
+    left: 0,
+    top: 0,
+    width: TOUCH_TARGET_SIZE,
+    height: TOUCH_TARGET_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 10,
+  },
+  cornerHandleDot: {
+    width: HANDLE_SIZE,
+    height: HANDLE_SIZE,
+    borderRadius: HANDLE_SIZE / 2,
+    borderWidth: 3,
   },
   controls: {
     flexDirection: 'row',
@@ -627,6 +868,8 @@ const styles = StyleSheet.create({
   // Zoom bubble styles
   zoomBubble: {
     position: 'absolute',
+    left: 0,
+    top: 0,
     borderRadius: ZOOM_BUBBLE_SIZE / 2,
     borderWidth: 3,
     overflow: 'hidden',
@@ -643,6 +886,11 @@ const styles = StyleSheet.create({
     height: '100%',
     overflow: 'hidden',
     borderRadius: ZOOM_BUBBLE_SIZE / 2,
+  },
+  magnifiedImage: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
   },
   crosshairHorizontal: {
     position: 'absolute',

@@ -33,7 +33,7 @@ import {
   BookshelfDimensions,
 } from '@/constants/theme';
 import { getSpineImageUrl } from '@/services/storage';
-import { getImageSpineHeightFactor } from '@/utils/placeholderSpine';
+import { getImageSpineHeightFactor, getImageSpineSize } from '@/utils/placeholderSpine';
 import type { Book, ShelfStyle } from '@/types';
 
 interface BookshelfGridProps {
@@ -112,54 +112,51 @@ export function BookshelfGrid({
   // so each spine sits at a slightly different height (matching the preview).
   const minDisplayHeight = Math.round(bookHeight * 0.6);
 
-  const getBookDisplayHeight = useCallback(
-    (book: Book): number => {
+  // Compute the display box for a single book. Books with an image are sized
+  // from the image's own aspect ratio so the spine fills its box edge to edge;
+  // a box that doesn't match the image letterboxes it, which reads as a gap
+  // between neighbouring spines.
+  const getBookDisplaySize = useCallback(
+    (book: Book): { width: number; height: number } => {
       const heightFactor = getImageSpineHeightFactor(book);
       const dims = imageDimensions[book.id];
-      if (dims) {
-        let clamped: number;
-        if (dims.height >= bookHeight) {
-          clamped = bookHeight;
-        } else if (dims.height < minDisplayHeight) {
-          clamped = minDisplayHeight;
-        } else {
-          clamped = dims.height;
-        }
-        return Math.max(minDisplayHeight, Math.round(clamped * heightFactor));
+
+      if (!dims) {
+        return {
+          width: BookSpineConstants.width, // default 50px
+          height: Math.round(bookHeight * heightFactor),
+        };
       }
-      return Math.round(bookHeight * heightFactor);
+
+      let clamped: number;
+      if (dims.height >= bookHeight) {
+        clamped = bookHeight;
+      } else if (dims.height < minDisplayHeight) {
+        clamped = minDisplayHeight;
+      } else {
+        clamped = dims.height;
+      }
+
+      return getImageSpineSize(
+        dims.width,
+        dims.height,
+        clamped * heightFactor,
+        { min: BookSpineConstants.minWidth, max: BookSpineConstants.maxWidth },
+        { min: minDisplayHeight, max: bookHeight }
+      );
     },
     [imageDimensions, bookHeight, minDisplayHeight]
-  );
-
-  // Compute display width for a single book based on its natural image dimensions
-  const getBookDisplayWidth = useCallback(
-    (book: Book): number => {
-      const dims = imageDimensions[book.id];
-      if (dims) {
-        const displayHeight = getBookDisplayHeight(book);
-        const aspectRatio = dims.width / dims.height;
-        const naturalWidth = Math.round(displayHeight * aspectRatio);
-        return Math.max(
-          BookSpineConstants.minWidth,
-          Math.min(BookSpineConstants.maxWidth, naturalWidth)
-        );
-      }
-      return BookSpineConstants.width; // default 50px
-    },
-    [imageDimensions, getBookDisplayHeight]
   );
 
   // Build layout items with variable widths and heights
   const layoutItems: GridLayoutItem[] = useMemo(() => {
     const items: GridLayoutItem[] = books.map((book) => ({
       item: book,
-      width: getBookDisplayWidth(book),
-      height: getBookDisplayHeight(book),
+      ...getBookDisplaySize(book),
     }));
     items.push({ item: 'add', width: BookSpineConstants.width, height: bookHeight });
     return items;
-  }, [books, getBookDisplayWidth, getBookDisplayHeight, bookHeight]);
+  }, [books, getBookDisplaySize, bookHeight]);
 
   // Group layout items into rows by accumulated width
   const rows = useMemo(() => {

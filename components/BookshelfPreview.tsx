@@ -26,7 +26,11 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { getShelfColors } from '@/utils/shelfColors';
 import { getSpineCloth } from '@/utils/spineCloth';
-import { getPlaceholderSpineSize, getImageSpineHeightFactor } from '@/utils/placeholderSpine';
+import {
+  getPlaceholderSpineSize,
+  getImageSpineHeightFactor,
+  getImageSpineSize,
+} from '@/utils/placeholderSpine';
 import { getSpineImageUrl } from '@/services/storage';
 import { SPINE_SHEEN_COLORS, SPINE_SHEEN_LOCATIONS } from '@/components/BookSpine';
 import type { Bookshelf, Book } from '@/types';
@@ -93,28 +97,35 @@ export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, to
     const dimensions = imageDimensions[book.id];
     const imageHeightFactor = getImageSpineHeightFactor(book);
 
-    // Absolute clamping: cap at PREVIEW_BOOK_HEIGHT, floor at min display height
-    let computedHeight: number | undefined;
-    if (dimensions) {
-      if (dimensions.height >= PREVIEW_BOOK_HEIGHT) {
-        computedHeight = PREVIEW_BOOK_HEIGHT;
-      } else if (dimensions.height < PREVIEW_MIN_DISPLAY_HEIGHT) {
-        computedHeight = PREVIEW_MIN_DISPLAY_HEIGHT;
-      } else {
-        computedHeight = dimensions.height;
-      }
+    if (!dimensions) {
+      return {
+        width: PREVIEW_DEFAULT_BOOK_WIDTH,
+        height: Math.max(
+          PREVIEW_MIN_DISPLAY_HEIGHT,
+          Math.round(PREVIEW_BOOK_HEIGHT * imageHeightFactor)
+        ),
+      };
     }
 
-    const imageHeight = computedHeight || PREVIEW_BOOK_HEIGHT;
-    const spineHeight = Math.max(PREVIEW_MIN_DISPLAY_HEIGHT, Math.round(imageHeight * imageHeightFactor));
-    const spineWidth = dimensions
-      ? Math.max(
-          PREVIEW_MIN_BOOK_WIDTH,
-          Math.min(PREVIEW_MAX_BOOK_WIDTH, Math.round((dimensions.width / dimensions.height) * spineHeight))
-        )
-      : PREVIEW_DEFAULT_BOOK_WIDTH;
+    // Absolute clamping: cap at PREVIEW_BOOK_HEIGHT, floor at min display height
+    let imageHeight: number;
+    if (dimensions.height >= PREVIEW_BOOK_HEIGHT) {
+      imageHeight = PREVIEW_BOOK_HEIGHT;
+    } else if (dimensions.height < PREVIEW_MIN_DISPLAY_HEIGHT) {
+      imageHeight = PREVIEW_MIN_DISPLAY_HEIGHT;
+    } else {
+      imageHeight = dimensions.height;
+    }
 
-    return { width: spineWidth, height: spineHeight };
+    // Sized from the image's own ratio so the spine fills its box edge to edge
+    // — a mismatch here is what leaves gaps between neighbouring spines.
+    return getImageSpineSize(
+      dimensions.width,
+      dimensions.height,
+      imageHeight * imageHeightFactor,
+      { min: PREVIEW_MIN_BOOK_WIDTH, max: PREVIEW_MAX_BOOK_WIDTH },
+      { min: PREVIEW_MIN_DISPLAY_HEIGHT, max: PREVIEW_BOOK_HEIGHT }
+    );
   };
 
   // Fill the row by accumulated spine width so books never spill past the
@@ -309,7 +320,10 @@ function BookPreviewSpine({ book, width, height }: BookPreviewSpineProps) {
     <View style={[styles.bookSpineShadow, { width, height }]}>
       <View style={styles.bookSpine}>
         {hasImage ? (
-          <Image source={{ uri: spineImageUrl }} style={styles.bookImage} contentFit="contain" transition={220} />
+          // `cover`, not `contain`: the box already carries the image's ratio,
+          // so this only absorbs the sub-pixel remainder — which `contain`
+          // would turn into a transparent sliver beside the spine.
+          <Image source={{ uri: spineImageUrl }} style={styles.bookImage} contentFit="cover" transition={220} />
         ) : (
           <View style={[styles.bookPlaceholder, { backgroundColor: cloth.color }]}>
             <LinearGradient

@@ -87,7 +87,10 @@ function BookSpineComponent({
             <Image
               source={{ uri: spineImageUrl! }}
               style={styles.image}
-              contentFit="contain"
+              // `cover`, not `contain`: the spine's box already carries the
+              // image's aspect ratio, so this only absorbs the sub-pixel
+              // remainder rather than letterboxing it into a gap between books.
+              contentFit="cover"
               transition={200}
               cachePolicy="memory-disk"
               onLoadStart={() => setIsLoading(true)}
