@@ -17,10 +17,9 @@ export default function CustomerCenterScreen() {
     <>
       <Stack.Screen
         options={{
-          title: 'Manage Subscription',
           headerLeft: () => (
             <Pressable onPress={() => router.back()} style={styles.headerButton}>
-              <Ionicons name="chevron-back" size={24} color={Colors.textInverse} />
+              <Ionicons name="chevron-back" size={24} color={Colors.text} />
             </Pressable>
           ),
         }}
