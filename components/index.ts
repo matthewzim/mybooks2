@@ -15,6 +15,7 @@ export { CommunitySpineBrowserModal } from './CommunitySpineBrowserModal';
 export { SpineCropper } from './SpineCropper';
 export { DraggableBookSpine } from './DraggableBookSpine';
 export { EditableBookshelfGrid } from './EditableBookshelfGrid';
+export { SleepingCat } from './SleepingCat';
 
 // UI components
 export * from './ui';

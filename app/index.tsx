@@ -10,6 +10,7 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { Redirect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SleepingCat } from '@/components/SleepingCat';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Colors, Typography, Spacing, getFontFamily, getSerifFontFamily } from '@/constants/theme';
@@ -40,6 +41,8 @@ export default function Index() {
   if (isLoading || !onboardingChecked || (isRetryingAuth && !isAuthenticated)) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <SleepingCat size={240} color={colors.textSecondary} />
+        {/* Absolutely positioned so the cat keeps the exact centre of the screen */}
         <Text style={[styles.appName, { color: colors.text }]}>TinyShelves</Text>
       </View>
     );
@@ -78,6 +81,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   appName: {
+    position: 'absolute',
+    bottom: '18%',
+    left: 0,
+    right: 0,
     fontSize: 34,
     fontFamily: getSerifFontFamily('medium'),
     textAlign: 'center',
