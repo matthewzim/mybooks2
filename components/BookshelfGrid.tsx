@@ -33,7 +33,7 @@ import {
   BookshelfDimensions,
 } from '@/constants/theme';
 import { getSpineImageUrl } from '@/services/storage';
-import { getImageSpineHeightFactor, getImageSpineSize } from '@/utils/placeholderSpine';
+import { getShelfAvailableWidth, getShelfHeight, getShelfSpineSize } from '@/utils/shelfLayout';
 import type { Book, ShelfStyle } from '@/types';
 
 interface BookshelfGridProps {
@@ -68,13 +68,8 @@ export function BookshelfGrid({
   // Calculate shelf layout
   const fullShelfMargin = Spacing.xs;
   const fullShelfBorderWidth = BookshelfDimensions.shelfThickness;
-  const availableWidth = shelfStyle === 'full'
-    ? screenWidth - (fullShelfMargin * 2) - (fullShelfBorderWidth * 2)
-    : screenWidth - Spacing.md * 2;
-  const bookHeight = Math.min(
-    Math.floor((availableWidth / 5) * 3.6),
-    BookSpineConstants.maxHeight
-  );
+  const availableWidth = getShelfAvailableWidth(screenWidth, shelfStyle);
+  const bookHeight = getShelfHeight(availableWidth);
 
   // Fetch natural image dimensions for all books with images
   useEffect(() => {
@@ -107,45 +102,14 @@ export function BookshelfGrid({
     };
   }, [books]);
 
-  // Compute display height for a single book.
-  // First clamp to shelf bounds, then apply deterministic height variability
-  // so each spine sits at a slightly different height (matching the preview).
-  const minDisplayHeight = Math.round(bookHeight * 0.6);
-
   // Compute the display box for a single book. Books with an image are sized
   // from the image's own aspect ratio so the spine fills its box edge to edge;
   // a box that doesn't match the image letterboxes it, which reads as a gap
   // between neighbouring spines.
   const getBookDisplaySize = useCallback(
-    (book: Book): { width: number; height: number } => {
-      const heightFactor = getImageSpineHeightFactor(book);
-      const dims = imageDimensions[book.id];
-
-      if (!dims) {
-        return {
-          width: BookSpineConstants.width, // default 50px
-          height: Math.round(bookHeight * heightFactor),
-        };
-      }
-
-      let clamped: number;
-      if (dims.height >= bookHeight) {
-        clamped = bookHeight;
-      } else if (dims.height < minDisplayHeight) {
-        clamped = minDisplayHeight;
-      } else {
-        clamped = dims.height;
-      }
-
-      return getImageSpineSize(
-        dims.width,
-        dims.height,
-        clamped * heightFactor,
-        { min: BookSpineConstants.minWidth, max: BookSpineConstants.maxWidth },
-        { min: minDisplayHeight, max: bookHeight }
-      );
-    },
-    [imageDimensions, bookHeight, minDisplayHeight]
+    (book: Book): { width: number; height: number } =>
+      getShelfSpineSize(book, imageDimensions[book.id], bookHeight),
+    [imageDimensions, bookHeight]
   );
 
   // Build layout items with variable widths and heights

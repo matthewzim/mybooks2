@@ -45,10 +45,10 @@ import { getSpineImageUrl } from '@/services/storage';
 import { getShelfColors, type ShelfColors } from '@/utils/shelfColors';
 import { getSpineCloth } from '@/utils/spineCloth';
 import {
-  getPlaceholderSpineSize,
-  getImageSpineHeightFactor,
-  getImageSpineSize,
-} from '@/utils/placeholderSpine';
+  getShelfAvailableWidth,
+  getShelfHeight,
+  getShelfSpineSize,
+} from '@/utils/shelfLayout';
 import type { Book, ShelfStyle } from '@/types';
 
 interface EditableBookshelfGridProps {
@@ -160,60 +160,16 @@ export function EditableBookshelfGrid({
 
   // Calculate shelf height (fixed for all shelves)
   // Full style: subtract cabinet margins, frame padding, and the 1px cabinet border on each side
-  const availableWidth = shelfStyle === 'full'
-    ? screenWidth - (fullShelfMargin * 2) - (fullShelfBorderWidth * 2) - 2
-    : screenWidth - Spacing.md * 2;
-  const shelfHeight = Math.min(
-    BookSpineConstants.maxHeight,
-    Math.floor(((availableWidth / 5) * 3.6))
-  );
-
-  const placeholderHeightRange = useMemo(() => {
-    const minHeight = Math.max(BookSpineConstants.minHeight, Math.round(shelfHeight * 0.75));
-    return {
-      min: Math.min(minHeight, shelfHeight),
-      max: shelfHeight,
-    };
-  }, [shelfHeight]);
-
-  // Compute display height for a single book.
-  // First clamp to shelf bounds, then apply deterministic height variability
-  // so each spine sits at a slightly different height (matching the preview).
-  const minDisplayHeight = Math.round(shelfHeight * 0.6);
+  const availableWidth = getShelfAvailableWidth(screenWidth, shelfStyle);
+  const shelfHeight = getShelfHeight(availableWidth);
 
   // Books with an image are sized from the image's own aspect ratio, matching
-  // the read-only grid so a shelf doesn't reflow when edit mode opens.
+  // the read-only grid so a shelf doesn't reflow when edit mode opens. Preview
+  // cards scale these very sizes down, so they stay in proportion.
   const getBookDisplaySize = useCallback(
-    (book: Book): { width: number; height: number } => {
-      const dims = imageDimensions[book.id];
-
-      if (!dims) {
-        return getPlaceholderSpineSize(
-          book,
-          { min: BookSpineConstants.minWidth, max: BookSpineConstants.maxWidth },
-          placeholderHeightRange
-        );
-      }
-
-      const heightFactor = getImageSpineHeightFactor(book);
-      let clamped: number;
-      if (dims.height >= shelfHeight) {
-        clamped = shelfHeight;
-      } else if (dims.height < minDisplayHeight) {
-        clamped = minDisplayHeight;
-      } else {
-        clamped = dims.height;
-      }
-
-      return getImageSpineSize(
-        dims.width,
-        dims.height,
-        clamped * heightFactor,
-        { min: BookSpineConstants.minWidth, max: BookSpineConstants.maxWidth },
-        { min: minDisplayHeight, max: shelfHeight }
-      );
-    },
-    [imageDimensions, shelfHeight, minDisplayHeight, placeholderHeightRange]
+    (book: Book): { width: number; height: number } =>
+      getShelfSpineSize(book, imageDimensions[book.id], shelfHeight),
+    [imageDimensions, shelfHeight]
   );
 
   const getBookDisplayHeight = useCallback(

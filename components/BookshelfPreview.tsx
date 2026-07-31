@@ -27,19 +27,17 @@ import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { getShelfColors } from '@/utils/shelfColors';
 import { getSpineCloth } from '@/utils/spineCloth';
 import {
-  getPlaceholderSpineSize,
-  getImageSpineHeightFactor,
-  getImageSpineSize,
-} from '@/utils/placeholderSpine';
+  getShelfAvailableWidth,
+  getShelfHeight,
+  getShelfSpineSize,
+  scaleSpineSize,
+} from '@/utils/shelfLayout';
 import { getSpineImageUrl } from '@/services/storage';
 import { SPINE_SHEEN_COLORS, SPINE_SHEEN_LOCATIONS } from '@/components/BookSpine';
 import type { Bookshelf, Book } from '@/types';
 
-const PREVIEW_DEFAULT_BOOK_WIDTH = 20;
+/** Height of the tallest possible spine in a preview card */
 const PREVIEW_BOOK_HEIGHT = 132;
-const PREVIEW_MIN_BOOK_HEIGHT = 90;
-const PREVIEW_MIN_BOOK_WIDTH = 14;
-const PREVIEW_MAX_BOOK_WIDTH = 32;
 const PREVIEW_SHELF_THICKNESS = BookshelfDimensions.shelfThickness;
 // Outer cabinet frame thickness for previews — slightly thinner (75%) than
 // the frame on the actual bookshelf page. Tweak the 0.75 factor to taste.
@@ -83,50 +81,17 @@ export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, to
 
   const [imageDimensions, setImageDimensions] = useState<Record<string, { width: number; height: number }>>({});
 
-  const PREVIEW_MIN_DISPLAY_HEIGHT = Math.round(PREVIEW_BOOK_HEIGHT * 0.6);
+  // Spines are sized exactly as the bookshelf page sizes them, then shrunk by a
+  // single factor. Anything else (preview-only min/max ranges, clamping the
+  // natural image height against the small preview height) resizes spines
+  // relative to one another, so two books that stand equally tall on the shelf
+  // come out different heights here — and a box that clamps out of the image's
+  // aspect ratio gets its artwork cropped by `cover`.
+  const shelfHeight = getShelfHeight(getShelfAvailableWidth(screenWidth, shelfStyle));
+  const previewScale = PREVIEW_BOOK_HEIGHT / shelfHeight;
 
-  const getSpineSize = (book: Book): { width: number; height: number } => {
-    if (!book.image_url) {
-      return getPlaceholderSpineSize(
-        book,
-        { min: PREVIEW_MIN_BOOK_WIDTH, max: PREVIEW_MAX_BOOK_WIDTH },
-        { min: PREVIEW_MIN_BOOK_HEIGHT, max: PREVIEW_BOOK_HEIGHT }
-      );
-    }
-
-    const dimensions = imageDimensions[book.id];
-    const imageHeightFactor = getImageSpineHeightFactor(book);
-
-    if (!dimensions) {
-      return {
-        width: PREVIEW_DEFAULT_BOOK_WIDTH,
-        height: Math.max(
-          PREVIEW_MIN_DISPLAY_HEIGHT,
-          Math.round(PREVIEW_BOOK_HEIGHT * imageHeightFactor)
-        ),
-      };
-    }
-
-    // Absolute clamping: cap at PREVIEW_BOOK_HEIGHT, floor at min display height
-    let imageHeight: number;
-    if (dimensions.height >= PREVIEW_BOOK_HEIGHT) {
-      imageHeight = PREVIEW_BOOK_HEIGHT;
-    } else if (dimensions.height < PREVIEW_MIN_DISPLAY_HEIGHT) {
-      imageHeight = PREVIEW_MIN_DISPLAY_HEIGHT;
-    } else {
-      imageHeight = dimensions.height;
-    }
-
-    // Sized from the image's own ratio so the spine fills its box edge to edge
-    // — a mismatch here is what leaves gaps between neighbouring spines.
-    return getImageSpineSize(
-      dimensions.width,
-      dimensions.height,
-      imageHeight * imageHeightFactor,
-      { min: PREVIEW_MIN_BOOK_WIDTH, max: PREVIEW_MAX_BOOK_WIDTH },
-      { min: PREVIEW_MIN_DISPLAY_HEIGHT, max: PREVIEW_BOOK_HEIGHT }
-    );
-  };
+  const getSpineSize = (book: Book): { width: number; height: number } =>
+    scaleSpineSize(getShelfSpineSize(book, imageDimensions[book.id], shelfHeight), previewScale);
 
   // Fill the row by accumulated spine width so books never spill past the
   // right shelf border.
