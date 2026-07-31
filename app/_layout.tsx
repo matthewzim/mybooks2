@@ -35,7 +35,22 @@ import { Platform } from 'react-native';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { RevenueCatProvider } from '@/contexts/RevenueCatContext';
-import { getSerifFontFamily } from '@/constants/theme';
+import { Colors, getSerifFontFamily } from '@/constants/theme';
+
+/**
+ * Header options for screens that render their content on the static light
+ * palette: no coloured bar, no title, dark tint so the native back/close
+ * controls stay legible against the page background.
+ */
+const plainHeaderOptions = {
+  title: '',
+  headerStyle: { backgroundColor: Colors.background },
+  headerTintColor: Colors.text,
+  headerShadowVisible: false,
+  // Bare arrow: without this iOS falls back to labelling it with the previous
+  // screen's title, which puts text back in a header meant to be empty.
+  headerBackButtonDisplayMode: 'minimal' as const,
+};
 
 // Prevent splash screen from auto-hiding. This rejects if the splash screen
 // has already gone (fast reload, or the module initialising twice); an
@@ -96,7 +111,7 @@ function RootLayoutContent() {
         <Stack.Screen
           name="user/[id]"
           options={{
-            title: 'User Profile',
+            ...plainHeaderOptions,
             presentation: 'card',
           }}
         />
@@ -124,7 +139,7 @@ function RootLayoutContent() {
         <Stack.Screen
           name="payment"
           options={{
-            title: 'Premium',
+            ...plainHeaderOptions,
             presentation: 'fullScreenModal',
           }}
         />
@@ -133,7 +148,7 @@ function RootLayoutContent() {
         <Stack.Screen
           name="customer-center"
           options={{
-            title: 'Manage Subscription',
+            ...plainHeaderOptions,
             presentation: 'modal',
           }}
         />

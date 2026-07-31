@@ -206,11 +206,6 @@ export default function UserProfileScreen() {
   if (error || !user) {
     return (
       <SafeAreaView style={styles.container}>
-        <Stack.Screen
-          options={{
-            title: 'User Profile',
-          }}
-        />
         <EmptyState
           icon="alert-circle-outline"
           title="User Not Found"
@@ -228,7 +223,6 @@ export default function UserProfileScreen() {
     <>
       <Stack.Screen
         options={{
-          title: `${displayName}'s Library`,
           headerRight: isOwnProfile
             ? undefined
             : () => (
@@ -241,7 +235,7 @@ export default function UserProfileScreen() {
                   <Ionicons
                     name="ellipsis-horizontal"
                     size={22}
-                    color={Colors.textInverse}
+                    color={Colors.text}
                   />
                 </Pressable>
               ),

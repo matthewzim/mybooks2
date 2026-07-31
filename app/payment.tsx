@@ -60,10 +60,9 @@ export default function PaymentScreen() {
       <>
         <Stack.Screen
           options={{
-            title: 'Premium',
             headerLeft: () => (
               <Pressable onPress={() => router.back()} style={styles.headerButton}>
-                <Ionicons name="close" size={24} color={Colors.textInverse} />
+                <Ionicons name="close" size={24} color={Colors.text} />
               </Pressable>
             ),
           }}
