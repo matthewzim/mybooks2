@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { booksService } from '@/services/books';
 import { CommunitySpineBrowserModal } from '@/components/CommunitySpineBrowserModal';
 import { Input } from '@/components/ui';
@@ -72,6 +73,7 @@ export function BrowseBooksModal({
   onBookAdded,
 }: BrowseBooksModalProps) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [bookSearchResults, setBookSearchResults] = useState<BookSearchResult[]>([]);
@@ -411,7 +413,17 @@ export function BrowseBooksModal({
       <Animated.View style={[styles.overlay, { opacity: overlayOpacity, backgroundColor: colors.overlay }]}>
         <Pressable style={styles.backdropPress} onPress={handleClose} accessible={false} />
 
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} pointerEvents="box-none" style={styles.keyboardView}>
+        {/* The card fills the space the keyboard leaves rather than sizing to
+            its content, so the header and search bar keep a fixed position no
+            matter how many results come back. */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          pointerEvents="box-none"
+          // Only the top inset is set here: with `behavior="padding"` the
+          // KeyboardAvoidingView owns paddingBottom, so the card carries its
+          // own bottom gap instead.
+          style={[styles.keyboardView, { paddingTop: insets.top + Spacing.md }]}
+        >
           <Animated.View
             style={[
               styles.card,
@@ -456,7 +468,7 @@ export function BrowseBooksModal({
               style={styles.scrollView}
               contentContainerStyle={styles.scrollContent}
               keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator
             >
               {isSearching ? (
                 <View style={styles.centerContainer}>
@@ -535,11 +547,16 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: Spacing.md,
+    paddingHorizontal: Spacing.md,
   },
   card: {
     width: CARD_WIDTH,
+    // flex + maxHeight sizes the card from the available space instead of from
+    // the number of results, which is what keeps the search bar from drifting
+    // off the top of the screen once a search returns a long list.
+    flex: 1,
     maxHeight: CARD_MAX_HEIGHT,
+    marginBottom: Spacing.md,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     overflow: 'hidden',
@@ -572,10 +589,10 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   scrollView: {
-    flexGrow: 0,
-    maxHeight: CARD_MAX_HEIGHT - 140,
+    flex: 1,
   },
   scrollContent: {
+    flexGrow: 1,
     padding: Spacing.md,
     paddingBottom: Spacing.lg,
     gap: Spacing.sm,
@@ -604,6 +621,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   centerContainer: {
+    // Fills the results area so the empty/loading states sit centred under the
+    // search bar instead of hugging the top of the now taller card.
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Spacing.xl,
