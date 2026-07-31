@@ -230,7 +230,9 @@ export function DraggableBookSpine({
           <Image
             source={{ uri: spineImageUrl! }}
             style={styles.image}
-            contentFit="contain"
+            // The box carries the image's aspect ratio, so `cover` fills it
+            // edge to edge instead of letterboxing a gap beside the spine.
+            contentFit="cover"
             cachePolicy="memory-disk"
           />
         ) : (

@@ -44,7 +44,11 @@ import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { getSpineImageUrl } from '@/services/storage';
 import { getShelfColors, type ShelfColors } from '@/utils/shelfColors';
 import { getSpineCloth } from '@/utils/spineCloth';
-import { getPlaceholderSpineSize, getImageSpineHeightFactor } from '@/utils/placeholderSpine';
+import {
+  getPlaceholderSpineSize,
+  getImageSpineHeightFactor,
+  getImageSpineSize,
+} from '@/utils/placeholderSpine';
 import type { Book, ShelfStyle } from '@/types';
 
 interface EditableBookshelfGridProps {
@@ -177,50 +181,49 @@ export function EditableBookshelfGrid({
   // so each spine sits at a slightly different height (matching the preview).
   const minDisplayHeight = Math.round(shelfHeight * 0.6);
 
-  const getBookDisplayHeight = useCallback(
-    (book: Book): number => {
-      const heightFactor = getImageSpineHeightFactor(book);
+  // Books with an image are sized from the image's own aspect ratio, matching
+  // the read-only grid so a shelf doesn't reflow when edit mode opens.
+  const getBookDisplaySize = useCallback(
+    (book: Book): { width: number; height: number } => {
       const dims = imageDimensions[book.id];
-      if (dims) {
-        let clamped: number;
-        if (dims.height >= shelfHeight) {
-          clamped = shelfHeight;
-        } else if (dims.height < minDisplayHeight) {
-          clamped = minDisplayHeight;
-        } else {
-          clamped = dims.height;
-        }
-        return Math.max(minDisplayHeight, Math.round(clamped * heightFactor));
+
+      if (!dims) {
+        return getPlaceholderSpineSize(
+          book,
+          { min: BookSpineConstants.minWidth, max: BookSpineConstants.maxWidth },
+          placeholderHeightRange
+        );
       }
-      return getPlaceholderSpineSize(
-        book,
+
+      const heightFactor = getImageSpineHeightFactor(book);
+      let clamped: number;
+      if (dims.height >= shelfHeight) {
+        clamped = shelfHeight;
+      } else if (dims.height < minDisplayHeight) {
+        clamped = minDisplayHeight;
+      } else {
+        clamped = dims.height;
+      }
+
+      return getImageSpineSize(
+        dims.width,
+        dims.height,
+        clamped * heightFactor,
         { min: BookSpineConstants.minWidth, max: BookSpineConstants.maxWidth },
-        placeholderHeightRange
-      ).height;
+        { min: minDisplayHeight, max: shelfHeight }
+      );
     },
     [imageDimensions, shelfHeight, minDisplayHeight, placeholderHeightRange]
   );
 
-  // Compute display width for a single book based on its natural image dimensions
+  const getBookDisplayHeight = useCallback(
+    (book: Book): number => getBookDisplaySize(book).height,
+    [getBookDisplaySize]
+  );
+
   const getBookDisplayWidth = useCallback(
-    (book: Book): number => {
-      const dims = imageDimensions[book.id];
-      if (dims) {
-        const displayHeight = getBookDisplayHeight(book);
-        const aspectRatio = dims.width / dims.height;
-        const naturalWidth = Math.round(displayHeight * aspectRatio);
-        return Math.max(
-          BookSpineConstants.minWidth,
-          Math.min(BookSpineConstants.maxWidth, naturalWidth)
-        );
-      }
-      return getPlaceholderSpineSize(
-        book,
-        { min: BookSpineConstants.minWidth, max: BookSpineConstants.maxWidth },
-        placeholderHeightRange
-      ).width;
-    },
-    [imageDimensions, getBookDisplayHeight, placeholderHeightRange]
+    (book: Book): number => getBookDisplaySize(book).width,
+    [getBookDisplaySize]
   );
 
   // Group books by stack_id and organize into layout items with proper widths
