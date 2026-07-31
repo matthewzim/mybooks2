@@ -14,7 +14,7 @@ import {
   StyleSheet,
   Pressable,
 } from 'react-native';
-import { router, Stack } from 'expo-router';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import RevenueCatUI from 'react-native-purchases-ui';
@@ -57,18 +57,8 @@ export default function PaymentScreen() {
   // its auto-dismiss) would never run.
   if (isPro) {
     return (
-      <>
-        <Stack.Screen
-          options={{
-            headerLeft: () => (
-              <Pressable onPress={() => router.back()} style={styles.headerButton}>
-                <Ionicons name="close" size={24} color={Colors.text} />
-              </Pressable>
-            ),
-          }}
-        />
-
-        <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      <View style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
           <View style={styles.premiumStatus}>
             <View style={styles.premiumBadge}>
               <Ionicons name="star" size={48} color={Colors.starFilled} />
@@ -101,50 +91,61 @@ export default function PaymentScreen() {
               style={styles.manageButton}
             />
           </View>
-          <ConfettiOverlay visible={showConfetti} onComplete={handleConfettiComplete} />
         </SafeAreaView>
-      </>
-    );
-  }
-
-  // Non-premium: show the RevenueCat Paywall full screen with a floating
-  // close button in the corner (no navigation header).
-  return (
-    <>
-      <Stack.Screen options={{ headerShown: false }} />
-
-      <View style={styles.paywallContainer}>
-        <RevenueCatUI.Paywall
-          options={{
-            displayCloseButton: false,
-          }}
-          onPurchaseCompleted={async () => {
-            await refreshUser();
-            await refresh();
-            setShowConfetti(true);
-          }}
-          onRestoreCompleted={async () => {
-            await refreshUser();
-            await refresh();
-            setShowConfetti(true);
-          }}
-          onDismiss={() => router.back()}
-          style={styles.paywall}
-        />
 
         <Pressable
           onPress={() => router.back()}
           hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel="Close"
-          style={[styles.closeButton, { top: insets.top + Spacing.sm }]}
+          style={[
+            styles.closeButton,
+            styles.closeButtonOnLight,
+            { top: insets.top + Spacing.sm },
+          ]}
         >
-          <Ionicons name="close" size={22} color={Colors.textInverse} />
+          <Ionicons name="close" size={22} color={Colors.text} />
         </Pressable>
 
         <ConfettiOverlay visible={showConfetti} onComplete={handleConfettiComplete} />
       </View>
-    </>
+    );
+  }
+
+  // Non-premium: show the RevenueCat Paywall full screen with a floating
+  // close button in the corner (no navigation header).
+  return (
+    <View style={styles.paywallContainer}>
+      <RevenueCatUI.Paywall
+        options={{
+          displayCloseButton: false,
+        }}
+        onPurchaseCompleted={async () => {
+          await refreshUser();
+          await refresh();
+          setShowConfetti(true);
+        }}
+        onRestoreCompleted={async () => {
+          await refreshUser();
+          await refresh();
+          setShowConfetti(true);
+        }}
+        onDismiss={() => router.back()}
+        style={styles.paywall}
+      />
+
+      <Pressable
+        onPress={() => router.back()}
+        hitSlop={12}
+        accessibilityRole="button"
+        accessibilityLabel="Close"
+        style={[styles.closeButton, { top: insets.top + Spacing.sm }]}
+      >
+        <Ionicons name="close" size={22} color={Colors.textInverse} />
+      </Pressable>
+
+      <ConfettiOverlay visible={showConfetti} onComplete={handleConfettiComplete} />
+    </View>
   );
 }
 
@@ -152,9 +153,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
-  },
-  headerButton: {
-    padding: Spacing.xs,
   },
   paywallContainer: {
     flex: 1,
@@ -171,6 +169,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // The premium status screen sits on the light page background, where the
+  // dark scrim used over the paywall artwork would read as a blob.
+  closeButtonOnLight: {
+    backgroundColor: 'rgba(0, 0, 0, 0.06)',
   },
   featureRow: {
     flexDirection: 'row',
