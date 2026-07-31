@@ -24,7 +24,7 @@ import {
   ilikeFilter,
   isMissingFunctionError,
 } from './supabase';
-import { bookDedupeKey } from './isbndb';
+import { bookDedupeKey, isbndbService } from './isbndb';
 import { normalizeAuthorName, normalizeBookTitle } from '@/utils/bookText';
 import type {
   Book,
@@ -265,6 +265,9 @@ class BooksService {
    *   - title, author, image_url, isbn → books table (global)
    *   - review, rating, position, shelf_id, stack fields → bookshelf_items table (per-user)
    *
+   * When the edit changes the title or author, the cover image is looked up
+   * again — see `refetchCoverAfterRename`.
+   *
    * @param id - BookshelfItem ID
    * @param updates - Fields to update
    * @returns Updated book (combined view)
@@ -297,22 +300,41 @@ class BooksService {
 
       // If we have global book updates, get the book_id and update the books table
       if (Object.keys(bookUpdates).length > 0) {
-        // First get the book_id from the bookshelf_item
+        // First get the book_id from the bookshelf_item, along with the text
+        // the cover was last searched with so a rename can be detected.
         const { data: itemRow, error: fetchError } = await supabase
           .from(TABLES.BOOKSHELF_ITEMS)
-          .select('book_id')
+          .select('book_id, book:books(title, author)')
           .eq('id', id)
           .single();
 
         if (fetchError) throw fetchError;
 
+        const previousBook = (itemRow as unknown as {
+          book_id: string;
+          book: { title: string; author: string } | null;
+        }).book;
+
         bookUpdates.updated_at = new Date().toISOString();
-        const { error: bookError } = await supabase
+        // `select()` reports what was actually written: the books table's RLS
+        // policy only lets the uploader update a shared row, and a blocked
+        // update returns no error, just no rows.
+        const { data: updatedBooks, error: bookError } = await supabase
           .from(TABLES.BOOKS)
           .update(bookUpdates)
-          .eq('id', itemRow.book_id);
+          .eq('id', itemRow.book_id)
+          .select('title, author');
 
         if (bookError) throw bookError;
+
+        const updatedBook = updatedBooks?.[0];
+        if (updatedBook) {
+          await this.refetchCoverAfterRename(
+            itemRow.book_id,
+            previousBook,
+            updatedBook
+          );
+        }
       }
 
       // If we have per-user updates, update the bookshelf_items table
@@ -333,6 +355,49 @@ class BooksService {
         data: null,
         error: { message: handleSupabaseError(error) },
       };
+    }
+  }
+
+  /**
+   * Look the cover image up again after an edit changed the book's title or
+   * author.
+   *
+   * A book shows no cover when nothing in the ISBNdb catalogue matched the
+   * title/author it was stored with — a typo in either is the usual cause,
+   * and correcting it is exactly the moment the search is worth re-running.
+   * The same edit can also mean an existing cover was found for the wrong
+   * book, so the re-fetch is allowed to overwrite it; a re-fetch that finds
+   * nothing leaves whatever is stored alone.
+   *
+   * Only title/author edits get here — a review, rating, spine image or
+   * shelf move changes nothing the cover search reads, and must not spend a
+   * request against the shared ISBNdb quota.
+   *
+   * Failures are swallowed: the edit itself has already been saved, and the
+   * cover is retried whenever the book is opened or prefetched.
+   */
+  private async refetchCoverAfterRename(
+    bookId: string,
+    previous: { title: string; author: string } | null,
+    current: { title: string; author: string }
+  ): Promise<void> {
+    // Compare the way the cover search does: case and surrounding whitespace
+    // don't change which book ISBNdb returns, so re-casing "the hobbit" is
+    // not a reason to spend an API request.
+    const previousKey = previous
+      ? bookDedupeKey(previous.title || '', previous.author || '')
+      : null;
+    const currentKey = bookDedupeKey(current.title || '', current.author || '');
+    if (previousKey === currentKey) return;
+
+    try {
+      await isbndbService.refetchCoverForBook({
+        book_id: bookId,
+        title: current.title,
+        author: current.author,
+      });
+    } catch {
+      // Cover lookups are best-effort; the edit is already saved.
     }
   }
 

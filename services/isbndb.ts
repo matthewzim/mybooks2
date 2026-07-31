@@ -20,6 +20,7 @@ import {
   TABLES,
   handleSupabaseError,
   escapeLikePattern,
+  isMissingFunctionError,
 } from './supabase';
 import { storageService } from './storage';
 import { normalizeAuthorName, normalizeBookTitle } from '@/utils/bookText';
@@ -653,6 +654,40 @@ class IsbndbCoverService {
   }
 
   /**
+   * Write a freshly cached cover URL onto the global books record.
+   *
+   * The ordinary path uses `set_book_cover_url`, whose guard refuses to
+   * overwrite a cover the current pipeline already produced. A forced
+   * re-fetch (the book's title or author was corrected, so the existing
+   * cover was found for the wrong book) has to get past that guard, which is
+   * what `refresh_book_cover_url` is for. If that RPC isn't deployed yet the
+   * ordinary write still repairs books that have no cover at all — the case
+   * a typo'd title usually produces.
+   *
+   * @returns An error to log, or null on success.
+   */
+  private async persistCoverUrl(
+    bookId: string,
+    coverUrl: string,
+    force: boolean
+  ): Promise<{ message: string } | null> {
+    if (force) {
+      const { error } = await supabase.rpc('refresh_book_cover_url', {
+        p_book_id: bookId,
+        p_cover_url: coverUrl,
+      });
+      if (!error) return null;
+      if (!isMissingFunctionError(error)) return error;
+    }
+
+    const { error } = await supabase.rpc('set_book_cover_url', {
+      p_book_id: bookId,
+      p_cover_url: coverUrl,
+    });
+    return error;
+  }
+
+  /**
    * Fetch the book cover from ISBNdb, upload it to the Supabase
    * `book-covers` bucket, and persist the URL on the books table.
    *
@@ -668,11 +703,17 @@ class IsbndbCoverService {
    * @param options.bypassCooldown - Set for on-demand (user-visible) fetches
    *   so they aren't skipped while a background prefetch is cooling down
    *   after a 429.
+   * @param options.force - Look the cover up again even when the book already
+   *   has a current-pipeline one, and overwrite it if a new one is found. Set
+   *   when the title or author changed, so the stored cover was searched for
+   *   with the wrong text. A forced fetch that finds nothing leaves the
+   *   existing cover alone.
    */
   async fetchAndCacheCover(
     book: Pick<Book, 'book_id' | 'title' | 'author'>,
-    options?: { bypassCooldown?: boolean }
+    options?: { bypassCooldown?: boolean; force?: boolean }
   ): Promise<ApiResponse<string>> {
+    const force = options?.force ?? false;
     try {
       // 0. Re-check Supabase in case the caller has stale in-memory book data.
       const { data: existingBook, error: existingBookError } = await supabase
@@ -683,7 +724,7 @@ class IsbndbCoverService {
 
       const existingUrl =
         (!existingBookError && existingBook?.cover_image_url) || null;
-      if (existingUrl && !needsCoverUpgrade(existingUrl)) {
+      if (existingUrl && !needsCoverUpgrade(existingUrl) && !force) {
         return { data: existingUrl, error: null };
       }
 
@@ -703,10 +744,11 @@ class IsbndbCoverService {
           );
           if (uploadResult.data) {
             const markedCoverUrl = markCoverUrl(uploadResult.data);
-            const { error: shareError } = await supabase.rpc('set_book_cover_url', {
-              p_book_id: book.book_id,
-              p_cover_url: markedCoverUrl,
-            });
+            const shareError = await this.persistCoverUrl(
+              book.book_id,
+              markedCoverUrl,
+              force
+            );
             if (shareError) {
               console.warn(
                 'Failed to persist shared cover_image_url:',
@@ -734,14 +776,16 @@ class IsbndbCoverService {
         };
       };
 
-      if (!bypassCooldown && hasRecentCoverMiss(missKey)) {
+      // A forced re-fetch follows a user correcting the title or author, so
+      // the miss cache — keyed on the old text — has nothing to say about it.
+      if (!bypassCooldown && !force && hasRecentCoverMiss(missKey)) {
         return noCoverFound();
       }
 
       const isbndbCoverUrl = await this.searchCoverUrl(
         book.title,
         book.author,
-        options
+        { bypassCooldown }
       );
 
       if (!isbndbCoverUrl) {
@@ -796,10 +840,11 @@ class IsbndbCoverService {
       // 4. Persist the cover URL on the global books record.
       //    Uses an RPC with SECURITY DEFINER so any authenticated user can
       //    set the cover, not just the original uploader.
-      const { error: updateError } = await supabase.rpc('set_book_cover_url', {
-        p_book_id: book.book_id,
-        p_cover_url: markedCoverUrl,
-      });
+      const updateError = await this.persistCoverUrl(
+        book.book_id,
+        markedCoverUrl,
+        force
+      );
 
       if (updateError) {
         // Upload succeeded but DB write failed – still return the URL
@@ -814,6 +859,26 @@ class IsbndbCoverService {
         error: { message: handleSupabaseError(error) },
       };
     }
+  }
+
+  /**
+   * Re-run the cover search for a book whose title or author was corrected.
+   *
+   * A misspelt title or author is the usual reason a book ends up with no
+   * cover — nothing in the ISBNdb catalogue matches it — so once the user
+   * fixes the text the search is worth running again, even though the book
+   * has already been looked up (and possibly already carries a cover found
+   * for the wrong text). Runs on demand, so it ignores the rate-limit
+   * cooldown a background prefetch may be in.
+   *
+   * @param book - The book with its corrected title/author
+   * @returns The cover URL, or an error when the corrected text matched
+   *   nothing either (the existing cover, if any, is left in place).
+   */
+  async refetchCoverForBook(
+    book: Pick<Book, 'book_id' | 'title' | 'author'>
+  ): Promise<ApiResponse<string>> {
+    return this.fetchAndCacheCover(book, { bypassCooldown: true, force: true });
   }
 
   /**

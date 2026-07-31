@@ -384,6 +384,13 @@ export interface Database {
         };
         Returns: undefined;
       };
+      refresh_book_cover_url: {
+        Args: {
+          p_book_id: string;
+          p_cover_url: string;
+        };
+        Returns: undefined;
+      };
       delete_my_account: {
         Args: Record<string, never>;
         Returns: undefined;
