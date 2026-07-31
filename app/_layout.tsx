@@ -135,11 +135,13 @@ function RootLayoutContent() {
           }}
         />
 
-        {/* Payment screen */}
+        {/* Payment screen. No header bar at all: the paywall and the premium
+            status screen both fill the modal edge to edge and render their own
+            floating close button. */}
         <Stack.Screen
           name="payment"
           options={{
-            ...plainHeaderOptions,
+            headerShown: false,
             presentation: 'fullScreenModal',
           }}
         />
