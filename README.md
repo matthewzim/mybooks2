@@ -421,6 +421,14 @@ eas build --platform ios --profile production   # logs the variables it loaded
 - `deleteBook(id)` - Remove book from shelf
 - `getCommunityBooks(page, pageSize)` - Browse community books
 
+A book with no cover image usually means nothing in the ISBNdb catalogue
+matched the title or author it was saved with — a typo in either is the common
+cause. `updateBook` therefore re-runs the cover search whenever an edit changes
+the title or author, and lets the result replace a cover that was found for the
+wrong text (`refresh_book_cover_url`). Edits that leave both untouched — a
+review, a rating, a new spine image — don't spend a request against the shared
+ISBNdb quota, and a re-run that finds nothing leaves the stored cover as it was.
+
 Titles and authors are normalized on the way into the `books` table:
 whitespace is collapsed, and values written entirely in capitals (as book
 spines are so often printed, and as OCR therefore reads them) are converted to

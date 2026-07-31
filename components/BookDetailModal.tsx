@@ -29,7 +29,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { booksService } from '@/services/books';
-import { isbndbService, needsCoverUpgrade } from '@/services/isbndb';
+import { bookDedupeKey, isbndbService, needsCoverUpgrade } from '@/services/isbndb';
 import { getCoverImageUrl, storageService } from '@/services/storage';
 import { CommunitySpineBrowserModal } from '@/components/CommunitySpineBrowserModal';
 import { Button, Rating } from '@/components/ui';
@@ -62,6 +62,11 @@ interface BookDetailModalProps {
 }
 
 const getBookColor = getClothColor;
+
+/** Identifies the text a book's cover image was last searched with. */
+function coverSearchKey(book: Pick<Book, 'book_id' | 'title' | 'author'>): string {
+  return `${book.book_id}|${bookDedupeKey(book.title, book.author)}`;
+}
 
 function AlternateSpineOption({
   option,
@@ -143,6 +148,14 @@ export function BookDetailModal({
   const onCloseRef = useRef(onClose);
   const scrollOffsetRef = useRef(0);
   const coverUrlCacheRef = useRef<Record<string, string>>({});
+  // Cover search key of a save that already re-ran the cover search itself
+  // (the title or author changed, so `updateBook` looked the cover up again).
+  // Without it the effect below would immediately repeat that same lookup
+  // whenever the corrected text still matched nothing — and repeat it again
+  // on every reopen, since an on-demand fetch deliberately ignores the
+  // service's miss cache. Another edit changes the key, so the next
+  // correction is still looked up.
+  const coverRefetchedOnSaveRef = useRef<string | null>(null);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -187,6 +200,22 @@ export function BookDetailModal({
         }
       });
       return;
+    }
+
+    // The save that corrected this book's title or author already searched
+    // for a cover with exactly this text and came back empty-handed; asking
+    // again here would spend the same requests on the same answer.
+    if (coverRefetchedOnSaveRef.current === coverSearchKey(book)) {
+      if (book.cover_image_url) {
+        getCoverImageUrl(book.cover_image_url).then((resolved) => {
+          if (!cancelled && resolved) setCoverImageUrl(resolved);
+        });
+      } else {
+        setCoverImageUrl(null);
+      }
+      return () => {
+        cancelled = true;
+      };
     }
 
     // No cover yet, or one cached by the old low-quality pipeline: fetch the
@@ -379,6 +408,7 @@ export function BookDetailModal({
     }
 
     setIsSaving(true);
+    const previousCoverSearchKey = coverSearchKey(book);
     try {
       const result = await booksService.updateBook(book.id, {
         title: normalizeBookTitle(title),
@@ -388,6 +418,14 @@ export function BookDetailModal({
       });
 
       if (result.data) {
+        // A corrected title or author is the usual fix for a book with no
+        // cover, so `updateBook` re-runs the cover search for it — that's why
+        // saving one can take a moment, and why the effect above shouldn't
+        // repeat the search when it found nothing.
+        const savedCoverSearchKey = coverSearchKey(result.data);
+        if (savedCoverSearchKey !== previousCoverSearchKey) {
+          coverRefetchedOnSaveRef.current = savedCoverSearchKey;
+        }
         onBookUpdated?.(result.data);
         setIsEditing(false);
         Alert.alert('Success', 'Book updated successfully');
