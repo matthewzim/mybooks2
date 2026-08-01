@@ -96,13 +96,13 @@ export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, to
   // Fill the row by accumulated spine width so books never spill past the
   // right shelf border.
   const firstRowBooks = useMemo(() => {
-    const row: { book: Book; width: number; height: number }[] = [];
+    const row: { book: Book; width: number; height: number; measured: boolean }[] = [];
     let usedWidth = 0;
 
     for (const book of books) {
       const size = getSpineSize(book);
       if (usedWidth + size.width > shelfInnerWidth && row.length > 0) break;
-      row.push({ book, ...size });
+      row.push({ book, ...size, measured: !!imageDimensions[book.id] });
       usedWidth += size.width;
     }
 
@@ -117,20 +117,37 @@ export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, to
   // URL resolutions and RNImage.getSize calls.
   const measureRequestedRef = useRef(new Set<string>());
 
-  useEffect(() => {
-    let cancelled = false;
+  // Measurements outlive the effect run that started them. Cancelling them per
+  // run — the obvious cleanup — dropped every request still in flight the
+  // moment the first one landed, because resolving one book re-runs this effect
+  // through `firstRowBooks`. The `measureRequestedRef` guard then stopped those
+  // books from ever being asked again, so all but one spine on a card kept its
+  // fallback (placeholder-shaped) box and had its artwork cropped to fit.
+  const isMountedRef = useRef(true);
 
+  useEffect(() => {
+    // Re-armed on mount, not just cleared on unmount: React re-runs mount
+    // effects (StrictMode in development, and on fast refresh), and a flag that
+    // only ever goes false would silence every measurement after the first pass.
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     firstRowBooks.forEach(({ book }) => {
       if (!book.image_url || measureRequestedRef.current.has(book.id)) return;
       measureRequestedRef.current.add(book.id);
 
       getSpineImageUrl(book.image_url).then((url) => {
-        if (!url || cancelled) return;
+        if (!url || !isMountedRef.current) return;
 
         RNImage.getSize(
           url,
           (width, height) => {
-            if (cancelled) return;
+            if (!isMountedRef.current) return;
             setImageDimensions((prev) => ({
               ...prev,
               [book.id]: { width, height },
@@ -142,10 +159,6 @@ export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, to
         );
       });
     });
-
-    return () => {
-      cancelled = true;
-    };
   }, [firstRowBooks]);
 
   const animateScale = (toValue: number) => {
@@ -225,8 +238,14 @@ export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, to
 
             <View style={[styles.booksRow, { minHeight: PREVIEW_BOOK_HEIGHT }]}>
               {firstRowBooks.length > 0 ? (
-                firstRowBooks.map(({ book, width, height }) => (
-                  <BookPreviewSpine key={book.id} book={book} width={width} height={height} />
+                firstRowBooks.map(({ book, width, height, measured }) => (
+                  <BookPreviewSpine
+                    key={book.id}
+                    book={book}
+                    width={width}
+                    height={height}
+                    measured={measured}
+                  />
                 ))
               ) : (
                 <View style={styles.emptyShelf}>
@@ -274,9 +293,11 @@ interface BookPreviewSpineProps {
   book: Book;
   width: number;
   height: number;
+  /** True once the spine image's natural size is known, so the box carries its ratio */
+  measured: boolean;
 }
 
-function BookPreviewSpine({ book, width, height }: BookPreviewSpineProps) {
+function BookPreviewSpine({ book, width, height, measured }: BookPreviewSpineProps) {
   const spineImageUrl = useSpineImageUrl(book.image_url);
   const hasImage = !!spineImageUrl;
   const cloth = getSpineCloth(book.title);
@@ -285,10 +306,17 @@ function BookPreviewSpine({ book, width, height }: BookPreviewSpineProps) {
     <View style={[styles.bookSpineShadow, { width, height }]}>
       <View style={styles.bookSpine}>
         {hasImage ? (
-          // `cover`, not `contain`: the box already carries the image's ratio,
-          // so this only absorbs the sub-pixel remainder — which `contain`
-          // would turn into a transparent sliver beside the spine.
-          <Image source={{ uri: spineImageUrl }} style={styles.bookImage} contentFit="cover" transition={220} />
+          // Once measured the box carries the image's own ratio, so `cover`
+          // only absorbs the sub-pixel rounding remainder — which `contain`
+          // would turn into a transparent sliver beside the spine. Until then
+          // the box is a fallback shape the artwork never fits, and `cover`
+          // there means a zoomed, cropped spine; `contain` shows all of it.
+          <Image
+            source={{ uri: spineImageUrl }}
+            style={styles.bookImage}
+            contentFit={measured ? 'cover' : 'contain'}
+            transition={220}
+          />
         ) : (
           <View style={[styles.bookPlaceholder, { backgroundColor: cloth.color }]}>
             <LinearGradient

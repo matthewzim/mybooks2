@@ -126,19 +126,35 @@ export function EditableBookshelfGrid({
   // dependency), so reading it cannot tell us what is already in flight.
   const measureRequestedRef = React.useRef(new Set<string>());
 
+  // Measurements outlive the effect run that started them, so they are tied to
+  // the component's lifetime rather than cancelled per run: `localBooks` gets a
+  // new identity whenever the shelf's books are re-set, and cancelling there
+  // would drop every request still in flight while the `measureRequestedRef`
+  // guard stops those books from ever being asked again — leaving them at their
+  // fallback box, which crops the spine artwork to a shape it doesn't have.
+  const isMountedRef = React.useRef(true);
+
+  useEffect(() => {
+    // Re-armed on mount because React re-runs mount effects (StrictMode in
+    // development, and on fast refresh).
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Fetch natural image dimensions for all books with images
   useEffect(() => {
-    let cancelled = false;
-
     localBooks.forEach((book) => {
       if (book.image_url && !measureRequestedRef.current.has(book.id)) {
         measureRequestedRef.current.add(book.id);
         getSpineImageUrl(book.image_url).then((url) => {
-          if (cancelled || !url) return;
+          if (!url || !isMountedRef.current) return;
           RNImage.getSize(
             url,
             (w, h) => {
-              if (!cancelled) {
+              if (isMountedRef.current) {
                 setImageDimensions((prev) => ({
                   ...prev,
                   [book.id]: { width: w, height: h },
@@ -152,10 +168,6 @@ export function EditableBookshelfGrid({
         });
       }
     });
-
-    return () => {
-      cancelled = true;
-    };
   }, [localBooks]);
 
   // Calculate shelf height (fixed for all shelves)
