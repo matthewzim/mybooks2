@@ -235,9 +235,18 @@ export default function AddBookScreen() {
       if (result.error) {
         Alert.alert('Error', result.error.message);
       } else {
-        Alert.alert('Success', 'Book added to your shelf!', [
-          { text: 'OK', onPress: () => router.back() },
-        ]);
+        // No photo of our own, but the book still got a spine: an existing
+        // upload for this title was reused. Say so, since the shelf will show
+        // a spine the user never picked.
+        const usedExistingSpine = !uploadedImageUrl && !!result.data?.image_url;
+
+        Alert.alert(
+          'Success',
+          usedExistingSpine
+            ? 'Book added to your shelf using an existing spine photo. You can swap it for another from the book’s detail screen.'
+            : 'Book added to your shelf!',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
       }
     } catch (error) {
       console.error('Failed to add book:', error);

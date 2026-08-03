@@ -201,7 +201,6 @@ export default function SettingsScreen() {
     const created = await bookshelvesService.createBookshelf({
       name: `Goodreads Import ${new Date().toLocaleDateString()}`,
       description: 'Imported from Goodreads CSV',
-      is_public: false,
     });
 
     if (created.error || !created.data) {

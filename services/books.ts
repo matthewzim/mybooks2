@@ -21,6 +21,7 @@ import {
   supabase,
   TABLES,
   handleSupabaseError,
+  escapeLikePattern,
   ilikeFilter,
   isMissingFunctionError,
 } from './supabase';
@@ -146,7 +147,9 @@ class BooksService {
    * Create a new book on a shelf.
    *
    * If `input.book_id` is provided, references the existing global book.
-   * Otherwise, creates a new global book record first.
+   * Otherwise, creates a new global book record first — reusing a spine image
+   * already uploaded for the same book when the caller has none of its own
+   * (see `findExistingSpineImage`).
    *
    * @param input - Book details including title, author, shelf_id
    * @returns Created book (combined view)
@@ -167,15 +170,36 @@ class BooksService {
         // title case. Global book rows are shared across users and drive the
         // cover-image search, so a title stored as "THE HOBBIT" would shout on
         // every shelf that references it and query ISBNdb in capitals too.
+        const title = normalizeBookTitle(input.title);
+        const author = normalizeAuthorName(input.author);
+
+        // No spine supplied: rather than putting the book on the shelf as a
+        // blank placeholder, reuse a spine photo somebody has already uploaded
+        // for this book. The user can swap it for another from the book's
+        // detail screen.
+        let imageUrl = input.image_url || null;
+        let inheritedSpine = false;
+        if (!imageUrl) {
+          imageUrl = await this.findExistingSpineImage({
+            title,
+            author,
+            isbn: input.isbn,
+          });
+          inheritedSpine = imageUrl !== null;
+        }
+
         const { data: newBook, error: bookError } = await supabase
           .from(TABLES.BOOKS)
           .insert({
-            title: normalizeBookTitle(input.title),
-            author: normalizeAuthorName(input.author),
-            image_url: input.image_url || null,
+            title,
+            author,
+            image_url: imageUrl,
             isbn: input.isbn || null,
             uploaded_by_user_id: session.session.user.id,
-            is_community: input.is_community ?? true,
+            // An inherited spine belongs to whoever uploaded it — listing this
+            // row in Browse Community too would show the same photo twice,
+            // credited to the wrong person.
+            is_community: inheritedSpine ? false : (input.is_community ?? true),
           })
           .select()
           .single();
@@ -730,6 +754,54 @@ class BooksService {
     rating: number | null
   ): Promise<ApiResponse<Book>> {
     return this.updateBook(id, { review, rating });
+  }
+
+  /**
+   * Find a spine image that has already been uploaded for a book, so a copy
+   * added without one doesn't land on the shelf as a blank placeholder.
+   *
+   * Matched on ISBN when one is known, otherwise on a case-insensitive
+   * title/author pair (as the shelf scan does) — rows added before titles were
+   * normalized are stored as the spine shouted them ("THE HOBBIT"), and an
+   * exact match would miss those and their spine images.
+   *
+   * Both a title and an author are required when there's no ISBN: two books
+   * can share a title, and putting the wrong book's spine on a shelf is worse
+   * than the placeholder the user would otherwise have got.
+   *
+   * @returns The most recently uploaded spine image reference, or null
+   */
+  async findExistingSpineImage(book: {
+    title: string;
+    author: string;
+    isbn?: string | null;
+  }): Promise<string | null> {
+    try {
+      let query = supabase
+        .from(TABLES.BOOKS)
+        .select('image_url')
+        .not('image_url', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (book.isbn) {
+        query = query.eq('isbn', book.isbn);
+      } else if (book.title.trim() && book.author.trim()) {
+        query = query
+          .ilike('title', escapeLikePattern(book.title))
+          .ilike('author', escapeLikePattern(book.author));
+      } else {
+        return null;
+      }
+
+      const { data, error } = await query.maybeSingle();
+      if (error) return null;
+
+      return (data as { image_url: string | null } | null)?.image_url ?? null;
+    } catch {
+      // Best-effort: the book is still added, just with a placeholder spine.
+      return null;
+    }
   }
 
   /**

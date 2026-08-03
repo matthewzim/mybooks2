@@ -441,7 +441,10 @@ class ShelfScanService {
 
       if (!result.error) {
         added += 1;
-        if (!match.spineImagePath) placeholders += 1;
+        // Count what actually landed on the shelf rather than what the review
+        // screen predicted: creating a book also picks up an existing spine
+        // upload (by ISBN, which the title/author pre-check can't see).
+        if (!result.data?.image_url) placeholders += 1;
       }
       onProgress?.(i + 1, matches.length);
     }

@@ -317,7 +317,9 @@ class BookshelvesService {
           name: input.name,
           description: input.description || null,
           cover_color: input.cover_color || '#8B4513', // Default wood color
-          is_public: input.is_public || false,
+          // New shelves are public unless the caller says otherwise, so a
+          // shelf is discoverable in Explore without the user having to opt in.
+          is_public: input.is_public ?? true,
           shelf_style: input.shelf_style || 'full',
           position: nextPosition,
         })
