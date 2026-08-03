@@ -1,6 +1,6 @@
 # Privacy Policy — TinyShelves
 
-**Effective date:** July 6, 2026
+**Effective date:** August 3, 2026
 **Developer:** Matthew Zimmerman ("we," "us," or "the developer")
 **Contact:** matthew.zimmerman7@gmail.com
 
@@ -27,28 +27,63 @@ account unrecoverable.
 The following information is stored on our backend (hosted by Supabase) and
 is linked to your anonymous account ID:
 
-- **Profile data:** your display name, public username, and optional avatar
-  image.
+- **Profile data:** your display name and public username.
 - **Library data:** the bookshelves you create, the books you add (title,
-  author, ISBN), and your personal reviews and ratings.
-- **Images you upload:** photos of book spines, book covers, and avatars.
+  author, ISBN), how you arrange them, and your personal reviews and
+  ratings.
+- **Images you add:** the photos of book spines you take or select. The App
+  also downloads a cover image for your books from ISBNdb (see Section 4)
+  and stores a copy so it doesn't have to be fetched again.
 - **Subscription status:** whether your account has an active premium
   entitlement (a true/false flag — see Section 5).
 - **Moderation data:** reports you file about other users' content and your
   list of blocked users.
 
-**Public visibility:** bookshelves are private by default. If you mark a
-shelf public, its name, its books, the spine images on it, and your display
-name and public username become visible to other users of the App in the
-community section.
+### Public visibility
 
-## 3. Camera and Photo Library
+**New bookshelves are public by default.** You can make a shelf private
+with the Public/Private toggle when you create it, or change it later in
+the shelf's settings. When a shelf is public, its name, description, the
+books on it, their spine images, and your display name and public username
+are visible to other users of the App. Your profile can also be found by
+searching your display name or public username in the community section,
+and public shelves may be featured in the community feed.
 
-The App requests camera access only to let you photograph book spines, and
-photo library access only to let you choose existing spine images. Images
-are used solely to add books to your library. The App never scans your
-photo library in the background and never accesses photos you did not
-explicitly select.
+### Shared book and spine records
+
+Books in the App are stored as shared records rather than as private copies:
+
+- **Spine photos are shared with the community by default.** When you scan a
+  spine, the photo is offered in Browse Community alongside your display
+  name, and other users can add it to their own shelves. The Add Book
+  screen has a "Share with Community" toggle you can turn off for that
+  book. This is independent of whether the shelf is public — a spine
+  photo can be shared with the community even if the shelf holding it is
+  private.
+- **Book details are shared.** Because several users can reference the same
+  book record, editing a book's title, author, or ISBN may change it for
+  other users who hold that book.
+
+Your reviews, ratings, and shelf arrangement are always private to your
+account and are never shown to other users.
+
+## 3. Camera, Photos, and Files
+
+The App requests camera access to let you photograph book spines and whole
+bookshelves, and photo library access to let you choose existing photos for
+the same purpose. The App never scans your photo library in the background
+and never accesses photos you did not explicitly select.
+
+- **Spine photos** are uploaded and stored as described in Section 2.
+- **Bookshelf photos** (the "scan a shelf" feature) are used only to read
+  the titles off the spines. The photo is sent for text recognition (see
+  Section 4) and is **not** uploaded to our backend or stored — only the
+  book titles and authors identified from it are saved.
+- **Goodreads import** uses the iOS file picker so you can select a CSV
+  file you exported from Goodreads. The App reads only the title and author
+  columns from that file; the rest of the export (dates, shelves, private
+  notes, and anything else Goodreads includes) is ignored and never
+  uploaded.
 
 ## 4. Third-Party Services
 
@@ -62,13 +97,15 @@ only the minimum data needed to do its job:
   details, billing address, or Apple ID. RevenueCat receives your anonymous
   account ID and purchase receipt information from Apple in order to manage
   your subscription entitlement.
-- **ISBNdb** (book lookup): when you search for a book, your search text
-  (title/author/ISBN) is sent to ISBNdb to fetch book details and cover
-  images.
-- **Google Cloud Vision API** (optional spine text recognition): if you use
-  the auto-fill feature when adding a book, the spine image you selected is
-  sent to Google for text recognition so the App can suggest the title and
-  author. The image is used only for this one-time recognition.
+- **ISBNdb** (book lookup): when you search for a book, scan a spine, or
+  the App looks for a cover image, the search text (title, author, or ISBN)
+  is sent to ISBNdb to fetch book details and a cover image. Cover images
+  found this way are copied to our storage so they don't have to be
+  re-fetched.
+- **Google Cloud Vision API** (text recognition): if you scan a book spine
+  or a whole bookshelf, the photo is sent to Google for text recognition so
+  the App can identify the books. The photo is used only for that one-time
+  recognition and is not stored by us.
 
 We do not sell your data, share it with data brokers, or use it for
 advertising. No third-party advertising, analytics, or tracking SDKs are
@@ -85,21 +122,29 @@ currently has an active entitlement.
 ## 6. Data Stored on Your Device
 
 The App stores your session token, theme preference, and onboarding state
-locally on your device. If you use the home-screen widget, the shelf you
-choose to display is copied into a shared container on your device so the
-widget can render it. This data never leaves your device except as
-described in Section 2.
+locally on your device. If you use the home-screen widget, a snapshot of
+your shelves and their spine images is copied into a shared container on
+your device so the widget can render whichever shelf you select, along with
+your premium status. This data never leaves your device except as described
+in Section 2.
 
 ## 7. Data Retention and Deletion
 
 Your data is retained for as long as your account exists. You can delete
 your data at any time, from inside the App, with no waiting period:
 
-- **Settings → Reset Data** deletes all of your bookshelves, books,
-  uploaded images, and profile details while keeping the account usable.
-- **Settings → Account Deletion** permanently deletes your account and all
-  associated data, including every image you uploaded. This cannot be
-  undone.
+- **Settings → Reset Data** deletes your bookshelves, the books you added,
+  your uploaded images, and your profile details, while keeping the account
+  usable.
+- **Settings → Account Deletion** permanently deletes your account, your
+  library, and your uploaded images. This cannot be undone.
+
+**One exception applies to both.** If another user has added one of your
+shared book spines to their shelf, that book record and its spine image are
+kept rather than deleted, so their shelf doesn't break. The retained record
+is disconnected from your account — your account ID is removed from it —
+and nothing that identifies you stays attached to it. Everything else,
+including every image no one else is using, is deleted.
 
 If you have questions about deletion, or believe data associated with an
 account you controlled still exists, contact us at the email above.
@@ -123,9 +168,9 @@ the App collects no contact information from any user of any age.
 
 Data is transmitted over encrypted (HTTPS/TLS) connections and stored with
 access controls (row-level security) so that each account can only access
-its own private data. No system is perfectly secure, but the App's
-anonymous design means there is no password, email, or payment data of
-yours for us to lose.
+its own private data. Stored images are served through expiring signed
+links. No system is perfectly secure, but the App's anonymous design means
+there is no password, email, or payment data of yours for us to lose.
 
 ## 11. Changes to This Policy
 

@@ -1,6 +1,6 @@
 # Terms of Use — TinyShelves
 
-**Effective date:** July 6, 2026
+**Effective date:** August 3, 2026
 **Developer:** Matthew Zimmerman ("we," "us," or "the developer")
 **Contact:** matthew.zimmerman7@gmail.com
 
@@ -22,22 +22,32 @@ code of the App except as permitted by law.
 
 Accounts are anonymous and tied to a randomly generated identifier created
 on first launch. You are responsible for activity that occurs under your
-account. Deleting the App without using the in-app Account Deletion feature
-may leave your account unrecoverable.
+account.
+
+Because there is no email address or password, there is no way to sign in
+to your account from another device and no way for us to recover it for
+you. Deleting the App, or deleting and reinstalling it, may leave your
+account and its contents permanently unrecoverable.
 
 ## 3. User Content and Intellectual Property
 
 The App lets you upload images — primarily photographs of book spines and
-covers — and text such as shelf names, reviews, and a public username
-(together, "User Content"). Shelves you mark public, including their images
-and your username, are visible to other users in the community section.
+of your own bookshelves — and text such as shelf names, book details,
+reviews, and a public username (together, "User Content"). You can also
+import a Goodreads CSV export, from which the App reads book titles and
+authors.
+
+**New shelves are public by default**, and can be made private with the
+toggle on the shelf. A public shelf, including its books, their spine
+images, your display name and your public username, is visible to other
+users in the community section.
 
 **(a) Your representation of ownership.** By uploading User Content, you
 represent and warrant that you own the content or have all rights,
 licenses, and permissions necessary to upload it and to grant the license
-in Section 3(b). For photographs of book spines and covers, this means you
-took the photograph yourself (or otherwise hold rights to it) of a book in
-your possession. You may not upload images scraped or copied from
+in Section 3(b). For photographs of book spines and bookshelves, this means
+you took the photograph yourself (or otherwise hold rights to it) of books
+in your possession. You may not upload images scraped or copied from
 publishers, retailers, other websites, or other users, or any content that
 infringes the intellectual property rights of any person.
 
@@ -77,16 +87,49 @@ developer harmless from claims, damages, and expenses (including reasonable
 attorneys' fees) arising from User Content you upload in breach of this
 Section 3.
 
-## 4. Book Metadata
+**(f) Community sharing and shared book records.** Spine photographs you
+scan are shared with the community by default, which means they are listed
+in Browse Community next to your display name and other users may add them
+to their own shelves. The Add Book screen has a "Share with Community"
+toggle you can turn off for that book. Sharing is separate from shelf
+visibility: a spine photo can be shared with the community even when the
+shelf holding it is private.
 
-Book titles, author names, and cover images retrieved through the Google
-Books API are provided by third parties and may be subject to their own
-terms. We make no warranty as to their accuracy.
+Books are also stored as shared records rather than as private copies, so
+editing a book's title, author, or ISBN may change it for other users who
+hold the same book. Your reviews, ratings, and shelf arrangement are always
+private to your account.
+
+Because of this, deleting your account does not remove a shared spine photo
+or book record that another user still has on a shelf — removing it would
+break their shelf. What is retained is disconnected from your account, and
+nothing identifying you remains attached to it. If you want a specific
+shared image taken down entirely, email us.
+
+## 4. Book Data and Text Recognition
+
+Book titles, author names, and cover images are retrieved through the
+**ISBNdb** API and are provided by third parties, who may impose their own
+terms; cover images retrieved this way are cached by the App so they don't
+have to be fetched repeatedly. Spine and bookshelf photographs are read
+using the **Google Cloud Vision** API to identify books automatically.
+
+Automatic identification is a convenience, not a guarantee: recognized text
+and matched book details are frequently wrong or incomplete, and you should
+check them before saving. We make no warranty as to the accuracy of any
+book data, cover image, or recognition result.
 
 ## 5. Subscriptions
 
 TinyShelves Pro is an optional auto-renewable subscription (monthly or
 yearly) purchased through Apple In-App Purchase.
+
+The App is usable without a subscription, subject to limits on the number
+of bookshelves you can create and the number of books per shelf; the
+home-screen widget requires a subscription. Pro lifts those limits and
+unlocks the widget. The exact limits and the features included in Pro may
+change over time, and we may add, change, or withdraw features of the App
+generally.
 
 - Payment is charged to your Apple account at confirmation of purchase.
 - The subscription renews automatically unless cancelled at least 24 hours
@@ -104,14 +147,16 @@ yearly) purchased through Apple In-App Purchase.
 You agree not to misuse the App, including by attempting to access other
 users' private data, probing or disrupting the service, circumventing
 subscription entitlements, using the App for unlawful purposes, or
-harassing other users.
+harassing other users. You also agree not to access the App by automated
+means, to bulk-download community images or book data, or to place
+unreasonable load on the App or the third-party services it depends on.
 
 ## 7. Termination
 
 You may stop using the App at any time and may delete your account in
 Settings. We may suspend or terminate your access to the App or its
-community features if you violate these Terms. Sections 3(b), 3(e), and
-8–11 survive termination.
+community features if you violate these Terms. Sections 3(b), 3(e), 3(f),
+and 8–11 survive termination.
 
 ## 8. Disclaimer of Warranties
 
