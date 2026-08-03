@@ -468,7 +468,8 @@ done from your accounts. Work through these in order.
 ### 3. Legal (required for approval)
 
 - [ ] **Host the privacy policy**: a ready-to-publish draft lives at `legal/privacy-policy.md`. Host it (GitHub Pages or any static host) and update `PRIVACY_POLICY` in `constants/legal.ts` (currently a placeholder URL — a broken link is a guaranteed rejection).
-- [ ] **Host the Terms of Use**: a draft with Apple's required minimum terms and a UGC/IP clause lives at `legal/terms-of-use.md`. Fill in the governing-law placeholder in Section 11, host it, and update `TERMS_OF_USE` in `constants/legal.ts` (until then the app links to Apple's standard EULA, which is also acceptable). Paste the same URL into the App Store description field, as required by Guideline 3.1.2.
+- [ ] **Host the Terms of Use**: `legal/terms-of-use.md` carries Apple's required minimum terms, the UGC/IP and community-sharing licence, DSA notice-and-action, DMCA takedown, and a US arbitration clause. Host it and update `TERMS_OF_USE` in `constants/legal.ts` (until then the app links to Apple's standard EULA, which is also acceptable). Paste the same URL into the App Store description field, as required by Guideline 3.1.2.
+- [ ] **Work through `legal/README.md`** before submitting: it lists the assumptions baked into both documents (governing law is set to New York, arbitration is enabled, you are treated as an individual rather than a company) and the open items — notably registering a DMCA agent, which the Terms' takedown process needs in order to give you actual safe harbour.
 - [ ] **Support contact**: `SUPPORT` in `constants/legal.ts` uses your email; App Store Connect also needs a Support URL.
 
 ### 4. Build & TestFlight
