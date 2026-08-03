@@ -59,7 +59,8 @@ export default function CreateBookshelfScreen() {
   const [description, setDescription] = useState('');
   const [selectedColor, setSelectedColor] = useState<string>(BOOKSHELF_COLORS[0]);
   const [shelfStyle, setShelfStyle] = useState<ShelfStyle>('full');
-  const [isPublic, setIsPublic] = useState(false);
+  // Shelves are public by default; the toggle below opts out.
+  const [isPublic, setIsPublic] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

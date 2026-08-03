@@ -149,6 +149,7 @@ export interface CreateBookshelfInput {
   name: string;
   description?: string;
   cover_color?: string;
+  /** Defaults to true (public) when omitted. */
   is_public?: boolean;
   shelf_style?: ShelfStyle;
 }

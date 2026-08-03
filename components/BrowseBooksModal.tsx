@@ -349,7 +349,25 @@ export function BrowseBooksModal({
             );
           }
         } else {
-          Alert.alert('Added', `"${book.title}" has been added to your shelf.`);
+          // The book landed with a real spine — either the record it
+          // references already carried one, or the add picked up a spine
+          // somebody had already uploaded for this title. Offer the picker so
+          // the user can swap it for a different one when others exist.
+          const spinesResult = await booksService.getAlternativeSpines(addedBook);
+          const otherSpines = spinesResult.data || [];
+
+          if (otherSpines.length > 0) {
+            Alert.alert(
+              'Added',
+              `"${book.title}" was added to your shelf with an existing spine photo. Want to use a different one?`,
+              [
+                { text: 'Keep This Spine', style: 'cancel' },
+                { text: 'Choose Another', onPress: () => setSpinePickerBook(addedBook) },
+              ]
+            );
+          } else {
+            Alert.alert('Added', `"${book.title}" has been added to your shelf.`);
+          }
         }
       } else if (result.error) {
         Alert.alert('Error', result.error.message);
