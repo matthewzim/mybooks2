@@ -315,6 +315,14 @@ The widget is configured in `app.json` under:
   - `npx expo prebuild -p ios --clean`
   - `cd ios && pod install && cd ..`
   - `npm run ios`
+- If Xcode fails with `Multiple commands produce .../ExpoWidgetsTarget.appex/ExpoWidgetsTarget`, the widget extension is being built twice (usually from stale generated iOS files or a manually added Widget Extension target). Fix it with a full native reset:
+  - Close Xcode + Simulator
+  - `rm -rf ios`
+  - `rm -rf ~/Library/Developer/Xcode/DerivedData`
+  - `npx expo prebuild -p ios --clean`
+  - `cd ios && pod install && cd ..`
+  - `npm run ios`
+  - In Xcode, verify there is only one app extension target: **ExpoWidgetsTarget** (delete any manually created duplicate target/build phase)
 - Ensure the app has finished installing and opened at least once after build.
 - If needed, reset simulator content and rerun the build.
 
