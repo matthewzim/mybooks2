@@ -159,12 +159,12 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
             try {
               resolvedUrl = await getSpineImageUrl(book.image_url);
               sourceUrl = book.image_url;
-            } catch {}
+            } catch { /* Missing images render as placeholders. */ }
           }
           if (book.cover_image_url) {
             try {
               coverUrl = await getCoverImageUrl(book.cover_image_url);
-            } catch {}
+            } catch { /* Missing images render as placeholders. */ }
           }
           return {
             id: book.id,

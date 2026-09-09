@@ -20,9 +20,11 @@ import React, {
   useState,
   useCallback,
   useMemo,
+  useRef,
 } from 'react';
 import { authService } from '@/services/auth';
-import { isSupabaseConfigured } from '@/services/supabase';
+import { AppState } from 'react-native';
+import { supabase, isSupabaseConfigured } from '@/services/supabase';
 import type {
   User,
   AuthState,
@@ -39,6 +41,7 @@ interface AuthContextType extends AuthState {
   // Profile methods
   updateProfile: (updates: UpdateUserInput) => Promise<ApiResponse<User>>;
   refreshUser: () => Promise<void>;
+  retryAuth: () => Promise<void>;
   restartAnonymousSession: () => Promise<ApiResponse<User>>;
 }
 
@@ -59,6 +62,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<AuthState['session']>(null);
   const [authError, setAuthError] = useState<string | null>(null);
 
+  const authGeneration = useRef(0);
+
   /**
    * Initialize auth state on mount
    * Check for existing session or create anonymous one
@@ -71,43 +76,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    initializeAuth();
-
-    // Subscribe to auth state changes
-    const unsubscribe = authService.onAuthStateChange(
-      async (event, newSession) => {
-        console.log('Auth state changed:', event);
-
-        try {
-          if (event === 'SIGNED_IN' && newSession) {
-            // User signed in - fetch profile
-            const { data: profile } = await authService.getCurrentUser();
-            setUser(profile);
-            setSession(newSession as AuthState['session']);
-            setAuthError(null);
-          } else if (event === 'SIGNED_OUT') {
-            // User signed out - clear state
-            setUser(null);
-            setSession(null);
-            setAuthError(null);
-          } else if (event === 'TOKEN_REFRESHED' && newSession) {
-            // Token refreshed - update session
-            setSession(newSession as AuthState['session']);
-          } else if (event === 'INITIAL_SESSION') {
-            // Initial session from storage - handled by initializeAuth
-          }
-        } catch (error) {
-          console.error('Error handling auth state change:', error);
-          setUser(null);
-          setSession(null);
-          setAuthError('Authentication state sync failed.');
+    let mounted = true;
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    const unsubscribe = authService.onAuthStateChange((event, newSession) => {
+      if (!mounted) return;
+      if (event === 'SIGNED_OUT') {
+        authGeneration.current += 1;
+        setUser(null);
+        setSession(null);
+      } else if (newSession) {
+        setSession(newSession as AuthState['session']);
+        if (event === 'SIGNED_IN') {
+          const generation = ++authGeneration.current;
+          // Supabase callbacks run under the auth lock. Query after it releases.
+          const timer = setTimeout(() => {
+            timers.delete(timer);
+            void authService.getCurrentUser().then(({ data, error }) => {
+              if (!mounted || generation !== authGeneration.current) return;
+              setUser(data);
+              setAuthError(error?.message ?? null);
+            });
+          }, 0);
+          timers.add(timer);
         }
       }
-    );
-
-    // Cleanup subscription on unmount
+    });
+    void initializeAuth();
+    const refresh = (state: string) => {
+      if (state === 'active') supabase.auth.startAutoRefresh();
+      else supabase.auth.stopAutoRefresh();
+    };
+    refresh(AppState.currentState);
+    const appState = AppState.addEventListener('change', refresh);
     return () => {
+      mounted = false;
+      authGeneration.current += 1;
+      timers.forEach(clearTimeout);
       unsubscribe();
+      appState.remove();
+      supabase.auth.stopAutoRefresh();
     };
   }, []);
 
@@ -115,16 +122,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * Initialize authentication state
    * Restores existing session or creates an anonymous one
    */
-  const initializeAuth = async () => {
+  const initializeAuth = useCallback(async () => {
     try {
       setIsLoading(true);
 
       // Check for existing session
-      const { data: existingSession } = await authService.getSession();
+      const { data: existingSession, error: sessionError } = await authService.getSession();
+      if (sessionError) throw new Error(sessionError.message);
 
       if (existingSession) {
         // Session exists - fetch user profile
-        const { data: profile } = await authService.getCurrentUser();
+        const { data: profile, error } = await authService.getCurrentUser();
+        if (error) throw new Error(error.message);
         setUser(profile);
         setSession(existingSession as AuthState['session']);
         setAuthError(null);
@@ -146,7 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   /**
    * Update user profile
@@ -228,6 +237,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isConfigured: isSupabaseConfigured,
       updateProfile,
       refreshUser,
+      retryAuth: initializeAuth,
       restartAnonymousSession,
     }),
     [
@@ -237,6 +247,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       authError,
       updateProfile,
       refreshUser,
+      initializeAuth,
       restartAnonymousSession,
     ]
   );

@@ -11,7 +11,7 @@
  */
 
 import 'react-native-url-polyfill/auto';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sessionStorage } from './sessionStorage';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/supabase';
 
@@ -39,17 +39,17 @@ if (!isSupabaseConfigured) {
  * Supabase client instance
  *
  * Configuration:
- * - Uses AsyncStorage for session persistence on mobile
+ * - Uses SecureStore for session persistence on mobile
  * - Auto-refreshes tokens
  * - Detects session from URL (useful for OAuth flows)
  */
 export const supabase: SupabaseClient<Database> = createClient<Database>(
-  supabaseUrl,
-  supabaseAnonKey,
+  isSupabaseConfigured ? supabaseUrl : 'https://unconfigured.invalid',
+  supabaseAnonKey || 'unconfigured',
   {
     auth: {
-      // Use AsyncStorage for persisting auth state on mobile
-      storage: AsyncStorage,
+      // Use secure persistence on mobile, migrating existing sessions
+      storage: sessionStorage,
       // Automatically refresh the session
       autoRefreshToken: true,
       // Persist session across app restarts

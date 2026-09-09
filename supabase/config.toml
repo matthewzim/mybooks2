@@ -1,0 +1,10 @@
+project_id = "tinyshelves"
+# These functions validate bearer JWTs or their own dedicated webhook secrets.
+[functions.book-api]
+verify_jwt = false
+[functions.sync-premium]
+verify_jwt = false
+[functions.revenuecat-webhook]
+verify_jwt = false
+[functions.storage-cleanup]
+verify_jwt = false

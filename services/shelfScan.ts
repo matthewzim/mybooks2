@@ -16,6 +16,8 @@
  * const result = await shelfScanService.addMatchesToShelf(matches, shelfId);
  */
 
+import { bookApi } from './bookApi';
+import { isSupabaseConfigured } from './supabase';
 import * as ImageManipulator from 'expo-image-manipulator';
 import {
   supabase,
@@ -28,9 +30,6 @@ import { getSpineImageUrl } from './storage';
 import { bookDedupeKey, searchBooksForSpineText } from './isbndb';
 import { normalizeAuthorName, normalizeBookTitle } from '@/utils/bookText';
 import type { ApiResponse } from '@/types';
-
-const GOOGLE_VISION_API_KEY =
-  process.env.EXPO_PUBLIC_GOOGLE_CLOUD_VISION_API_KEY || '';
 
 /**
  * Longest edge (px) we downscale a shelf photo to before OCR. Full-resolution
@@ -181,7 +180,7 @@ function blockToText(block: VisionBlock): string {
 class ShelfScanService {
   /** Whether OCR is configured (Vision API key present). */
   isConfigured(): boolean {
-    return GOOGLE_VISION_API_KEY.length > 0;
+    return isSupabaseConfigured;
   }
 
   /**
@@ -245,23 +244,7 @@ class ShelfScanService {
     }
 
     try {
-      const response = await fetch(
-        `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            requests: [
-              {
-                image: { content: base64Image },
-                // DOCUMENT_TEXT_DETECTION returns text grouped into blocks,
-                // which map well onto individual book spines.
-                features: [{ type: 'DOCUMENT_TEXT_DETECTION', maxResults: 1 }],
-              },
-            ],
-          }),
-        }
-      );
+      const response = await bookApi({ kind: 'ocr', image: base64Image });
 
       if (!response.ok) {
         // Surface the Vision API's own error message (e.g. an invalid key or an

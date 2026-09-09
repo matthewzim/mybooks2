@@ -360,6 +360,7 @@ export interface Database {
       };
     };
     Functions: {
+      create_book_on_shelf: { Args: { p_input: Json }; Returns: Json };
       get_community_books: {
         Args: {
           page_num?: number;

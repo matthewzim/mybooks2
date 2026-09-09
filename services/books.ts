@@ -95,18 +95,22 @@ class BooksService {
    */
   async getBooksByShelf(shelfId: string): Promise<ApiResponse<Book[]>> {
     try {
-      const { data, error } = await supabase
-        .from(TABLES.BOOKSHELF_ITEMS)
-        .select(`
-          *,
-          book:books(*)
-        `)
-        .eq('shelf_id', shelfId)
-        .order('position', { ascending: true });
-
-      if (error) throw error;
-
-      return { data: (data || []).map(toBook), error: null };
+      const books: Book[] = [];
+      let cursor: string | undefined;
+      for (;;) {
+        let query = supabase.from(TABLES.BOOKSHELF_ITEMS)
+          .select('*, book:books(*)').eq('shelf_id', shelfId)
+          .order('id', { ascending: true }).limit(500);
+        if (cursor) query = query.gt('id', cursor);
+        const { data, error } = await query;
+        if (error) throw error;
+        const page = data || [];
+        books.push(...page.map(toBook));
+        if (page.length < 500) break;
+        cursor = page[page.length - 1].id;
+      }
+      books.sort((a,b) => a.position - b.position || a.id.localeCompare(b.id));
+      return { data: books, error: null };
     } catch (error) {
       return {
         data: null,
@@ -161,94 +165,19 @@ class BooksService {
         throw new Error('Not authenticated');
       }
 
-      let bookId = input.book_id;
-
-      // If no existing book_id, create a new global book record
-      if (!bookId) {
-        // Every entry point lands here — spine scan, manual entry, CSV import,
-        // community browse — so this is where SHOUTED text gets folded back to
-        // title case. Global book rows are shared across users and drive the
-        // cover-image search, so a title stored as "THE HOBBIT" would shout on
-        // every shelf that references it and query ISBNdb in capitals too.
-        const title = normalizeBookTitle(input.title);
-        const author = normalizeAuthorName(input.author);
-
-        // No spine supplied: rather than putting the book on the shelf as a
-        // blank placeholder, reuse a spine photo somebody has already uploaded
-        // for this book. The user can swap it for another from the book's
-        // detail screen.
-        let imageUrl = input.image_url || null;
-        let inheritedSpine = false;
-        if (!imageUrl) {
-          imageUrl = await this.findExistingSpineImage({
-            title,
-            author,
-            isbn: input.isbn,
-          });
-          inheritedSpine = imageUrl !== null;
-        }
-
-        const { data: newBook, error: bookError } = await supabase
-          .from(TABLES.BOOKS)
-          .insert({
-            title,
-            author,
-            image_url: imageUrl,
-            isbn: input.isbn || null,
-            uploaded_by_user_id: session.session.user.id,
-            // An inherited spine belongs to whoever uploaded it — listing this
-            // row in Browse Community too would show the same photo twice,
-            // credited to the wrong person.
-            is_community: inheritedSpine ? false : (input.is_community ?? true),
-          })
-          .select()
-          .single();
-
-        if (bookError) throw bookError;
-        bookId = newBook.id;
+      const title = normalizeBookTitle(input.title);
+      const author = normalizeAuthorName(input.author);
+      let imageUrl = input.image_url || null;
+      let inheritedSpine = false;
+      if (!input.book_id && !imageUrl) {
+        imageUrl = await this.findExistingSpineImage({ title, author, isbn: input.isbn });
+        inheritedSpine = imageUrl !== null;
       }
-
-      // Only look up the next position when the caller didn't supply one.
-      // Bulk adds (onboarding, shelf scan) pass explicit positions, and this
-      // query was running once per book anyway — an extra round trip per
-      // book that also can't produce a correct answer when several inserts
-      // are in flight at once, since they all read the same maximum.
-      let position = input.position;
-      if (position === undefined) {
-        const { data: existingItems } = await supabase
-          .from(TABLES.BOOKSHELF_ITEMS)
-          .select('position')
-          .eq('shelf_id', input.shelf_id)
-          .order('position', { ascending: false })
-          .limit(1);
-
-        position =
-          existingItems && existingItems.length > 0
-            ? existingItems[0].position + 1
-            : 0;
-      }
-
-      // Create the bookshelf_item linking the book to the shelf
-      const { data: item, error: itemError } = await supabase
-        .from(TABLES.BOOKSHELF_ITEMS)
-        .insert({
-          book_id: bookId,
-          shelf_id: input.shelf_id,
-          position,
-          review: input.review || null,
-          rating: input.rating || null,
-          is_stacked: input.is_stacked ?? false,
-          stack_id: input.stack_id || null,
-          stack_position: input.stack_position ?? 0,
-        })
-        .select(`
-          *,
-          book:books(*)
-        `)
-        .single();
-
-      if (itemError) throw itemError;
-
+      const { data: item, error } = await supabase.rpc('create_book_on_shelf', {
+        p_input: { ...input, title, author, image_url: imageUrl,
+          is_community: inheritedSpine ? false : (input.is_community ?? true) },
+      });
+      if (error) throw error;
       return { data: toBook(item), error: null };
     } catch (error) {
       return {
@@ -352,6 +281,7 @@ class BooksService {
         if (bookError) throw bookError;
 
         const updatedBook = updatedBooks?.[0];
+        if (!updatedBook) throw new Error('Only the uploader can edit this shared book.');
         if (updatedBook) {
           await this.refetchCoverAfterRename(
             itemRow.book_id,
@@ -481,6 +411,9 @@ class BooksService {
         .from(TABLES.BOOKSHELF_ITEMS)
         .update({
           shelf_id: newShelfId,
+          is_stacked: false,
+          stack_id: null,
+          stack_position: 0,
           position: position,
           updated_at: new Date().toISOString(),
         })

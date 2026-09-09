@@ -8,7 +8,7 @@
  * URL per book (no zoom-level renditions, no "image not available"
  * placeholder served with HTTP 200) and supports exact ISBN lookup. It has
  * no keyless quota, so every entry point degrades gracefully (empty results,
- * no cover) when EXPO_PUBLIC_ISBNDB_API_KEY is unset.
+ * no cover) when the server-side ISBNdb proxy is unavailable.
  *
  * Usage:
  * import { isbndbService } from '@/services/isbndb';
@@ -22,22 +22,11 @@ import {
   escapeLikePattern,
   isMissingFunctionError,
 } from './supabase';
+import { bookApi } from './bookApi';
+import { isSupabaseConfigured } from './supabase';
 import { storageService } from './storage';
 import { normalizeAuthorName, normalizeBookTitle } from '@/utils/bookText';
 import type { Book, ApiResponse } from '@/types';
-
-const ISBNDB_API_KEY = process.env.EXPO_PUBLIC_ISBNDB_API_KEY || '';
-
-/**
- * The base URL and request rate are tied to the ISBNdb subscription tier:
- *   Basic   https://api2.isbndb.com        1 request/second
- *   Premium https://api.premium.isbndb.com 3 requests/second
- *   Pro     https://api.pro.isbndb.com     5 requests/second
- * Keep EXPO_PUBLIC_ISBNDB_BASE_URL and EXPO_PUBLIC_ISBNDB_REQUESTS_PER_SECOND
- * in sync with the plan the API key belongs to.
- */
-const ISBNDB_BASE_URL =
-  process.env.EXPO_PUBLIC_ISBNDB_BASE_URL || 'https://api2.isbndb.com';
 
 const ISBNDB_REQUESTS_PER_SECOND =
   parseFloat(process.env.EXPO_PUBLIC_ISBNDB_REQUESTS_PER_SECOND || '') || 1;
@@ -74,7 +63,7 @@ function sleep(ms: number): Promise<void> {
 
 /** Whether the ISBNdb API key is present. There is no keyless quota. */
 export function isbndbConfigured(): boolean {
-  return ISBNDB_API_KEY.length > 0;
+  return isSupabaseConfigured;
 }
 
 let warnedUnconfigured = false;
@@ -100,7 +89,7 @@ async function isbndbFetch<T>(
     if (!warnedUnconfigured) {
       warnedUnconfigured = true;
       console.warn(
-        'ISBNdb API key is not configured — book search and cover fetching are disabled.'
+        'Book search is not configured.'
       );
     }
     return null;
@@ -118,9 +107,7 @@ async function isbndbFetch<T>(
       }
       lastRequestTime = Date.now();
 
-      const response = await fetch(`${ISBNDB_BASE_URL}${path}`, {
-        headers: { Authorization: ISBNDB_API_KEY },
-      });
+      const response = await bookApi({ kind: 'isbndb', path });
 
       if (response.status === 429) {
         // Activate global cooldown so other callers stop hammering too
@@ -671,6 +658,8 @@ class IsbndbCoverService {
     coverUrl: string,
     force: boolean
   ): Promise<{ message: string } | null> {
+    const version = coverUrl.includes('cv=3') ? '?cv=3' : '';
+    coverUrl = (storageService.getStoragePath(coverUrl, 'book-covers') || coverUrl).split('?')[0] + version;
     if (force) {
       const { error } = await supabase.rpc('refresh_book_cover_url', {
         p_book_id: bookId,
@@ -718,7 +707,7 @@ class IsbndbCoverService {
       // 0. Re-check Supabase in case the caller has stale in-memory book data.
       const { data: existingBook, error: existingBookError } = await supabase
         .from(TABLES.BOOKS)
-        .select('cover_image_url')
+        .select('cover_image_url, uploaded_by_user_id')
         .eq('id', book.book_id)
         .maybeSingle();
 
@@ -726,6 +715,17 @@ class IsbndbCoverService {
         (!existingBookError && existingBook?.cover_image_url) || null;
       if (existingUrl && !needsCoverUpgrade(existingUrl) && !force) {
         return { data: existingUrl, error: null };
+      }
+
+      if (existingBookError) throw existingBookError;
+      const { data: auth } = await supabase.auth.getSession();
+      if (!existingBook || existingBook.uploaded_by_user_id !== auth.session?.user.id) {
+        // Readers cannot persist covers on another uploader's global record.
+        // Avoid orphan uploads on every background prefetch. An explicit
+        // detail request may still display a provider image without caching it.
+        const url = existingUrl || (options?.bypassCooldown
+          ? await this.searchCoverUrl(book.title, book.author, options) : null);
+        return { data: url, error: null };
       }
 
       // 1. Reuse the cover another record of the same title/author already
@@ -838,8 +838,7 @@ class IsbndbCoverService {
       const markedCoverUrl = markCoverUrl(supabaseCoverUrl);
 
       // 4. Persist the cover URL on the global books record.
-      //    Uses an RPC with SECURITY DEFINER so any authenticated user can
-      //    set the cover, not just the original uploader.
+      //    Uses an uploader-authorized RPC that validates the stored image path.
       const updateError = await this.persistCoverUrl(
         book.book_id,
         markedCoverUrl,

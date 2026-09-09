@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+// SDK 55 production builds require Xcode 26.2+. Old-SDK source patches are
+// opt-in for local experiments and must never mutate release dependencies.
+if (process.env.TINYSHELVES_LEGACY_IOS_PATCH !== '1' || process.env.EAS_BUILD_PROFILE === 'production') {
+  process.exit(0);
+}
 const fs = require('fs');
 const path = require('path');
 

@@ -18,6 +18,7 @@ import {
   ilikeFilter,
   isMissingFunctionError,
 } from './supabase';
+import { booksService } from './books';
 import type {
   Bookshelf,
   Book,
@@ -144,7 +145,7 @@ class BookshelvesService {
     );
 
     results.forEach((result, index) => {
-      if (result.error) return;
+      if (result.error) throw result.error;
       const books = (result.data || []).map(itemToBook);
       byShelf.set(shelfIds[index], {
         books,
@@ -206,20 +207,12 @@ class BookshelvesService {
     id: string
   ): Promise<ApiResponse<Bookshelf & { books: Book[] }>> {
     try {
-      const { data, error } = await supabase
-        .from(TABLES.BOOKSHELVES)
-        .select(
-          `
-          *,
-          bookshelf_items(*, book:books(*))
-        `
-        )
-        .eq('id', id)
-        .single();
-
+      const { data, error } = await supabase.from(TABLES.BOOKSHELVES)
+        .select('*').eq('id', id).single();
       if (error) throw error;
-
-      return { data: shelfWithBooks(data), error: null };
+      const books = await booksService.getBooksByShelf(id);
+      if (books.error) throw new Error(books.error.message);
+      return { data: { ...data, books: books.data || [] } as Bookshelf & { books: Book[] }, error: null };
     } catch (error) {
       return {
         data: null,
@@ -236,7 +229,7 @@ class BookshelvesService {
    */
   async getBookshelvesWithPreviews(
     previewLimit: number | null = 3
-  ): Promise<ApiResponse<(Bookshelf & { books: Book[] })[]>> {
+  ): Promise<ApiResponse<PreviewShelf[]>> {
     try {
       const { data: session } = await supabase.auth.getSession();
       if (!session.session?.user) {
@@ -248,7 +241,7 @@ class BookshelvesService {
       // rows are trimmed by Postgres rather than downloaded and sliced here.
       let query = supabase
         .from(TABLES.BOOKSHELVES)
-        .select(`*, bookshelf_items(${PREVIEW_ITEM_SELECT})`)
+        .select(`*, bookshelf_items(${PREVIEW_ITEM_SELECT}), item_count:bookshelf_items(count)` )
         .eq('user_id', session.session.user.id)
         .order('position', { ascending: true });
 
@@ -267,6 +260,7 @@ class BookshelvesService {
         const shelf = shelfWithBooks(raw);
         return {
           ...shelf,
+          book_count: raw.item_count?.[0]?.count ?? shelf.books.length,
           books:
             previewLimit === null ? shelf.books : shelf.books.slice(0, previewLimit),
         };
@@ -379,10 +373,7 @@ class BookshelvesService {
    */
   async deleteBookshelf(id: string): Promise<ApiResponse<null>> {
     try {
-      // Delete all bookshelf_items on this shelf
-      await supabase.from(TABLES.BOOKSHELF_ITEMS).delete().eq('shelf_id', id);
-
-      // Then delete the bookshelf
+      // The foreign key cascades items in the same transaction.
       const { error } = await supabase
         .from(TABLES.BOOKSHELVES)
         .delete()
@@ -457,7 +448,7 @@ class BookshelvesService {
       const { data: userById, error: userByIdError } = await supabase
         .from(TABLES.USERS)
         .select('id, name, public_username')
-        .eq('id', userId)
+        .eq(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId) ? 'id' : 'public_username', userId)
         .maybeSingle();
 
       if (userByIdError) throw userByIdError;
@@ -480,7 +471,8 @@ class BookshelvesService {
           null;
       }
 
-      const targetUserId = resolvedUser?.id || userId;
+      if (!resolvedUser) throw new Error('User not found');
+      const targetUserId = resolvedUser.id;
 
       // Get this user's public shelves, then their preview books separately.
       // Books are capped per shelf: the profile renders one preview row per

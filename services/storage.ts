@@ -172,14 +172,18 @@ class StorageService {
     bookId: string
   ): Promise<ApiResponse<string>> {
     try {
-      const fileName = `${bookId}/cover.jpg`;
+      const { data: session, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      const userId = session.session?.user.id;
+      if (!userId) throw new Error('Not authenticated');
+      const fileName = `${userId}/${bookId}/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
       const contentType = this.sniffImageContentType(base64);
 
       const { data, error } = await supabase.storage
         .from(STORAGE_BUCKETS.BOOK_COVERS)
         .upload(fileName, decode(base64), {
           contentType,
-          upsert: true,
+          upsert: false,
         });
 
       if (error) throw error;
@@ -615,7 +619,7 @@ async function resolveBucketImageUrl(
     // Non-Supabase absolute URL (e.g. an external CDN) is used as-is.
     const path = isFullUrl
       ? extractStoragePathFromUrl(imageUrlOrPath, bucket)
-      : imageUrlOrPath;
+      : imageUrlOrPath.split('?')[0];
 
     if (!path) {
       return imageUrlOrPath;

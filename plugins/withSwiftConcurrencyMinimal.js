@@ -15,6 +15,7 @@ const path = require("path");
  * equivalent form that older compilers accept.
  */
 const withSwiftConcurrencyMinimal = (config) => {
+  if (process.env.TINYSHELVES_LEGACY_IOS_PATCH !== '1' || process.env.EAS_BUILD_PROFILE === 'production') return config;
   // 1. Set the build setting on all Xcode project configurations
   config = withXcodeProject(config, (config) => {
     const project = config.modResults;
