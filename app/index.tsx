@@ -19,7 +19,7 @@ const ONBOARDING_COMPLETE_KEY = 'onboarding_complete';
 
 export default function Index() {
   const { colors } = useTheme();
-  const { isAuthenticated, isLoading, authError, restartAnonymousSession } = useAuth();
+  const { isAuthenticated, isLoading, authError, retryAuth } = useAuth();
   const [isRetryingAuth, setIsRetryingAuth] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
@@ -27,13 +27,15 @@ export default function Index() {
   useEffect(() => {
     AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY).then((value) => {
       setHasCompletedOnboarding(value === 'true');
-      setOnboardingChecked(true);
-    });
+    }).catch(() => {
+      // A storage read failure must not leave the splash visible forever.
+      setHasCompletedOnboarding(false);
+    }).finally(() => setOnboardingChecked(true));
   }, []);
 
   const handleRetryAuth = async () => {
     setIsRetryingAuth(true);
-    await restartAnonymousSession();
+    await retryAuth();
     setIsRetryingAuth(false);
   };
 
@@ -55,7 +57,7 @@ export default function Index() {
           <View style={styles.logoContainer}>
             <Text style={styles.logoText}>Couldn't start your session</Text>
             <Text style={styles.tagline}>
-              {authError || 'Anonymous sign-in failed. Check your Supabase Auth trigger and users table migration.'}
+              {authError || 'We could not connect. Check your connection and try again.'}
             </Text>
           </View>
 

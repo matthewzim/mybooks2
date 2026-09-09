@@ -183,12 +183,12 @@ export function BrowseBooksModal({
             if (book.image_url) {
               try {
                 resolvedUrl = await getSpineImageUrl(book.image_url);
-              } catch {}
+              } catch { /* Missing images render as placeholders. */ }
             }
             if (book.cover_image_url) {
               try {
                 coverUrl = await getCoverImageUrl(book.cover_image_url);
-              } catch {}
+              } catch { /* Missing images render as placeholders. */ }
             }
             return {
               id: book.id,

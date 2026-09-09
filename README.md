@@ -1,3 +1,5 @@
+> **Pre-release audit:** See [the audit and deployment requirements](docs/PRE_RELEASE_AUDIT.md) before building or applying SQL. The original schema examples below are historical; the hardened client requires the new migrations and Edge Functions. Paid API keys now belong only in server secrets.
+
 # TinyShelves
 
 A React Native + Expo iOS app for creating and managing virtual bookshelves. Users can organize their book collections, scan book spines, browse community uploads, and display their favorite shelf on their home screen with an iOS widget.
@@ -355,10 +357,10 @@ npm test
 | `EXPO_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key |
 | `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` | RevenueCat public SDK key for iOS (`appl_...`) |
-| `EXPO_PUBLIC_ISBNDB_API_KEY` | ISBNdb key for book search and cover lookups (required for those features) |
+| `ISBNDB_API_KEY` | ISBNdb key for book search and cover lookups (required for those features) |
 | `EXPO_PUBLIC_ISBNDB_BASE_URL` | Optional ISBNdb base URL override for Premium/Pro tiers (default `https://api2.isbndb.com`) |
 | `EXPO_PUBLIC_ISBNDB_REQUESTS_PER_SECOND` | Optional ISBNdb rate limit matching the subscription tier (default `1`) |
-| `EXPO_PUBLIC_GOOGLE_CLOUD_VISION_API_KEY` | Optional Vision key for spine OCR auto-fill |
+| `GOOGLE_CLOUD_VISION_API_KEY` | Optional Vision key for spine OCR auto-fill |
 
 ### Environment variables in EAS builds
 

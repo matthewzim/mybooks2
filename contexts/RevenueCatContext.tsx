@@ -78,6 +78,8 @@ export function RevenueCatProvider({
     useState<PurchasesOffering | null>(null);
 
   // Track previous isPro to avoid redundant syncs
+  const currentUserIdRef = useRef(user?.id);
+  currentUserIdRef.current = user?.id;
   const prevIsProRef = useRef<boolean | null>(null);
 
   /**
@@ -86,6 +88,7 @@ export function RevenueCatProvider({
    * so all UI surfaces reflect the current subscription state.
    */
   const processCustomerInfo = useCallback((info: CustomerInfo) => {
+    if (!user?.id || currentUserIdRef.current !== user.id) return;
     setCustomerInfo(info);
     const { isActive } = revenueCatService.extractProEntitlement(info);
     setIsPro(isActive);
@@ -94,57 +97,46 @@ export function RevenueCatProvider({
     // Keep Supabase and auth context in sync
     if (prevIsProRef.current !== isActive) {
       prevIsProRef.current = isActive;
-      revenueCatService.syncPremiumStatus(isActive).then(() => refreshUser());
+      revenueCatService.syncPremiumStatus().then(() => refreshUser()).catch(() => {
+        prevIsProRef.current = null;
+        console.warn('Premium sync pending; it will retry on refresh');
+      });
     }
-  }, [refreshUser]);
+  }, [refreshUser, user?.id]);
 
   /**
    * Initialize RevenueCat and fetch initial data.
    */
   useEffect(() => {
+    let disposed = false;
     let unsubscribe: (() => void) | undefined;
-
+    setIsReady(false);
+    setIsPro(false);
+    setCustomerInfo(null);
+    setCurrentOffering(null);
+    prevIsProRef.current = null;
+    void widgetManager.syncPremiumStatus(false);
+    if (!user?.id) return;
+    const id = user.id;
     const init = async () => {
       try {
-        // Initialize SDK with the Supabase user ID if available
-        await revenueCatService.initialize(user?.id);
-
-        // If we have a user ID, log in so purchases are tied to this user
-        if (user?.id) {
-          try {
-            const info = await revenueCatService.logIn(user.id);
-            processCustomerInfo(info);
-          } catch {
-            // logIn can fail if already logged in with same ID — fall back to getCustomerInfo
-            const info = await revenueCatService.getCustomerInfo();
-            processCustomerInfo(info);
-          }
-        } else {
-          const info = await revenueCatService.getCustomerInfo();
-          processCustomerInfo(info);
-        }
-
-        // Fetch offerings
+        await revenueCatService.initialize(id);
+        const info = await revenueCatService.logIn(id);
+        if (disposed) return;
+        processCustomerInfo(info);
+        unsubscribe = revenueCatService.onCustomerInfoUpdated(processCustomerInfo);
         const offering = await revenueCatService.getOfferings();
-        setCurrentOffering(offering);
-
-        // Listen for real-time updates (e.g. subscription renewal, expiry)
-        unsubscribe = revenueCatService.onCustomerInfoUpdated((info) => {
-          processCustomerInfo(info);
-        });
-
-        setIsReady(true);
+        if (!disposed) {
+          setCurrentOffering(offering);
+          setIsReady(true);
+        }
       } catch (error) {
+        // Do not use customer info from a previous identity after login fails.
         console.error('RevenueCat initialization failed:', error);
-        setIsReady(true); // Mark ready even on error so the app doesn't hang
       }
     };
-
-    init();
-
-    return () => {
-      unsubscribe?.();
-    };
+    void init();
+    return () => { disposed = true; unsubscribe?.(); };
   }, [user?.id, processCustomerInfo]);
 
   /**
@@ -153,16 +145,17 @@ export function RevenueCatProvider({
   const handlePurchase = useCallback(
     async (pkg: PurchasesPackage): Promise<boolean> => {
       try {
+        if (!isReady || !user?.id) throw new Error('Purchases are not ready. Please retry.');
         const { customerInfo: info, cancelled } =
           await revenueCatService.purchasePackage(pkg);
         processCustomerInfo(info);
-        return !cancelled;
+        return !cancelled && revenueCatService.extractProEntitlement(info).isActive;
       } catch (error) {
         console.error('Purchase failed:', error);
         throw error;
       }
     },
-    [processCustomerInfo]
+    [processCustomerInfo, isReady, user?.id]
   );
 
   /**
@@ -170,6 +163,7 @@ export function RevenueCatProvider({
    */
   const handleRestore = useCallback(async (): Promise<boolean> => {
     try {
+      if (!isReady || !user?.id) throw new Error('Purchases are not ready. Please retry.');
       const info = await revenueCatService.restorePurchases();
       processCustomerInfo(info);
       const { isActive } = revenueCatService.extractProEntitlement(info);
@@ -178,12 +172,13 @@ export function RevenueCatProvider({
       console.error('Restore failed:', error);
       throw error;
     }
-  }, [processCustomerInfo]);
+  }, [processCustomerInfo, isReady, user?.id]);
 
   /**
    * Refresh all data from RevenueCat.
    */
   const refresh = useCallback(async () => {
+    if (!isReady || !user?.id) return;
     try {
       const [info, offering] = await Promise.all([
         revenueCatService.getCustomerInfo(),
@@ -194,7 +189,7 @@ export function RevenueCatProvider({
     } catch (error) {
       console.error('RevenueCat refresh failed:', error);
     }
-  }, [processCustomerInfo]);
+  }, [processCustomerInfo, isReady, user?.id]);
 
   const contextValue = useMemo<RevenueCatContextType>(
     () => ({

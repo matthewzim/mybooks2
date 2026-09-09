@@ -128,6 +128,7 @@ export default function HomeScreen() {
                 key={shelf.id}
                 bookshelf={shelf}
                 books={shelf.books}
+                totalBooks={shelf.book_count}
                 onPress={handleBookshelfPress}
               />
             ))}

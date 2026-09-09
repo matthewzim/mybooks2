@@ -9,13 +9,12 @@ const { withInfoPlist } = require("expo/config-plugins");
  * even if other plugins touch ATS settings.
  *
  * The ATS exceptions are only applied to development builds. On EAS the
- * build profile is exposed as EAS_BUILD_PROFILE; local `expo run:ios` /
- * `expo prebuild` runs have no profile set and are treated as development.
+ * build profile is exposed as EAS_BUILD_PROFILE; local builds must explicitly set the development profile to enable HTTP.
  * Preview and production builds get the iOS default (HTTPS only) so the
  * shipped binary never carries NSAllowsArbitraryLoads, which App Review
  * flags and which would require a justification during submission.
  */
-const DEV_PROFILES = [undefined, "", "development"];
+const DEV_PROFILES = ["development"];
 
 const withAllowHTTPDevServer = (config) => {
   return withInfoPlist(config, (config) => {
@@ -27,7 +26,11 @@ const withAllowHTTPDevServer = (config) => {
       };
     } else {
       // Make sure nothing merged earlier leaves the flag on in release builds.
-      delete config.modResults.NSAppTransportSecurity;
+      const ats = config.modResults.NSAppTransportSecurity;
+      if (ats) {
+        delete ats.NSAllowsArbitraryLoads;
+        delete ats.NSAllowsArbitraryLoadsInWebContent;
+      }
     }
     return config;
   });

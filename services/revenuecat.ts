@@ -40,7 +40,7 @@ import { supabase } from './supabase';
  */
 const REVENUECAT_API_KEY =
   process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ||
-  'test_JICfTmnFPOhNQTrUxXCLhXNIqTO';
+  (__DEV__ ? 'test_JICfTmnFPOhNQTrUxXCLhXNIqTO' : '');
 
 /**
  * The entitlement identifier configured in RevenueCat dashboard.
@@ -84,6 +84,7 @@ export const PREMIUM_FEATURES = [
 
 class RevenueCatService {
   private isInitialized = false;
+  private identityQueue: Promise<unknown> = Promise.resolve();
 
   /**
    * Initialize the RevenueCat SDK.
@@ -93,18 +94,13 @@ class RevenueCatService {
    *                    If omitted, RevenueCat generates an anonymous ID.
    */
   async initialize(appUserID?: string): Promise<void> {
+    if (!__DEV__ && !REVENUECAT_API_KEY.startsWith('appl_')) throw new Error('App Store purchases are not configured');
     if (this.isInitialized) return;
 
     // react-native-purchases only supports native platforms.
     if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
       console.warn('RevenueCat is not supported on this platform; skipping initialization.');
       return;
-    }
-
-    if (!REVENUECAT_API_KEY.startsWith('appl_') && !__DEV__) {
-      console.warn(
-        'RevenueCat is using a test store API key. Set EXPO_PUBLIC_REVENUECAT_IOS_API_KEY to your production key before release.'
-      );
     }
 
     try {
@@ -129,7 +125,9 @@ class RevenueCatService {
    * This merges any anonymous purchase history into the identified user.
    */
   async logIn(appUserID: string): Promise<CustomerInfo> {
-    const { customerInfo } = await Purchases.logIn(appUserID);
+    const login = this.identityQueue.then(() => Purchases.logIn(appUserID));
+    this.identityQueue = login.catch(() => {});
+    const { customerInfo } = await login;
     return customerInfo;
   }
 
@@ -227,7 +225,7 @@ class RevenueCatService {
       const { customerInfo } = await Purchases.purchasePackage(pkg);
       // Sync premium status to Supabase after successful purchase
       const { isActive } = this.extractProEntitlement(customerInfo);
-      await this.syncPremiumStatus(isActive);
+      void this.syncPremiumStatus().catch(() => console.warn('Premium sync pending'));
       return { customerInfo, cancelled: false };
     } catch (error: any) {
       if (error.userCancelled) {
@@ -246,7 +244,7 @@ class RevenueCatService {
   async restorePurchases(): Promise<CustomerInfo> {
     const customerInfo = await Purchases.restorePurchases();
     const { isActive } = this.extractProEntitlement(customerInfo);
-    await this.syncPremiumStatus(isActive);
+    void this.syncPremiumStatus().catch(() => console.warn('Premium sync pending'));
     return customerInfo;
   }
 
@@ -257,21 +255,9 @@ class RevenueCatService {
   /**
    * Keep the Supabase `users.is_premium` flag in sync with RevenueCat state.
    */
-  async syncPremiumStatus(isPremium: boolean): Promise<void> {
-    try {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session?.user) return;
-
-      await (supabase
-        .from('users') as any)
-        .update({
-          is_premium: isPremium,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', session.session.user.id);
-    } catch (error) {
-      console.error('Failed to sync premium status to Supabase:', error);
-    }
+  async syncPremiumStatus(_isPremium?: boolean): Promise<void> {
+    const { error } = await supabase.functions.invoke('sync-premium');
+    if (error) throw error;
   }
 
   // ------------------------------------------

@@ -523,7 +523,7 @@ export default function SettingsScreen() {
 
     Alert.alert(
       'Delete Account',
-      'This permanently deletes your account, bookshelves, uploaded books, images, widget data, and onboarding progress.',
+      'This permanently deletes your account and personal content. Stored images are queued for deletion. Apple subscriptions continue billing until cancelled; manage your subscription in Apple Settings.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

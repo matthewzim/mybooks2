@@ -1,0 +1,33 @@
+name: Release checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test -- --runInBand
+      - run: npx expo install --check
+      - run: npx expo export --platform ios --output-dir /tmp/ios-export
+        env:
+          EXPO_NO_CACHE: '1'
+      - run: npx expo export --platform web --max-workers 2 --output-dir /tmp/web-export
+        env:
+          EXPO_NO_CACHE: '1'
+      - run: npm audit --audit-level=high
+  edge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno check --config supabase/functions/deno.json supabase/functions/book-api/index.ts supabase/functions/sync-premium/index.ts supabase/functions/revenuecat-webhook/index.ts supabase/functions/storage-cleanup/index.ts

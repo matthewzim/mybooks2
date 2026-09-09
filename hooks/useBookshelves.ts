@@ -21,6 +21,7 @@ import type {
 
 interface BookshelfWithBooks extends Bookshelf {
   books: Book[];
+  book_count?: number;
 }
 
 interface UseBookshelvesReturn {
@@ -57,7 +58,7 @@ export function useBookshelves(): UseBookshelvesReturn {
     setError(null);
 
     try {
-      const result = await bookshelvesService.getBookshelvesWithPreviews(null);
+      const result = await bookshelvesService.getBookshelvesWithPreviews(40);
 
       if (result.error) {
         setError(result.error.message);

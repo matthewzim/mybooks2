@@ -60,42 +60,9 @@ class AuthService {
       const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
 
       if (authError) throw authError;
-      if (!authData.user) throw new Error('Anonymous sign-in failed');
+      if (!authData.user || !authData.session) throw new Error('Anonymous sign-in failed');
 
-      // Generate a bookish profile name and a unique public username
-      const profileName = generateBookishName();
-      let publicUsername = generateBookishUsername();
-
-      // Ensure the public_username is unique (retry up to 5 times on collision)
-      const MAX_USERNAME_RETRIES = 5;
-      for (let i = 0; i < MAX_USERNAME_RETRIES; i++) {
-        const { data: existing } = await supabase
-          .from(TABLES.USERS)
-          .select('id')
-          .eq('public_username', publicUsername)
-          .limit(1);
-
-        if (!existing || existing.length === 0) break;
-        publicUsername = generateBookishUsername();
-      }
-
-      // Upsert the user profile in the users table
-      const { data: profile, error: profileError } = await supabase
-        .from(TABLES.USERS)
-        .upsert(
-          {
-            id: authData.user.id,
-            name: profileName,
-            public_username: publicUsername,
-          },
-          { onConflict: 'id' }
-        )
-        .select()
-        .single();
-
-      if (profileError) {
-        console.error('Profile upsert failed:', profileError);
-      }
+      const profile = await this.ensureProfile(authData.user.id);
 
       return {
         data: {
@@ -113,6 +80,22 @@ class AuthService {
         },
       };
     }
+  }
+
+  private async ensureProfile(id: string): Promise<User> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { data: existing, error: readError } = await supabase.from(TABLES.USERS)
+        .select('*').eq('id', id).maybeSingle();
+      if (readError) throw readError;
+      if (existing) return existing as User;
+      const { data, error } = await supabase.from(TABLES.USERS).insert({
+        id, name: generateBookishName(), public_username: generateBookishUsername(),
+      }).select().single();
+      if (!error && data) return data as User;
+      // Retry a username collision or concurrent trigger/profile repair.
+      if (error?.code !== '23505') throw error ?? new Error('Profile unavailable');
+    }
+    throw new Error('Could not create your profile. Please retry.');
   }
 
   /**
@@ -174,13 +157,7 @@ class AuthService {
         return { data: null, error: null };
       }
 
-      const { data: profile, error } = await supabase
-        .from(TABLES.USERS)
-        .select('*')
-        .eq('id', session.session.user.id)
-        .single();
-
-      if (error) throw error;
+      const profile = await this.ensureProfile(session.session.user.id);
 
       return { data: profile as User, error: null };
     } catch (error) {
@@ -278,7 +255,7 @@ class AuthService {
       callback(event, session as Session | null);
     });
 
-    return data.subscription.unsubscribe;
+    return () => data.subscription.unsubscribe();
   }
 }
 

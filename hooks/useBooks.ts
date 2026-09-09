@@ -34,6 +34,7 @@ interface UseBooksReturn {
 }
 
 export function useBooks(shelfId: string): UseBooksReturn {
+  const fetchVersion = useRef(0);
   const [books, setBooks] = useState<Book[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +53,8 @@ export function useBooks(shelfId: string): UseBooksReturn {
    * Fetch all books on the shelf
    */
   const fetchBooks = useCallback(async () => {
-    if (!shelfId) return;
+    const version = ++fetchVersion.current;
+    if (!shelfId) { setBooks([]); setIsLoading(false); return; }
 
     setLoadingState('loading');
     setIsLoading(true);
@@ -60,6 +62,7 @@ export function useBooks(shelfId: string): UseBooksReturn {
 
     try {
       const result = await booksService.getBooksByShelf(shelfId);
+      if (version !== fetchVersion.current) return;
 
       if (result.error) {
         setError(result.error.message);
@@ -69,10 +72,11 @@ export function useBooks(shelfId: string): UseBooksReturn {
         setLoadingState('success');
       }
     } catch (err) {
+      if (version !== fetchVersion.current) return;
       setError('Failed to fetch books');
       setLoadingState('error');
     } finally {
-      setIsLoading(false);
+      if (version === fetchVersion.current) setIsLoading(false);
     }
   }, [shelfId]);
 
@@ -275,7 +279,8 @@ export function useBooks(shelfId: string): UseBooksReturn {
 
   // Fetch books when shelfId changes
   useEffect(() => {
-    fetchBooks();
+    void fetchBooks();
+    return () => { fetchVersion.current += 1; };
   }, [fetchBooks]);
 
   // Pre-fetch and cache ISBNdb covers in the background for books
