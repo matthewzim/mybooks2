@@ -360,6 +360,7 @@ export interface Database {
       };
     };
     Functions: {
+      mutate_bookshelf_item: { Args: { p_item_id: string; p_action: string; p_target_id?: string; p_position?: number }; Returns: Json };
       create_book_on_shelf: { Args: { p_input: Json }; Returns: Json };
       get_community_books: {
         Args: {

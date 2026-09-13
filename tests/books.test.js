@@ -28,3 +28,19 @@ test('book creation uses one transactional RPC and surfaces rollback',async()=>{
  expect(supabase.rpc).toHaveBeenCalledWith('create_book_on_shelf',expect.any(Object));
  expect(supabase.from).not.toHaveBeenCalled();
 });
+test.each([
+ ['moveBookToShelf',['i','s'],{p_item_id:'i',p_action:'move',p_target_id:'s',p_position:undefined}],
+ ['stackBookOnTop',['i','t'],{p_item_id:'i',p_action:'stack',p_target_id:'t'}],
+ ['unstackBook',['i'],{p_item_id:'i',p_action:'unstack'}],
+ ['deleteBook',['i'],{p_item_id:'i',p_action:'delete'}],
+])('%s uses one atomic RPC and surfaces failures',async(method,args,input)=>{
+ supabase.rpc.mockResolvedValue({error:{message:'Transaction rolled back'}});
+ expect((await booksService[method](...args)).error.message).toBe('Transaction rolled back');
+ expect(supabase.rpc).toHaveBeenCalledWith('mutate_bookshelf_item',input);
+ expect(supabase.from).not.toHaveBeenCalled();
+});
+test('missing reorder RPC cannot trigger partial fallback writes',async()=>{
+ supabase.rpc.mockResolvedValue({error:{code:'PGRST202',message:'Migration required'}});
+ expect((await booksService.reorderBooks('s',['a','b'])).error.message).toBe('Migration required');
+ expect(supabase.from).not.toHaveBeenCalled();
+});

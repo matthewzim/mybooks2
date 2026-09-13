@@ -23,7 +23,6 @@ import {
   handleSupabaseError,
   escapeLikePattern,
   ilikeFilter,
-  isMissingFunctionError,
 } from './supabase';
 import { bookDedupeKey, isbndbService } from './isbndb';
 import { normalizeAuthorName, normalizeBookTitle } from '@/utils/bookText';
@@ -363,10 +362,9 @@ class BooksService {
    */
   async deleteBook(id: string): Promise<ApiResponse<null>> {
     try {
-      const { error } = await supabase
-        .from(TABLES.BOOKSHELF_ITEMS)
-        .delete()
-        .eq('id', id);
+      const { error } = await supabase.rpc('mutate_bookshelf_item', {
+        p_item_id: id, p_action: 'delete',
+      });
 
       if (error) throw error;
 
@@ -392,40 +390,8 @@ class BooksService {
     newPosition?: number
   ): Promise<ApiResponse<Book>> {
     try {
-      let position = newPosition;
-      if (position === undefined) {
-        const { data: existingItems } = await supabase
-          .from(TABLES.BOOKSHELF_ITEMS)
-          .select('position')
-          .eq('shelf_id', newShelfId)
-          .order('position', { ascending: false })
-          .limit(1);
-
-        position =
-          existingItems && existingItems.length > 0
-            ? existingItems[0].position + 1
-            : 0;
-      }
-
-      const { data, error } = await supabase
-        .from(TABLES.BOOKSHELF_ITEMS)
-        .update({
-          shelf_id: newShelfId,
-          is_stacked: false,
-          stack_id: null,
-          stack_position: 0,
-          position: position,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', bookId)
-        .select(`
-          *,
-          book:books(*)
-        `)
-        .single();
-
+      const { data, error } = await supabase.rpc('mutate_bookshelf_item', { p_item_id: bookId, p_action: 'move', p_target_id: newShelfId, p_position: newPosition });
       if (error) throw error;
-
       return { data: toBook(data), error: null };
     } catch (error) {
       return {
@@ -460,23 +426,7 @@ class BooksService {
         p_item_ids: orderedIds,
       });
 
-      if (error && !isMissingFunctionError(error)) throw error;
-
-      if (error) {
-        // RPC not deployed yet — keep the old path but check the results.
-        const results = await Promise.all(
-          orderedIds.map((id, index) =>
-            supabase
-              .from(TABLES.BOOKSHELF_ITEMS)
-              .update({ position: index })
-              .eq('id', id)
-              .eq('shelf_id', shelfId)
-          )
-        );
-
-        const failure = results.find((result) => result.error);
-        if (failure?.error) throw failure.error;
-      }
+      if (error) throw error;
 
       return { data: null, error: null };
     } catch (error) {
@@ -900,62 +850,8 @@ class BooksService {
     targetBookId: string
   ): Promise<ApiResponse<Book>> {
     try {
-      // Get the target item to find its stack
-      const { data: targetItem, error: targetError } = await supabase
-        .from(TABLES.BOOKSHELF_ITEMS)
-        .select('*')
-        .eq('id', targetBookId)
-        .single();
-
-      if (targetError) throw targetError;
-
-      // Determine the stack_id - use existing or create new from target item id
-      const stackId = targetItem.stack_id || targetBookId;
-
-      // Get the current max stack_position in this stack
-      const { data: stackItems } = await supabase
-        .from(TABLES.BOOKSHELF_ITEMS)
-        .select('stack_position')
-        .or(`id.eq.${targetBookId},stack_id.eq.${stackId}`)
-        .order('stack_position', { ascending: false })
-        .limit(1);
-
-      const nextStackPosition =
-        stackItems && stackItems.length > 0
-          ? (stackItems[0].stack_position || 0) + 1
-          : 1;
-
-      // If target item doesn't have a stack_id, update it first
-      if (!targetItem.stack_id) {
-        await supabase
-          .from(TABLES.BOOKSHELF_ITEMS)
-          .update({
-            stack_id: stackId,
-            stack_position: 0,
-            is_stacked: true,
-          })
-          .eq('id', targetBookId);
-      }
-
-      // Update the item being stacked
-      const { data, error } = await supabase
-        .from(TABLES.BOOKSHELF_ITEMS)
-        .update({
-          stack_id: stackId,
-          stack_position: nextStackPosition,
-          is_stacked: true,
-          position: targetItem.position,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', bookId)
-        .select(`
-          *,
-          book:books(*)
-        `)
-        .single();
-
+      const { data, error } = await supabase.rpc('mutate_bookshelf_item', { p_item_id: bookId, p_action: 'stack', p_target_id: targetBookId });
       if (error) throw error;
-
       return { data: toBook(data), error: null };
     } catch (error) {
       return {
@@ -973,72 +869,9 @@ class BooksService {
    */
   async unstackBook(bookId: string): Promise<ApiResponse<Book>> {
     try {
-      // Get the item's current stack info
-      const { data: item, error: itemError } = await supabase
-        .from(TABLES.BOOKSHELF_ITEMS)
-        .select(`
-          *,
-          book:books(*)
-        `)
-        .eq('id', bookId)
-        .single();
-
-      if (itemError) throw itemError;
-
-      if (!item.stack_id) {
-        return { data: toBook(item), error: null };
-      }
-
-      // Check how many items are left in this stack
-      const { data: stackItems, error: countError } = await supabase
-        .from(TABLES.BOOKSHELF_ITEMS)
-        .select('id, stack_position')
-        .eq('stack_id', item.stack_id);
-
-      if (countError) throw countError;
-
-      // Remove this item from the stack
-      const { data: updatedItem, error: updateError } = await supabase
-        .from(TABLES.BOOKSHELF_ITEMS)
-        .update({
-          stack_id: null,
-          stack_position: 0,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', bookId)
-        .select(`
-          *,
-          book:books(*)
-        `)
-        .single();
-
-      if (updateError) throw updateError;
-
-      // If only one item left in stack, clear its stack_id too
-      const remainingItems = stackItems.filter((b) => b.id !== bookId);
-      if (remainingItems.length === 1) {
-        await supabase
-          .from(TABLES.BOOKSHELF_ITEMS)
-          .update({
-            stack_id: null,
-            stack_position: 0,
-          })
-          .eq('id', remainingItems[0].id);
-      } else if (remainingItems.length > 1) {
-        const sortedRemaining = remainingItems.sort(
-          (a, b) => (a.stack_position || 0) - (b.stack_position || 0)
-        );
-        await Promise.all(
-          sortedRemaining.map((b, index) =>
-            supabase
-              .from(TABLES.BOOKSHELF_ITEMS)
-              .update({ stack_position: index })
-              .eq('id', b.id)
-          )
-        );
-      }
-
-      return { data: toBook(updatedItem), error: null };
+      const { data, error } = await supabase.rpc('mutate_bookshelf_item', { p_item_id: bookId, p_action: 'unstack' });
+      if (error) throw error;
+      return { data: toBook(data), error: null };
     } catch (error) {
       return {
         data: null,

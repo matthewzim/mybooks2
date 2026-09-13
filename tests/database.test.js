@@ -100,3 +100,40 @@ test('account deletion preserves another user placement and queues images transa
   expect((await db.query('SELECT * FROM storage_cleanup_queue')).rows).toHaveLength(2);
   await expect(asUser(A,`INSERT INTO storage.objects(bucket_id,name) VALUES ('book-spines','${A}/late.jpg')`)).rejects.toThrow(/Account no longer exists/);
 });
+test('free limits apply to direct writes, expired/unverified premium, and transactional moves',async()=>{
+ const C='dddddddd-dddd-4ddd-addd-dddddddddddd';
+ await db.exec(`INSERT INTO auth.users VALUES ('${C}')`);
+ const shelves=(await asUser(C,`INSERT INTO bookshelves(user_id,name) SELECT '${C}','S'||n FROM generate_series(1,3) n RETURNING id`)).rows;
+ await expect(asUser(C,`INSERT INTO bookshelves(user_id,name) VALUES ('${C}','Fourth')`)).rejects.toThrow(/3 bookshelves/);
+ const source=shelves[0].id,dest=shelves[1].id;
+ // Use a fresh shared book: the earlier deletion fixture removes A's attribution.
+ const b=(await db.query(`INSERT INTO books(title,author,uploaded_by_user_id,is_community) VALUES ('Quota','A','${C}',true) RETURNING id`)).rows[0].id;
+ await asUser(C,`INSERT INTO bookshelf_items(book_id,shelf_id) SELECT '${b}','${dest}' FROM generate_series(1,50)`);
+ await expect(asUser(C,`INSERT INTO bookshelf_items(book_id,shelf_id) VALUES ('${b}','${dest}')`)).rejects.toThrow(/50 books/);
+ const item=(await asUser(C,`INSERT INTO bookshelf_items(book_id,shelf_id) VALUES ('${b}','${source}') RETURNING id`)).rows[0].id;
+ await expect(asUser(C,`SELECT mutate_bookshelf_item('${item}','move','${dest}')`)).rejects.toThrow(/50 books/);
+ expect((await asUser(C,`SELECT shelf_id FROM bookshelf_items WHERE id='${item}'`)).rows[0].shelf_id).toBe(source);
+ await db.exec(`UPDATE users SET is_premium=true,premium_checked_at=NULL WHERE id='${C}'`);
+ await expect(asUser(C,`INSERT INTO bookshelves(user_id,name) VALUES ('${C}','Unverified')`)).rejects.toThrow(/3 bookshelves/);
+ await db.exec(`UPDATE users SET premium_checked_at=now(),premium_expires_at=now()-interval '1 second' WHERE id='${C}'`);
+ await expect(asUser(C,`INSERT INTO bookshelves(user_id,name) VALUES ('${C}','Expired')`)).rejects.toThrow(/3 bookshelves/);
+ await db.exec(`UPDATE users SET premium_expires_at=now()+interval '1 day' WHERE id='${C}'`);
+ await asUser(C,`INSERT INTO bookshelf_items(book_id,shelf_id) VALUES ('${b}','${dest}')`);
+ await db.exec(`UPDATE users SET is_premium=false WHERE id='${C}'`);
+ expect((await asUser(C,`UPDATE bookshelf_items SET review='Still editable' WHERE shelf_id='${dest}' RETURNING id`)).rows).toHaveLength(51);
+ await asUser(C,`DELETE FROM bookshelf_items WHERE shelf_id='${dest}'`);
+});
+test('stack mutations validate targets and repair singleton stacks atomically',async()=>{
+ const rows=(await asUser(B,`SELECT id FROM bookshelf_items WHERE shelf_id='${shelfB}' ORDER BY position`)).rows;
+ const [x,y,z]=rows.map(r=>r.id);
+ await expect(asUser(B,`SELECT mutate_bookshelf_item('${x}','stack','${x}')`)).rejects.toThrow(/another book/);
+ await asUser(B,`SELECT mutate_bookshelf_item('${x}','stack','${y}')`);
+ await asUser(B,`SELECT mutate_bookshelf_item('${z}','stack','${y}')`);
+ await asUser(B,`SELECT mutate_bookshelf_item('${z}','stack','${y}')`); // retry is a no-op
+ expect((await asUser(B,`SELECT stack_position FROM bookshelf_items WHERE shelf_id='${shelfB}' ORDER BY stack_position`)).rows.map(r=>r.stack_position)).toEqual([0,1,2]);
+ await asUser(B,`SELECT mutate_bookshelf_item('${x}','unstack')`);
+ await asUser(B,`SELECT mutate_bookshelf_item('${z}','delete')`);
+ expect((await asUser(B,`SELECT stack_id,is_stacked,stack_position FROM bookshelf_items WHERE shelf_id='${shelfB}'`)).rows).toEqual([
+  {stack_id:null,is_stacked:false,stack_position:0},{stack_id:null,is_stacked:false,stack_position:0},
+ ]);
+});

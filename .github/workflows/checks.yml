@@ -31,3 +31,30 @@ jobs:
         with:
           deno-version: v2.x
       - run: deno check --config supabase/functions/deno.json supabase/functions/book-api/index.ts supabase/functions/sync-premium/index.ts supabase/functions/revenuecat-webhook/index.ts supabase/functions/storage-cleanup/index.ts
+
+  concurrency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: library_concurrency_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: test-only
+      PGDATABASE: library_concurrency_test
+      PGOPTIONS: '-c statement_timeout=20000'
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/test-concurrency.py
