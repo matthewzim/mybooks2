@@ -409,20 +409,7 @@ class BookshelvesService {
         p_shelf_ids: orderedIds,
       });
 
-      if (error && !isMissingFunctionError(error)) throw error;
-
-      if (error) {
-        // RPC not deployed yet — fall back to per-row updates, but surface
-        // failures instead of swallowing them.
-        const results = await Promise.all(
-          orderedIds.map((id, index) =>
-            supabase.from(TABLES.BOOKSHELVES).update({ position: index }).eq('id', id)
-          )
-        );
-
-        const failure = results.find((result) => result.error);
-        if (failure?.error) throw failure.error;
-      }
+      if (error) throw error;
 
       return { data: null, error: null };
     } catch (error) {
