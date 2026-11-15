@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, Settings } from 'react-native';
 import type { WidgetData, WidgetBookshelf, Bookshelf, Book } from '@/types';
 import { getSpineWidgetUrls } from '@/services/storage';
+import { getSpineImageRef } from '@/utils/placeholderSpine';
 
 const WIDGET_DATA_KEY = '@tinyshelves_widget_data';
 const WIDGET_SELECTED_SHELF_KEY = '@tinyshelves_widget_shelf';
@@ -188,7 +189,7 @@ class WidgetManager {
 
     const unresolved = trimmed.flatMap(({ books }) =>
       books
-        .map((b) => b.image_url)
+        .map((b) => getSpineImageRef(b))
         .filter((url): url is string => !!url && !reusableUrls.has(url))
     );
 
@@ -204,15 +205,17 @@ class WidgetManager {
       name: shelf.name,
       cover_color: shelf.cover_color,
       shelf_style: shelf.shelf_style,
-      books: books.map((b) => ({
-        id: b.id,
-        title: b.title,
-        author: b.author,
-        image_url: b.image_url,
-        resolved_image_url: b.image_url
-          ? resolvedByUrl.get(b.image_url) ?? null
-          : null,
-      })),
+      books: books.map((b) => {
+        // A real spine photo when there is one, otherwise the AI spine.
+        const spineRef = getSpineImageRef(b);
+        return {
+          id: b.id,
+          title: b.title,
+          author: b.author,
+          image_url: spineRef,
+          resolved_image_url: spineRef ? resolvedByUrl.get(spineRef) ?? null : null,
+        };
+      }),
     }));
   }
 

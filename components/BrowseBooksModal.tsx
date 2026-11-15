@@ -333,9 +333,12 @@ export function BrowseBooksModal({
           const spinesResult = await booksService.getAlternativeSpines(addedBook);
           const hasCommunitySpines = (spinesResult.data || []).length > 0;
 
+          // An AI spine stands in for the placeholder when one exists.
+          const addedTitle = addedBook.ai_spine_url ? 'Added' : 'Added with Placeholder Spine';
+
           if (hasCommunitySpines) {
             Alert.alert(
-              'Added with Placeholder Spine',
+              addedTitle,
               `"${book.title}" was added to your shelf, but it doesn't have a spine photo yet. Want to pick a spine image from the community?`,
               [
                 { text: 'Not Now', style: 'cancel' },
@@ -344,7 +347,7 @@ export function BrowseBooksModal({
             );
           } else {
             Alert.alert(
-              'Added with Placeholder Spine',
+              addedTitle,
               `"${book.title}" was added to your shelf. No community spine photos exist for it yet — you can scan or upload one from the book's edit screen.`
             );
           }

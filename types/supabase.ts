@@ -108,6 +108,7 @@ export interface Database {
           title: string;
           author: string;
           image_url: string | null;
+          ai_spine_path: string | null;
           cover_image_url: string | null;
           uploaded_by_user_id: string | null;
           is_community: boolean;
@@ -120,6 +121,7 @@ export interface Database {
           title: string;
           author: string;
           image_url?: string | null;
+          ai_spine_path?: string | null;
           cover_image_url?: string | null;
           uploaded_by_user_id?: string | null;
           is_community?: boolean;
@@ -132,6 +134,7 @@ export interface Database {
           title?: string;
           author?: string;
           image_url?: string | null;
+          ai_spine_path?: string | null;
           cover_image_url?: string | null;
           uploaded_by_user_id?: string | null;
           is_community?: boolean;

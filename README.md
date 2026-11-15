@@ -247,6 +247,28 @@ CREATE POLICY "Authenticated upload" ON storage.objects
   );
 ```
 
+### AI-generated spines
+
+A book with no real spine photo shows an AI-generated spine when one exists,
+and the cloth placeholder otherwise. AI spines are kept apart from community
+spines: they live in the `ai-book-spines` bucket and the `ai_book_spines`
+table (both created by `supabase/migrations/202611150001_ai_book_spines.sql`,
+both read-only to app users) and are never written to `books.image_url`, so
+nothing that lists community spines can return one. The database matches them
+to books by ISBN or title/author and exposes the result as
+`books.ai_spine_path`.
+
+To add them, with the service-role key in your shell (never in the app):
+
+```bash
+node scripts/upload-ai-spines.mjs missing > manifest.csv   # books with no spine, most-added first
+node scripts/upload-ai-spines.mjs upload ./spines manifest.csv
+```
+
+Fill in the `file` column of the manifest for each image you generated; rows
+without a file are skipped. Use portrait, spine-shaped JPEG/WebP/PNG images
+and keep them small, since a shelf loads many at once.
+
 ### 4. Enable Auth Providers
 
 In Supabase Auth settings, enable:

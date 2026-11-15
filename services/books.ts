@@ -26,6 +26,7 @@ import {
 } from './supabase';
 import { bookDedupeKey, isbndbService } from './isbndb';
 import { normalizeAuthorName, normalizeBookTitle } from '@/utils/bookText';
+import { getAiSpinePublicUrl } from './aiSpines';
 import type {
   Book,
   CommunityBookSpine,
@@ -64,6 +65,7 @@ function toBook(row: any): Book {
     title: book.title ?? row.title ?? 'Untitled',
     author: book.author ?? row.author ?? 'Unknown Author',
     image_url: book.image_url ?? row.image_url ?? null,
+    ai_spine_url: getAiSpinePublicUrl(book.ai_spine_path ?? row.ai_spine_path),
     cover_image_url: book.cover_image_url ?? row.cover_image_url ?? null,
     isbn: book.isbn ?? row.isbn ?? null,
     uploaded_by_user_id: book.uploaded_by_user_id ?? row.uploaded_by_user_id ?? '',

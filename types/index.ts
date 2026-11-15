@@ -91,7 +91,13 @@ export interface Book {
   book_id: string;      // books.id (global book reference)
   title: string;
   author: string;
+  /** A real spine photo (own upload or community). Never an AI spine. */
   image_url: string | null;
+  /**
+   * Public URL of the AI-generated spine for this book, if one exists. Shown
+   * only when `image_url` is null — read it through `getSpineImageRef`.
+   */
+  ai_spine_url?: string | null;
   cover_image_url: string | null;
   shelf_id: string;
   position: number;

@@ -19,6 +19,7 @@ import {
   isMissingFunctionError,
 } from './supabase';
 import { booksService } from './books';
+import { getAiSpinePublicUrl } from './aiSpines';
 import type {
   Bookshelf,
   Book,
@@ -53,6 +54,7 @@ const PREVIEW_ITEM_SELECT = `
     title,
     author,
     image_url,
+    ai_spine_path,
     cover_image_url,
     isbn,
     uploaded_by_user_id,
@@ -84,6 +86,7 @@ function itemToBook(item: any): Book {
     title: book.title ?? '',
     author: book.author ?? '',
     image_url: book.image_url ?? null,
+    ai_spine_url: getAiSpinePublicUrl(book.ai_spine_path),
     cover_image_url: book.cover_image_url ?? null,
     isbn: book.isbn ?? null,
     uploaded_by_user_id: book.uploaded_by_user_id ?? '',

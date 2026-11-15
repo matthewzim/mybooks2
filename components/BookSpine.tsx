@@ -32,6 +32,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { getSpineCloth } from '@/utils/spineCloth';
 import type { Book } from '@/types';
+import { getSpineImageRef } from '@/utils/placeholderSpine';
 
 interface BookSpineProps {
   book: Book;
@@ -59,8 +60,8 @@ function BookSpineComponent({
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
 
-  // Get the book spine image URL from the book-spines bucket
-  const spineImageUrl = useSpineImageUrl(book.image_url);
+  // A real spine photo when the book has one, otherwise its AI spine
+  const spineImageUrl = useSpineImageUrl(getSpineImageRef(book));
   const hasImage = Boolean(spineImageUrl) && !hasError;
   const cloth = getSpineCloth(book.title);
   const displayTitle = book.title?.trim() || 'Untitled';
@@ -157,6 +158,7 @@ export const BookSpine = React.memo(
     prev.onPress === next.onPress &&
     prev.book.id === next.book.id &&
     prev.book.image_url === next.book.image_url &&
+    prev.book.ai_spine_url === next.book.ai_spine_url &&
     prev.book.title === next.book.title &&
     prev.book.author === next.book.author
 );

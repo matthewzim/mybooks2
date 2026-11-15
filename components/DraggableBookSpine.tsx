@@ -34,6 +34,7 @@ import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { getSpineCloth } from '@/utils/spineCloth';
 import type { Book } from '@/types';
 import type { BookPosition } from './EditableBookshelfGrid';
+import { getSpineImageRef } from '@/utils/placeholderSpine';
 
 interface DraggableBookSpineProps {
   book: Book;
@@ -163,7 +164,7 @@ export function DraggableBookSpine({
   });
 
   // Get the book spine image URL from the book-spines bucket
-  const spineImageUrl = useSpineImageUrl(book.image_url);
+  const spineImageUrl = useSpineImageUrl(getSpineImageRef(book));
   const hasValidUrl = Boolean(spineImageUrl);
   const displayTitle = book.title?.trim() || 'Untitled';
   const cloth = getSpineCloth(displayTitle);

@@ -45,6 +45,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getClothColor } from '@/utils/spineCloth';
 import { normalizeAuthorName, normalizeBookTitle } from '@/utils/bookText';
 import type { Book, CommunityBookSpine } from '@/types';
+import { getSpineImageRef } from '@/utils/placeholderSpine';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_MAX_HEIGHT = Math.min(SCREEN_HEIGHT * 0.88, 720);
@@ -160,7 +161,7 @@ export function BookDetailModal({
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
-  const resolvedSpineImageUrl = useSpineImageUrl(book?.image_url);
+  const resolvedSpineImageUrl = useSpineImageUrl(getSpineImageRef(book));
 
   useEffect(() => {
     if (book) {
