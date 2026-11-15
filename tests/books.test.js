@@ -44,3 +44,24 @@ test('missing reorder RPC cannot trigger partial fallback writes',async()=>{
  expect((await booksService.reorderBooks('s',['a','b'])).error.message).toBe('Migration required');
  expect(supabase.from).not.toHaveBeenCalled();
 });
+test('spine options list real photos first (current one kept), then the AI spine',async()=>{
+ const rows=[{id:'b1',title:'T',author:'A',image_url:'u1/a.jpg',created_at:'2',users:{name:'Ann'}},
+  {id:'b2',title:'T',author:'A',image_url:'u1/a.jpg',created_at:'1',users:null},
+  {id:'b3',title:'T',author:'A',image_url:'u2/b.jpg',created_at:'0',users:null}];
+ const q={select:()=>q,not:()=>q,order:()=>q,limit:()=>q,eq:()=>q,then:resolve=>Promise.resolve({data:rows,error:null}).then(resolve)};
+ supabase.from.mockReturnValue(q);
+ const book={title:'T',author:'A',isbn:null,image_url:'u1/a.jpg',ai_spine_url:'https://x/ai.webp'};
+ const options=(await booksService.getSpineOptions(book)).data;
+ expect(options.map(o=>[o.kind,o.image_url])).toEqual([['community','u1/a.jpg'],['community','u2/b.jpg'],['ai','https://x/ai.webp']]);
+ expect((await booksService.getSpineOptions({...book,ai_spine_url:null})).data.map(o=>o.kind)).toEqual(['community','community']);
+ // The "other spines" list used elsewhere never includes the AI spine or the current photo.
+ expect((await booksService.getAlternativeSpines(book)).data.map(o=>o.image_url)).toEqual(['u2/b.jpg']);
+});
+test('the drawn spine is the photo, unless the owner chose the AI spine or there is no photo',()=>{
+ const {getSpineImageRef}=require('../utils/placeholderSpine');
+ expect(getSpineImageRef({image_url:'p',ai_spine_url:'ai'})).toBe('p');
+ expect(getSpineImageRef({image_url:'p',ai_spine_url:'ai',use_ai_spine:true})).toBe('ai');
+ expect(getSpineImageRef({image_url:'p',ai_spine_url:null,use_ai_spine:true})).toBe('p');
+ expect(getSpineImageRef({image_url:null,ai_spine_url:'ai'})).toBe('ai');
+ expect(getSpineImageRef({image_url:null,ai_spine_url:null})).toBeNull();
+});

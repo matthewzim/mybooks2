@@ -30,6 +30,7 @@ import { getAiSpinePublicUrl } from './aiSpines';
 import type {
   Book,
   CommunityBookSpine,
+  SpineOption,
   CreateBookInput,
   UpdateBookInput,
   ApiResponse,
@@ -77,6 +78,7 @@ function toBook(row: any): Book {
     is_stacked: row.is_stacked ?? false,
     stack_id: row.stack_id ?? null,
     stack_position: row.stack_position ?? 0,
+    use_ai_spine: row.use_ai_spine ?? false,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -251,6 +253,10 @@ class BooksService {
       if (updates.is_stacked !== undefined) itemUpdates.is_stacked = updates.is_stacked;
       if (updates.stack_id !== undefined) itemUpdates.stack_id = updates.stack_id;
       if (updates.stack_position !== undefined) itemUpdates.stack_position = updates.stack_position;
+      if (updates.use_ai_spine !== undefined) itemUpdates.use_ai_spine = updates.use_ai_spine;
+      // A newly scanned or uploaded photo is the spine the user now wants,
+      // even if they had picked the AI spine before.
+      else if (updates.image_url) itemUpdates.use_ai_spine = false;
 
       // If we have global book updates, get the book_id and update the books table
       if (Object.keys(bookUpdates).length > 0) {
@@ -699,6 +705,21 @@ class BooksService {
   async getAlternativeSpines(
     book: Pick<Book, 'book_id' | 'title' | 'author' | 'isbn' | 'image_url'>
   ): Promise<ApiResponse<CommunityBookSpine[]>> {
+    const result = await this.getCommunitySpines(book);
+    if (!result.data) return result;
+    return {
+      data: result.data.filter((item) => item.image_url !== book.image_url),
+      error: null,
+    };
+  }
+
+  /**
+   * Every distinct real spine photo uploaded for a book, newest first,
+   * including the one the book currently uses.
+   */
+  private async getCommunitySpines(
+    book: Pick<Book, 'title' | 'author' | 'isbn'>
+  ): Promise<ApiResponse<CommunityBookSpine[]>> {
     try {
       // Bounded: a popular title accumulates a books row per user who added
       // it, and this query has no user filter at all — without a limit the
@@ -751,10 +772,62 @@ class BooksService {
         });
       }
 
+      return { data: alternatives, error: null };
+    } catch (error) {
       return {
-        data: alternatives.filter((item) => item.image_url !== book.image_url),
-        error: null,
+        data: null,
+        error: { message: handleSupabaseError(error) },
       };
+    }
+  }
+
+  /**
+   * The choices for a book's spine picker: real spine photos first (newest
+   * first), then the book's AI-generated spine when it has one. This is the
+   * only place the two are listed together — AI spines stay out of every
+   * community query.
+   */
+  async getSpineOptions(
+    book: Pick<Book, 'title' | 'author' | 'isbn' | 'ai_spine_url'>
+  ): Promise<ApiResponse<SpineOption[]>> {
+    const result = await this.getCommunitySpines(book);
+    if (!result.data) return { data: null, error: result.error };
+
+    const options: SpineOption[] = result.data.map((spine) => ({
+      key: `community:${spine.id}`,
+      kind: 'community',
+      image_url: spine.image_url as string,
+      community: spine,
+    }));
+    if (book.ai_spine_url) {
+      options.push({ key: 'ai', kind: 'ai', image_url: book.ai_spine_url });
+    }
+    return { data: options, error: null };
+  }
+
+  /**
+   * Apply a spine picker choice to a user's bookshelf item.
+   *
+   * The AI spine is a per-item preference (`use_ai_spine`); it never touches
+   * the book row, so the photo stays available to everyone else. Choosing a
+   * photo clears that preference.
+   */
+  async selectSpine(itemId: string, option: SpineOption): Promise<ApiResponse<Book>> {
+    if (option.kind === 'community' && option.community) {
+      return this.setBookSpineFromCommunity(itemId, option.community);
+    }
+    try {
+      // Either the AI spine, or the photo the book row already carries.
+      const { data, error } = await supabase
+        .from(TABLES.BOOKSHELF_ITEMS)
+        .update({ use_ai_spine: option.kind === 'ai', updated_at: new Date().toISOString() })
+        .eq('id', itemId)
+        .select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('Could not update the book spine. Please try again.');
+      }
+      return this.getBookById(itemId);
     } catch (error) {
       return {
         data: null,
@@ -812,6 +885,11 @@ class BooksService {
           .select('id');
 
         if (!bookError && updatedBooks && updatedBooks.length > 0) {
+          const { error: flagError } = await supabase
+            .from(TABLES.BOOKSHELF_ITEMS)
+            .update({ use_ai_spine: false, updated_at: new Date().toISOString() })
+            .eq('id', itemId);
+          if (flagError) throw flagError;
           return this.getBookById(itemId);
         }
         // RLS blocked the update — fall through to re-pointing the item.
@@ -821,6 +899,7 @@ class BooksService {
         .from(TABLES.BOOKSHELF_ITEMS)
         .update({
           book_id: option.id,
+          use_ai_spine: false,
           updated_at: new Date().toISOString(),
         })
         .eq('id', itemId)

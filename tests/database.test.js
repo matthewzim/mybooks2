@@ -163,6 +163,15 @@ describe('AI spines stay separate from community spines',()=>{
   await asUser(B,`UPDATE books SET title='Something Else', isbn=NULL WHERE id='${b}'`);
   expect((await aiPath(b)).ai_spine_path).toBeNull();
  });
+ test('choosing the AI spine is a per-item flag only the shelf owner can set',async()=>{
+  const created=(await asUser(B,`SELECT create_book_on_shelf('{"shelf_id":"${shelfB}","title":"The Hobbit","author":"J.R.R. Tolkien","image_url":"${B}/photo.jpg"}') AS r`)).rows[0].r;
+  expect(created.use_ai_spine).toBe(false);
+  expect((await asUser(A,`UPDATE bookshelf_items SET use_ai_spine=true WHERE id='${created.id}' RETURNING id`)).rows).toHaveLength(0);
+  expect((await asUser(B,`UPDATE bookshelf_items SET use_ai_spine=true WHERE id='${created.id}' RETURNING use_ai_spine`)).rows[0].use_ai_spine).toBe(true);
+  // The shared book row keeps its photo for everyone else.
+  expect(await aiPath(created.book.id)).toEqual({ai_spine_path:'hobbit.webp',image_url:`${B}/photo.jpg`});
+  await asUser(B,`SELECT mutate_bookshelf_item('${created.id}','delete')`);
+ });
  test('clients cannot set the path, read the table, or write the bucket',async()=>{
   const b=(await db.query(`INSERT INTO books(title,author,uploaded_by_user_id) VALUES ('Unmatched','Nobody','${B}') RETURNING id`)).rows[0].id;
   await asUser(B,`UPDATE books SET ai_spine_path='evil.png' WHERE id='${b}'`);

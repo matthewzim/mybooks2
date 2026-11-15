@@ -47,6 +47,7 @@ const PREVIEW_ITEM_SELECT = `
   is_stacked,
   stack_id,
   stack_position,
+  use_ai_spine,
   created_at,
   updated_at,
   book:books(
@@ -98,6 +99,7 @@ function itemToBook(item: any): Book {
     is_stacked: item.is_stacked ?? false,
     stack_id: item.stack_id ?? null,
     stack_position: item.stack_position ?? 0,
+    use_ai_spine: item.use_ai_spine ?? false,
     created_at: item.created_at,
     updated_at: item.updated_at,
   };

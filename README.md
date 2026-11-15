@@ -258,6 +258,12 @@ nothing that lists community spines can return one. The database matches them
 to books by ISBN or title/author and exposes the result as
 `books.ai_spine_path`.
 
+The spine picker in a book's edit view is the one place the two appear
+together: real spine photos first, then the AI spine. Choosing the AI spine
+over a photo is stored per shelf item (`bookshelf_items.use_ai_spine`,
+`supabase/migrations/202611150002_ai_spine_choice.sql`), so the shared book row
+and its photo are left alone.
+
 To add them, with the service-role key in your shell (never in the app):
 
 ```bash

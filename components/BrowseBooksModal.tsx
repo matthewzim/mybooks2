@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { booksService } from '@/services/books';
-import { CommunitySpineBrowserModal } from '@/components/CommunitySpineBrowserModal';
+import { SpinePickerModal } from '@/components/SpinePickerModal';
 import { Input } from '@/components/ui';
 import { BorderRadius, Spacing, Typography } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -83,7 +83,6 @@ export function BrowseBooksModal({
   // Book just added with a placeholder spine — target for the community
   // spine picker that we offer right after the add.
   const [spinePickerBook, setSpinePickerBook] = useState<Book | null>(null);
-  const [isApplyingSpine, setIsApplyingSpine] = useState(false);
 
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
@@ -99,7 +98,6 @@ export function BrowseBooksModal({
       setIsAdding(null);
       setIsClosing(false);
       setSpinePickerBook(null);
-      setIsApplyingSpine(false);
 
       overlayOpacity.setValue(0);
       cardOpacity.setValue(0);
@@ -359,10 +357,10 @@ export function BrowseBooksModal({
           const spinesResult = await booksService.getAlternativeSpines(addedBook);
           const otherSpines = spinesResult.data || [];
 
-          if (otherSpines.length > 0) {
+          if (otherSpines.length > 0 || addedBook.ai_spine_url) {
             Alert.alert(
               'Added',
-              `"${book.title}" was added to your shelf with an existing spine photo. Want to use a different one?`,
+              `"${book.title}" was added to your shelf with an existing spine photo. Want to choose a different spine?`,
               [
                 { text: 'Keep This Spine', style: 'cancel' },
                 { text: 'Choose Another', onPress: () => setSpinePickerBook(addedBook) },
@@ -382,24 +380,10 @@ export function BrowseBooksModal({
     }
   };
 
-  const handleSpinePicked = async (option: CommunityBookSpine) => {
-    if (!spinePickerBook || isApplyingSpine) return;
-
-    setIsApplyingSpine(true);
-    try {
-      const result = await booksService.setBookSpineFromCommunity(spinePickerBook.id, option);
-      if (result.data) {
-        onBookAdded();
-        setSpinePickerBook(null);
-        Alert.alert('Spine Updated', 'The selected community spine is now on your shelf.');
-      } else {
-        Alert.alert('Error', result.error?.message || 'Failed to apply the spine.');
-      }
-    } catch {
-      Alert.alert('Error', 'Failed to apply the spine.');
-    } finally {
-      setIsApplyingSpine(false);
-    }
+  const handleSpinePicked = (updated: Book) => {
+    // Keep the picker on the refreshed book so its tick follows the choice.
+    setSpinePickerBook(updated);
+    onBookAdded();
   };
 
   const handleAddBook = async (book: BookSearchResult) => {
@@ -542,12 +526,11 @@ export function BrowseBooksModal({
         </KeyboardAvoidingView>
       </Animated.View>
 
-      {/* Community spine picker for books added with a placeholder spine */}
-      <CommunitySpineBrowserModal
+      {/* Spine picker offered right after a book is added */}
+      <SpinePickerModal
         visible={spinePickerBook !== null}
         book={spinePickerBook}
-        isUpdatingSpine={isApplyingSpine}
-        onSelect={handleSpinePicked}
+        onBookUpdated={handleSpinePicked}
         onClose={() => setSpinePickerBook(null)}
       />
     </Modal>

@@ -159,6 +159,7 @@ export const BookSpine = React.memo(
     prev.book.id === next.book.id &&
     prev.book.image_url === next.book.image_url &&
     prev.book.ai_spine_url === next.book.ai_spine_url &&
+    prev.book.use_ai_spine === next.book.use_ai_spine &&
     prev.book.title === next.book.title &&
     prev.book.author === next.book.author
 );

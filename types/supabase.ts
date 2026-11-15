@@ -163,6 +163,7 @@ export interface Database {
           is_stacked: boolean;
           stack_id: string | null;
           stack_position: number;
+          use_ai_spine: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -176,6 +177,7 @@ export interface Database {
           is_stacked?: boolean;
           stack_id?: string | null;
           stack_position?: number;
+          use_ai_spine?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -189,6 +191,7 @@ export interface Database {
           is_stacked?: boolean;
           stack_id?: string | null;
           stack_position?: number;
+          use_ai_spine?: boolean;
           created_at?: string;
           updated_at?: string;
         };
