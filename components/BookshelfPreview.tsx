@@ -35,6 +35,7 @@ import {
 import { getSpineImageUrl } from '@/services/storage';
 import { SPINE_SHEEN_COLORS, SPINE_SHEEN_LOCATIONS } from '@/components/BookSpine';
 import type { Bookshelf, Book } from '@/types';
+import { getSpineImageRef } from '@/utils/placeholderSpine';
 
 /** Height of the tallest possible spine in a preview card */
 const PREVIEW_BOOK_HEIGHT = 132;
@@ -138,10 +139,11 @@ export function BookshelfPreview({ bookshelf, books, onPress, containerStyle, to
 
   useEffect(() => {
     firstRowBooks.forEach(({ book }) => {
-      if (!book.image_url || measureRequestedRef.current.has(book.id)) return;
+      const spineRef = getSpineImageRef(book);
+      if (!spineRef || measureRequestedRef.current.has(book.id)) return;
       measureRequestedRef.current.add(book.id);
 
-      getSpineImageUrl(book.image_url).then((url) => {
+      getSpineImageUrl(spineRef).then((url) => {
         if (!url || !isMountedRef.current) return;
 
         RNImage.getSize(
@@ -298,7 +300,7 @@ interface BookPreviewSpineProps {
 }
 
 function BookPreviewSpine({ book, width, height, measured }: BookPreviewSpineProps) {
-  const spineImageUrl = useSpineImageUrl(book.image_url);
+  const spineImageUrl = useSpineImageUrl(getSpineImageRef(book));
   const hasImage = !!spineImageUrl;
   const cloth = getSpineCloth(book.title);
 

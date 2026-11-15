@@ -19,6 +19,7 @@ import {
   isMissingFunctionError,
 } from './supabase';
 import { booksService } from './books';
+import { getAiSpinePublicUrl } from './aiSpines';
 import type {
   Bookshelf,
   Book,
@@ -46,6 +47,7 @@ const PREVIEW_ITEM_SELECT = `
   is_stacked,
   stack_id,
   stack_position,
+  use_ai_spine,
   created_at,
   updated_at,
   book:books(
@@ -53,6 +55,7 @@ const PREVIEW_ITEM_SELECT = `
     title,
     author,
     image_url,
+    ai_spine_path,
     cover_image_url,
     isbn,
     uploaded_by_user_id,
@@ -84,6 +87,7 @@ function itemToBook(item: any): Book {
     title: book.title ?? '',
     author: book.author ?? '',
     image_url: book.image_url ?? null,
+    ai_spine_url: getAiSpinePublicUrl(book.ai_spine_path),
     cover_image_url: book.cover_image_url ?? null,
     isbn: book.isbn ?? null,
     uploaded_by_user_id: book.uploaded_by_user_id ?? '',
@@ -95,6 +99,7 @@ function itemToBook(item: any): Book {
     is_stacked: item.is_stacked ?? false,
     stack_id: item.stack_id ?? null,
     stack_position: item.stack_position ?? 0,
+    use_ai_spine: item.use_ai_spine ?? false,
     created_at: item.created_at,
     updated_at: item.updated_at,
   };

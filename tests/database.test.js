@@ -137,3 +137,49 @@ test('stack mutations validate targets and repair singleton stacks atomically',a
   {stack_id:null,is_stacked:false,stack_position:0},{stack_id:null,is_stacked:false,stack_position:0},
  ]);
 });
+describe('AI spines stay separate from community spines',()=>{
+ const spine=(title,author,path,isbn)=>db.query(`INSERT INTO ai_book_spines(title,author,storage_path,isbn) VALUES ($1,$2,$3,$4) RETURNING id`,[title,author,path,isbn??null]);
+ const aiPath=async(id)=>(await db.query(`SELECT ai_spine_path,image_url FROM books WHERE id=$1`,[id])).rows[0];
+ test('a new AI spine reaches existing and future copies without touching image_url',async()=>{
+  const existing=(await db.query(`INSERT INTO books(title,author,uploaded_by_user_id) VALUES ('  the HOBBIT ','J.R.R. Tolkien','${B}') RETURNING id`)).rows[0].id;
+  expect((await aiPath(existing)).ai_spine_path).toBeNull();
+  await spine('The Hobbit','j.r.r. tolkien','hobbit.webp');
+  expect(await aiPath(existing)).toEqual({ai_spine_path:'hobbit.webp',image_url:null});
+  const created=(await asUser(B,`SELECT create_book_on_shelf('{"shelf_id":"${shelfB}","title":"The Hobbit","author":"J.R.R. Tolkien"}') AS r`)).rows[0].r;
+  expect(created.book.ai_spine_path).toBe('hobbit.webp');
+  expect(created.book.image_url).toBeNull();
+  await asUser(B,`SELECT mutate_bookshelf_item('${created.id}','delete')`);
+  // Nothing that reads "books with a spine photo" can see an AI spine.
+  expect((await db.query(`SELECT id FROM books WHERE image_url IS NOT NULL AND ai_spine_path IS NOT NULL`)).rows).toHaveLength(0);
+ });
+ test('an ISBN match wins, and edits and removals re-resolve',async()=>{
+  const b=(await db.query(`INSERT INTO books(title,author,isbn,uploaded_by_user_id) VALUES ('Dune (Deluxe)','Frank Herbert','9780441013593','${B}') RETURNING id`)).rows[0].id;
+  const byIsbn=(await spine('Dune','Frank Herbert','dune.webp','9780441013593')).rows[0].id;
+  expect((await aiPath(b)).ai_spine_path).toBe('dune.webp');
+  await spine('Dune (Deluxe)','Frank Herbert','dune-deluxe.webp');
+  expect((await aiPath(b)).ai_spine_path).toBe('dune.webp');
+  await db.query(`DELETE FROM ai_book_spines WHERE id=$1`,[byIsbn]);
+  expect((await aiPath(b)).ai_spine_path).toBe('dune-deluxe.webp');
+  await asUser(B,`UPDATE books SET title='Something Else', isbn=NULL WHERE id='${b}'`);
+  expect((await aiPath(b)).ai_spine_path).toBeNull();
+ });
+ test('choosing the AI spine is a per-item flag only the shelf owner can set',async()=>{
+  const created=(await asUser(B,`SELECT create_book_on_shelf('{"shelf_id":"${shelfB}","title":"The Hobbit","author":"J.R.R. Tolkien","image_url":"${B}/photo.jpg"}') AS r`)).rows[0].r;
+  expect(created.use_ai_spine).toBe(false);
+  expect((await asUser(A,`UPDATE bookshelf_items SET use_ai_spine=true WHERE id='${created.id}' RETURNING id`)).rows).toHaveLength(0);
+  expect((await asUser(B,`UPDATE bookshelf_items SET use_ai_spine=true WHERE id='${created.id}' RETURNING use_ai_spine`)).rows[0].use_ai_spine).toBe(true);
+  // The shared book row keeps its photo for everyone else.
+  expect(await aiPath(created.book.id)).toEqual({ai_spine_path:'hobbit.webp',image_url:`${B}/photo.jpg`});
+  await asUser(B,`SELECT mutate_bookshelf_item('${created.id}','delete')`);
+ });
+ test('clients cannot set the path, read the table, or write the bucket',async()=>{
+  const b=(await db.query(`INSERT INTO books(title,author,uploaded_by_user_id) VALUES ('Unmatched','Nobody','${B}') RETURNING id`)).rows[0].id;
+  await asUser(B,`UPDATE books SET ai_spine_path='evil.png' WHERE id='${b}'`);
+  expect((await aiPath(b)).ai_spine_path).toBeNull();
+  const forged=(await asUser(B,`INSERT INTO books(title,author,uploaded_by_user_id,ai_spine_path) VALUES ('Forged','Nobody','${B}','evil.png') RETURNING ai_spine_path`)).rows[0];
+  expect(forged.ai_spine_path).toBeNull();
+  await expect(asUser(B,`SELECT * FROM ai_book_spines`)).rejects.toThrow(/permission denied/);
+  await expect(asUser(B,`INSERT INTO ai_book_spines(title,author,storage_path) VALUES ('X','Y','x.png')`)).rejects.toThrow(/permission denied/);
+  await expect(asUser(B,`INSERT INTO storage.objects(bucket_id,name) VALUES ('ai-book-spines','${B}/x.png')`)).rejects.toThrow(/row-level security/);
+ });
+});

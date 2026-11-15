@@ -35,6 +35,7 @@ import {
   Shadows,
 } from '@/constants/theme';
 import type { Book } from '@/types';
+import { getSpineImageRef } from '@/utils/placeholderSpine';
 
 export default function BookDetailScreen() {
   const { id, shelfId } = useLocalSearchParams<{ id: string; shelfId: string }>();
@@ -204,9 +205,9 @@ export default function BookDetailScreen() {
           >
             {/* Book Spine Image */}
             <View style={styles.imageSection}>
-              {book.image_url ? (
+              {getSpineImageRef(book) ? (
                 <Image
-                  source={{ uri: book.image_url }}
+                  source={{ uri: getSpineImageRef(book)! }}
                   style={styles.bookImage}
                   contentFit="contain"
                 />

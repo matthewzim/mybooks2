@@ -91,7 +91,15 @@ export interface Book {
   book_id: string;      // books.id (global book reference)
   title: string;
   author: string;
+  /** A real spine photo (own upload or community). Never an AI spine. */
   image_url: string | null;
+  /**
+   * Public URL of the AI-generated spine for this book, if one exists. Shown
+   * only when `image_url` is null — read it through `getSpineImageRef`.
+   */
+  ai_spine_url?: string | null;
+  /** The owner picked the AI spine over the book's real spine photo. */
+  use_ai_spine?: boolean;
   cover_image_url: string | null;
   shelf_id: string;
   position: number;
@@ -119,6 +127,22 @@ export interface CommunityBookSpine {
   uploader_name: string | null;
   times_added: number;
   created_at: string;
+}
+
+/**
+ * One choice in a book's spine picker: a real spine photo (community or the
+ * user's own) or the book's AI-generated spine.
+ */
+export interface SpineOption {
+  key: string;
+  kind: 'community' | 'ai';
+  /** Storage path or URL to draw; resolve with `useSpineImageUrl`. */
+  image_url: string;
+  /**
+   * The books row carrying this photo. Absent for the AI spine, and for the
+   * book's current photo when it isn't among the fetched community rows.
+   */
+  community?: CommunityBookSpine;
 }
 
 /**
@@ -193,6 +217,7 @@ export interface UpdateBookInput {
   is_stacked?: boolean;
   stack_id?: string | null;
   stack_position?: number;
+  use_ai_spine?: boolean;
 }
 
 // ============================================

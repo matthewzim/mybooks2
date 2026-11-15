@@ -66,6 +66,8 @@ export const supabase: SupabaseClient<Database> = createClient<Database>(
  */
 export const STORAGE_BUCKETS = {
   BOOK_SPINES: 'book-spines',
+  /** Curated AI-generated spines. Read-only for clients; never a community spine. */
+  AI_BOOK_SPINES: 'ai-book-spines',
   BOOK_COVERS: 'book-covers',
   AVATARS: 'avatars',
 } as const;

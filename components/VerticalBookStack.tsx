@@ -20,6 +20,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { getSpineCloth } from '@/utils/spineCloth';
 import type { Book } from '@/types';
+import { getSpineImageRef } from '@/utils/placeholderSpine';
 
 interface VerticalBookStackProps {
   books: Book[]; // Books in the stack, sorted by stack_position
@@ -103,7 +104,7 @@ function StackedBookItem({
   onUnstackBook,
 }: StackedBookItemProps) {
   const { colors } = useTheme();
-  const spineImageUrl = useSpineImageUrl(book.image_url);
+  const spineImageUrl = useSpineImageUrl(getSpineImageRef(book));
   const hasValidUrl = Boolean(spineImageUrl);
   const displayTitle = book.title?.trim() || 'Untitled';
   const displayAuthor = book.author?.trim() || 'Unknown Author';

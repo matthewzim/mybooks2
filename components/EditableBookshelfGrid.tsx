@@ -50,6 +50,7 @@ import {
   getShelfSpineSize,
 } from '@/utils/shelfLayout';
 import type { Book, ShelfStyle } from '@/types';
+import { getSpineImageRef } from '@/utils/placeholderSpine';
 
 interface EditableBookshelfGridProps {
   books: Book[];
@@ -147,9 +148,10 @@ export function EditableBookshelfGrid({
   // Fetch natural image dimensions for all books with images
   useEffect(() => {
     localBooks.forEach((book) => {
-      if (book.image_url && !measureRequestedRef.current.has(book.id)) {
+      const spineRef = getSpineImageRef(book);
+      if (spineRef && !measureRequestedRef.current.has(book.id)) {
         measureRequestedRef.current.add(book.id);
-        getSpineImageUrl(book.image_url).then((url) => {
+        getSpineImageUrl(spineRef).then((url) => {
           if (!url || !isMountedRef.current) return;
           RNImage.getSize(
             url,
@@ -677,7 +679,7 @@ function StackedBookSpine({
   height,
 }: StackedBookSpineProps) {
   const { colors } = useTheme();
-  const spineImageUrl = useSpineImageUrl(book.image_url);
+  const spineImageUrl = useSpineImageUrl(getSpineImageRef(book));
   const hasValidUrl = Boolean(spineImageUrl);
   const displayTitle = book.title?.trim() || 'Untitled';
   const displayAuthor = book.author?.trim() || 'Unknown Author';

@@ -35,6 +35,7 @@ import {
 import { getSpineImageUrl } from '@/services/storage';
 import { getShelfAvailableWidth, getShelfHeight, getShelfSpineSize } from '@/utils/shelfLayout';
 import type { Book, ShelfStyle } from '@/types';
+import { getSpineImageRef } from '@/utils/placeholderSpine';
 
 interface BookshelfGridProps {
   books: Book[];
@@ -76,8 +77,9 @@ export function BookshelfGrid({
     let cancelled = false;
 
     books.forEach((book) => {
-      if (book.image_url && !imageDimensions[book.id]) {
-        getSpineImageUrl(book.image_url).then((url) => {
+      const spineRef = getSpineImageRef(book);
+      if (spineRef && !imageDimensions[book.id]) {
+        getSpineImageUrl(spineRef).then((url) => {
           if (cancelled || !url) return;
           RNImage.getSize(
             url,

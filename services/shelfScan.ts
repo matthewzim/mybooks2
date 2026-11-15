@@ -427,7 +427,9 @@ class ShelfScanService {
         // Count what actually landed on the shelf rather than what the review
         // screen predicted: creating a book also picks up an existing spine
         // upload (by ISBN, which the title/author pre-check can't see).
-        if (!result.data?.image_url) placeholders += 1;
+        // An AI spine fills in for the placeholder, so only count books that
+        // will really show one.
+        if (!result.data?.image_url && !result.data?.ai_spine_url) placeholders += 1;
       }
       onProgress?.(i + 1, matches.length);
     }

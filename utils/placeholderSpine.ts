@@ -4,6 +4,24 @@ const PLACEHOLDER_VARIATION_SCALE = 0.4;
 const IMAGE_SPINE_MIN_HEIGHT_FACTOR = 0.8;
 const IMAGE_SPINE_MAX_HEIGHT_FACTOR = 0.95;
 
+/**
+ * The image a book's spine is drawn from: a real spine photo when the book
+ * has one, otherwise its AI-generated spine, otherwise null (cloth
+ * placeholder). The owner can also pick the AI spine over a photo in the
+ * spine picker (`use_ai_spine`).
+ *
+ * Use this only to draw or measure a spine. Anything that asks "does this
+ * book have a real spine photo?" — community pickers, spine reuse — must keep
+ * reading `image_url` directly so AI spines never pass as community ones.
+ */
+export function getSpineImageRef(
+  book: Pick<Book, 'image_url' | 'ai_spine_url' | 'use_ai_spine'> | null | undefined
+): string | null {
+  if (!book) return null;
+  if (book.use_ai_spine && book.ai_spine_url) return book.ai_spine_url;
+  return book.image_url ?? book.ai_spine_url ?? null;
+}
+
 function seededNormalized(book: Book, salt: string): number {
   const source = `${book.id}-${book.title}-${salt}`;
   let hash = 0;
