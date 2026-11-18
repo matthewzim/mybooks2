@@ -13,7 +13,7 @@
  * - Casts a warm shadow onto the shelf plank (image and placeholder alike)
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -33,12 +33,16 @@ import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { getSpineCloth } from '@/utils/spineCloth';
 import type { Book } from '@/types';
 import { getSpineImageRef } from '@/utils/placeholderSpine';
+import { measureBookOrigin, type BookOrigin } from '@/utils/bookOrigin';
 
 interface BookSpineProps {
   book: Book;
-  onPress: (book: Book) => void;
+  /** Called with where the spine sits on screen, for the 3D lift-out */
+  onPress: (book: Book, origin?: BookOrigin) => void;
   width?: number;
   height?: number;
+  /** Hide the spine while the book is lifted off the shelf */
+  hidden?: boolean;
 }
 
 /** Horizontal sheen over the cloth so the spine reads as a rounded surface */
@@ -55,89 +59,128 @@ function BookSpineComponent({
   onPress,
   width = BookSpineConstants.width,
   height = BookSpineConstants.height,
+  hidden = false,
 }: BookSpineProps) {
-  const { colors } = useTheme();
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasError, setHasError] = useState(false);
-
-  // A real spine photo when the book has one, otherwise its AI spine
-  const spineImageUrl = useSpineImageUrl(getSpineImageRef(book));
-  const hasImage = Boolean(spineImageUrl) && !hasError;
-  const cloth = getSpineCloth(book.title);
+  const pressableRef = useRef<View>(null);
   const displayTitle = book.title?.trim() || 'Untitled';
   const displayAuthor = book.author?.trim() || 'Unknown Author';
 
-  // Rotated title runs along the spine height; leave breathing room at the ends
-  const titleLength = Math.max(40, height - 44);
-
   return (
     <Pressable
+      ref={pressableRef}
       style={({ pressed }) => [
         styles.container,
         { width, height },
         pressed && styles.pressed,
+        hidden && styles.hidden,
       ]}
-      onPress={() => onPress(book)}
+      onPress={() =>
+        measureBookOrigin(pressableRef.current, false, (origin) => onPress(book, origin))
+      }
       accessibilityRole="button"
       accessibilityLabel={`${displayTitle} by ${displayAuthor}`}
     >
       <View style={styles.spineBody}>
-        {hasImage ? (
-          // Book spine image from book-spines bucket
-          <View style={styles.imageContainer}>
-            <Image
-              source={{ uri: spineImageUrl! }}
-              style={styles.image}
-              // `cover`, not `contain`: the spine's box already carries the
-              // image's aspect ratio, so this only absorbs the sub-pixel
-              // remainder rather than letterboxing it into a gap between books.
-              contentFit="cover"
-              transition={200}
-              cachePolicy="memory-disk"
-              onLoadStart={() => setIsLoading(true)}
-              onLoadEnd={() => setIsLoading(false)}
-              onError={(error) => {
-                console.warn('BookSpine image load error:', book.title, error);
-                setHasError(true);
-                setIsLoading(false);
-              }}
-            />
-            {isLoading && (
-              <View style={[styles.loadingOverlay, { backgroundColor: colors.overlay }]}>
-                <ActivityIndicator size="small" color={colors.textOnDark} />
-              </View>
-            )}
-          </View>
-        ) : (
-          // Cloth-bound placeholder spine
-          <View style={[styles.placeholder, { backgroundColor: cloth.color }]}>
-            <LinearGradient
-              colors={SPINE_SHEEN_COLORS}
-              locations={SPINE_SHEEN_LOCATIONS}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={StyleSheet.absoluteFill}
-              pointerEvents="none"
-            />
-            <View style={[styles.giltBand, { top: 10, backgroundColor: cloth.bandColor }]} />
-            <View style={[styles.giltBand, { top: 14, backgroundColor: cloth.bandColor }]} />
-            <View style={[styles.giltBand, { bottom: 12, backgroundColor: cloth.bandColor }]} />
-            <Text
-              style={[
-                styles.placeholderTitle,
-                { color: cloth.titleColor, width: titleLength },
-                cloth.isLight && styles.placeholderTitleOnLight,
-              ]}
-              numberOfLines={2}
-              ellipsizeMode="tail"
-              maxFontSizeMultiplier={FIXED_GEOMETRY_MAX_FONT_SCALE}
-            >
-              {displayTitle}
-            </Text>
+        <SpineArt book={book} height={height} />
+      </View>
+    </Pressable>
+  );
+}
+
+interface SpineArtProps {
+  book: Book;
+  /** Spine height, used to size the rotated placeholder title */
+  height: number;
+  /** Show a spinner while the spine photo loads */
+  showLoading?: boolean;
+  /** Called once the art is drawn: the photo has loaded, or there is none */
+  onReady?: () => void;
+}
+
+/**
+ * The spine's artwork: the spine photo (or AI spine) when the book has one,
+ * otherwise a cloth-bound placeholder. Fills its parent. Shared by the shelf
+ * spine and the spine face of the 3D book viewer so the two always match.
+ */
+export function SpineArt({ book, height, showLoading = true, onReady }: SpineArtProps) {
+  const { colors } = useTheme();
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasError, setHasError] = useState(false);
+
+  const spineImageRef = getSpineImageRef(book);
+  const spineImageUrl = useSpineImageUrl(spineImageRef);
+
+  // A book with no spine photo is drawn as cloth straight away
+  useEffect(() => {
+    if (!spineImageRef) onReady?.();
+  }, [spineImageRef, onReady]);
+  const hasImage = Boolean(spineImageUrl) && !hasError;
+  const cloth = getSpineCloth(book.title);
+  const displayTitle = book.title?.trim() || 'Untitled';
+
+  // Rotated title runs along the spine height; leave breathing room at the ends
+  const titleLength = Math.max(40, height - 44);
+
+  if (hasImage) {
+    // Book spine image from book-spines bucket
+    return (
+      <View style={styles.imageContainer}>
+        <Image
+          source={{ uri: spineImageUrl! }}
+          style={styles.image}
+          // `cover`, not `contain`: the spine's box already carries the
+          // image's aspect ratio, so this only absorbs the sub-pixel
+          // remainder rather than letterboxing it into a gap between books.
+          contentFit="cover"
+          transition={200}
+          cachePolicy="memory-disk"
+          onLoadStart={() => setIsLoading(true)}
+          onLoadEnd={() => {
+            setIsLoading(false);
+            onReady?.();
+          }}
+          onError={(error) => {
+            console.warn('BookSpine image load error:', book.title, error);
+            setHasError(true);
+            setIsLoading(false);
+          }}
+        />
+        {showLoading && isLoading && (
+          <View style={[styles.loadingOverlay, { backgroundColor: colors.overlay }]}>
+            <ActivityIndicator size="small" color={colors.textOnDark} />
           </View>
         )}
       </View>
-    </Pressable>
+    );
+  }
+
+  // Cloth-bound placeholder spine
+  return (
+    <View style={[styles.placeholder, { backgroundColor: cloth.color }]}>
+      <LinearGradient
+        colors={SPINE_SHEEN_COLORS}
+        locations={SPINE_SHEEN_LOCATIONS}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <View style={[styles.giltBand, { top: 10, backgroundColor: cloth.bandColor }]} />
+      <View style={[styles.giltBand, { top: 14, backgroundColor: cloth.bandColor }]} />
+      <View style={[styles.giltBand, { bottom: 12, backgroundColor: cloth.bandColor }]} />
+      <Text
+        style={[
+          styles.placeholderTitle,
+          { color: cloth.titleColor, width: titleLength },
+          cloth.isLight && styles.placeholderTitleOnLight,
+        ]}
+        numberOfLines={2}
+        ellipsizeMode="tail"
+        maxFontSizeMultiplier={FIXED_GEOMETRY_MAX_FONT_SCALE}
+      >
+        {displayTitle}
+      </Text>
+    </View>
   );
 }
 
@@ -155,6 +198,7 @@ export const BookSpine = React.memo(
   (prev, next) =>
     prev.width === next.width &&
     prev.height === next.height &&
+    prev.hidden === next.hidden &&
     prev.onPress === next.onPress &&
     prev.book.id === next.book.id &&
     prev.book.image_url === next.book.image_url &&
@@ -186,6 +230,9 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.9,
     transform: [{ scale: 0.98 }],
+  },
+  hidden: {
+    opacity: 0,
   },
   imageContainer: {
     flex: 1,

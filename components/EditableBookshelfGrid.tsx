@@ -51,10 +51,14 @@ import {
 } from '@/utils/shelfLayout';
 import type { Book, ShelfStyle } from '@/types';
 import { getSpineImageRef } from '@/utils/placeholderSpine';
+import { measureBookOrigin, type BookOrigin } from '@/utils/bookOrigin';
 
 interface EditableBookshelfGridProps {
   books: Book[];
-  onBookPress: (book: Book) => void;
+  /** Called with where the tapped book sits on screen, for the 3D lift-out */
+  onBookPress: (book: Book, origin?: BookOrigin) => void;
+  /** Book currently lifted off the shelf into the 3D viewer; its spine is hidden */
+  hiddenBookId?: string | null;
   onAddBook?: () => void;
   isLoading?: boolean;
   isEditing: boolean;
@@ -92,6 +96,7 @@ export interface BookPosition {
 export function EditableBookshelfGrid({
   books,
   onBookPress,
+  hiddenBookId = null,
   onAddBook,
   isLoading = false,
   isEditing,
@@ -540,6 +545,7 @@ export function EditableBookshelfGrid({
                         stackWidth={stackBookHeight}
                         stackHeight={stackBookWidth}
                         onBookPress={onBookPress}
+                        hiddenBookId={hiddenBookId}
                         isEditing={isEditing}
                         onUnstackBook={handleUnstackBook}
                       />
@@ -584,6 +590,7 @@ export function EditableBookshelfGrid({
                         onPress={onBookPress}
                         width={layoutW}
                         height={layoutH}
+                        hidden={book.id === hiddenBookId}
                       />
                     ) : (
                       <BookSpine
@@ -591,6 +598,7 @@ export function EditableBookshelfGrid({
                         onPress={onBookPress}
                         width={layoutW}
                         height={layoutH}
+                        hidden={book.id === hiddenBookId}
                       />
                     )}
                   </View>
@@ -667,9 +675,10 @@ function ShelfPlank({ shelfColors }: { shelfColors: ShelfColors }) {
  */
 interface StackedBookSpineProps {
   book: Book;
-  onPress: (book: Book) => void;
+  onPress: (book: Book, origin?: BookOrigin) => void;
   width: number;
   height: number;
+  hidden?: boolean;
 }
 
 function StackedBookSpine({
@@ -677,8 +686,10 @@ function StackedBookSpine({
   onPress,
   width,
   height,
+  hidden = false,
 }: StackedBookSpineProps) {
   const { colors } = useTheme();
+  const pressableRef = React.useRef<View>(null);
   const spineImageUrl = useSpineImageUrl(getSpineImageRef(book));
   const hasValidUrl = Boolean(spineImageUrl);
   const displayTitle = book.title?.trim() || 'Untitled';
@@ -688,12 +699,16 @@ function StackedBookSpine({
 
   return (
     <Pressable
+      ref={pressableRef}
       style={({ pressed }) => [
         hasValidUrl ? styles.stackedBookImage : styles.stackedBook,
         { width, height },
         pressed && styles.pressed,
+        hidden && { opacity: 0 },
       ]}
-      onPress={() => onPress(book)}
+      onPress={() =>
+        measureBookOrigin(pressableRef.current, true, (origin) => onPress(book, origin))
+      }
       accessibilityRole="button"
       accessibilityLabel={`${displayTitle} by ${displayAuthor} (stacked)`}
     >

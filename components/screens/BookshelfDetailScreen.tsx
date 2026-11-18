@@ -33,6 +33,7 @@ import { LoadingView, EmptyState } from '@/components/ui';
 import { Spacing, Typography, BorderRadius, getSerifFontFamily, serifItalicStyle } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { Book, Bookshelf, ShelfStyle, UpdateBookshelfInput } from '@/types';
+import type { BookOrigin } from '@/utils/bookOrigin';
 
 export default function BookshelfDetailScreen() {
   const { colors } = useTheme();
@@ -44,6 +45,10 @@ export default function BookshelfDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  // Where the selected book sat on screen, so it lifts out of that slot
+  const [selectedBookOrigin, setSelectedBookOrigin] = useState<BookOrigin | null>(null);
+  // Book currently lifted off the shelf in 3D; its spine is hidden meanwhile
+  const [liftedBookId, setLiftedBookId] = useState<string | null>(null);
   const [isBookModalVisible, setIsBookModalVisible] = useState(false);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [isBrowseModalVisible, setIsBrowseModalVisible] = useState(false);
@@ -104,21 +109,23 @@ export default function BookshelfDetailScreen() {
    * Stable identity so the memoised spines in the grid aren't invalidated on
    * every render of this screen.
    */
-  const handleBookPress = useCallback((book: Book) => {
+  const handleBookPress = useCallback((book: Book, origin?: BookOrigin) => {
     if (clearSelectedBookTimerRef.current) {
       clearTimeout(clearSelectedBookTimerRef.current);
       clearSelectedBookTimerRef.current = null;
     }
     setSelectedBook(book);
+    setSelectedBookOrigin(origin ?? null);
     setIsBookModalVisible(true);
   }, []);
 
   /**
-   * Close book detail modal
+   * Close book detail modal. The modal calls this once the book is back on
+   * the shelf, so it can be hidden straight away.
    */
   const handleCloseBookModal = () => {
     setIsBookModalVisible(false);
-    // Small delay before clearing selected book to allow close animation
+    // Keep the book around briefly in case the modal is still unmounting
     clearSelectedBookTimerRef.current = setTimeout(() => {
       clearSelectedBookTimerRef.current = null;
       setSelectedBook(null);
@@ -453,6 +460,7 @@ export default function BookshelfDetailScreen() {
         <EditableBookshelfGrid
           books={books}
           onBookPress={handleBookPress}
+          hiddenBookId={liftedBookId}
           onAddBook={isOwner ? handleAddBook : undefined}
           isLoading={booksLoading}
           isEditing={isOwner ? isEditMode : false}
@@ -472,6 +480,8 @@ export default function BookshelfDetailScreen() {
           onBookUpdated={handleBookUpdated}
           onBookDeleted={handleBookDeleted}
           readOnly={!isOwner}
+          origin={selectedBookOrigin}
+          onLiftedChange={setLiftedBookId}
         />
 
         {/* Bookshelf Edit Modal */}

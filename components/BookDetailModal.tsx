@@ -1,7 +1,9 @@
 /**
  * BookDetailModal Component
  *
- * A minimal modal for viewing and editing book details.
+ * Opens a book from the shelf: the book lifts out of its slot as a 3D object
+ * (see Book3D) on the top half of the screen, over a details sheet for viewing
+ * and editing it. Closing flies the book back onto the shelf.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -24,13 +26,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { booksService } from '@/services/books';
 import { bookDedupeKey, isbndbService, needsCoverUpgrade } from '@/services/isbndb';
 import { getCoverImageUrl, storageService } from '@/services/storage';
 import { SpinePicker, type SpinePickerAction } from '@/components/SpinePicker';
+import { Book3D, type Book3DHandle, type Book3DStage } from '@/components/Book3D';
 import { Button, Rating } from '@/components/ui';
 import {
   BorderRadius,
@@ -41,15 +44,17 @@ import {
   serifItalicStyle,
 } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getClothColor } from '@/utils/spineCloth';
 import { normalizeAuthorName, normalizeBookTitle } from '@/utils/bookText';
+import type { BookOrigin } from '@/utils/bookOrigin';
 import type { Book } from '@/types';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
+// Editing needs room for the form, so the sheet grows over the 3D book
 const SHEET_MAX_HEIGHT = Math.min(SCREEN_HEIGHT * 0.88, 720);
-// Height of the drag-handle strip at the top of the sheet. In view mode the
-// scroll view slides under it so the cover shadow can bleed into that area.
-const SHEET_HANDLE_HEIGHT = Spacing.xs * 4 + 5;
+// Viewing keeps the sheet to the lower half, leaving the top for the 3D book
+const SHEET_VIEW_MAX_HEIGHT = Math.min(SCREEN_HEIGHT * 0.5, 460);
+// Delay before the sheet rises, so the book visibly leaves the shelf first
+const SHEET_OPEN_DELAY = 160;
 
 interface BookDetailModalProps {
   visible: boolean;
@@ -58,9 +63,14 @@ interface BookDetailModalProps {
   onBookUpdated?: (book: Book) => void;
   onBookDeleted?: (bookId: string) => void;
   readOnly?: boolean;
+  /** Where the tapped book sat on screen, so it can lift out of that spot */
+  origin?: BookOrigin | null;
+  /**
+   * Called with the book's id once it has left the shelf (hide its spine
+   * there) and with `null` once it is back in its slot.
+   */
+  onLiftedChange?: (bookId: string | null) => void;
 }
-
-const getBookColor = getClothColor;
 
 /** Identifies the text a book's cover image was last searched with. */
 function coverSearchKey(book: Pick<Book, 'book_id' | 'title' | 'author'>): string {
@@ -74,9 +84,24 @@ export function BookDetailModal({
   onBookUpdated,
   onBookDeleted,
   readOnly = false,
+  origin = null,
+  onLiftedChange,
 }: BookDetailModalProps) {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const book3DRef = useRef<Book3DHandle>(null);
+  const onLiftedChangeRef = useRef(onLiftedChange);
+  useEffect(() => {
+    onLiftedChangeRef.current = onLiftedChange;
+  }, [onLiftedChange]);
+
+  // The 3D book rests centred in the space above the details sheet
+  const bookStage = useMemo<Book3DStage>(() => {
+    const top = insets.top + Spacing.md;
+    const bottom = SCREEN_HEIGHT - SHEET_VIEW_MAX_HEIGHT - Spacing.md;
+    return { x: 0, y: top, width: SCREEN_WIDTH, height: Math.max(160, bottom - top) };
+  }, [insets.top]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -216,54 +241,82 @@ export function BookDetailModal({
     };
   }, [visible, book]);
 
-  // Slide the sheet up from the bottom of the screen when it opens
+  // Dim the shelf and slide the sheet up when a book opens. Keyed on the
+  // book's id rather than the object, so saving an edit (which hands back an
+  // updated book) doesn't replay the opening.
+  const openBookId = visible && book ? book.id : null;
   useEffect(() => {
-    if (visible && book) {
-      isClosingRef.current = false;
-      scrollOffsetRef.current = 0;
-      overlayOpacity.setValue(0);
-      cardTranslateY.setValue(SHEET_MAX_HEIGHT);
-
-      Animated.parallel([
-        Animated.timing(overlayOpacity, {
-          toValue: 1,
-          duration: 220,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(cardTranslateY, {
-          toValue: 0,
-          duration: 320,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [visible, book, overlayOpacity, cardTranslateY]);
-
-  // Slide the sheet back down off-screen, then notify the caller
-  const handleClose = useCallback(() => {
-    if (isClosingRef.current) return;
-    isClosingRef.current = true;
+    if (!openBookId) return;
+    isClosingRef.current = false;
+    scrollOffsetRef.current = 0;
+    overlayOpacity.setValue(0);
+    cardTranslateY.setValue(SHEET_MAX_HEIGHT);
 
     Animated.parallel([
       Animated.timing(overlayOpacity, {
-        toValue: 0,
-        duration: 200,
-        easing: Easing.in(Easing.quad),
+        toValue: 1,
+        duration: 320,
+        easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
       Animated.timing(cardTranslateY, {
-        toValue: SHEET_MAX_HEIGHT,
-        duration: 260,
-        easing: Easing.in(Easing.cubic),
+        toValue: 0,
+        duration: 380,
+        delay: SHEET_OPEN_DELAY,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      isClosingRef.current = false;
-      onCloseRef.current();
-    });
-  }, [overlayOpacity, cardTranslateY]);
+    ]).start();
+  }, [openBookId, overlayOpacity, cardTranslateY]);
+
+  const handleBookLifted = useCallback(() => {
+    if (book) onLiftedChangeRef.current?.(book.id);
+  }, [book]);
+
+  // Slide the sheet down and fly the book back onto the shelf, then notify
+  // the caller once both have finished. `vanish` fades the book out instead
+  // (used after a delete, when its slot is gone).
+  const handleClose = useCallback(
+    (options?: { vanish?: boolean }) => {
+      if (isClosingRef.current) return;
+      isClosingRef.current = true;
+      setIsEditing(false);
+
+      let pending = 2;
+      const finish = () => {
+        pending -= 1;
+        if (pending > 0) return;
+        isClosingRef.current = false;
+        // Show the shelf spine under the landed book before the modal goes,
+        // so there is never a frame with neither on screen.
+        onLiftedChangeRef.current?.(null);
+        onCloseRef.current();
+      };
+
+      Animated.parallel([
+        Animated.timing(overlayOpacity, {
+          toValue: 0,
+          duration: 520,
+          delay: 160,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(cardTranslateY, {
+          toValue: SHEET_MAX_HEIGHT,
+          duration: 260,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(finish);
+
+      if (book3DRef.current) {
+        book3DRef.current.putBack(finish, options);
+      } else {
+        finish();
+      }
+    },
+    [overlayOpacity, cardTranslateY]
+  );
 
   const springSheetBack = useCallback(() => {
     Animated.spring(cardTranslateY, {
@@ -384,7 +437,7 @@ export function BookDetailModal({
             const result = await booksService.deleteBook(book.id);
             if (!result.error) {
               onBookDeleted?.(book.id);
-              handleClose();
+              handleClose({ vanish: true });
             } else {
               Alert.alert('Error', result.error.message);
             }
@@ -503,18 +556,45 @@ export function BookDetailModal({
 
   const displayTitle = book.title?.trim() || 'Untitled';
   const displayAuthor = book.author?.trim() || 'Unknown Author';
-  const bookColor = getBookColor(displayTitle);
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
-      <Animated.View style={[styles.overlay, { opacity: overlayOpacity, backgroundColor: colors.overlay }]}>
-        <Pressable style={styles.backdropPress} onPress={handleClose} accessible={false} />
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={() => handleClose()}
+    >
+      <GestureHandlerRootView style={styles.root}>
+        <Animated.View
+          style={[styles.overlay, { opacity: overlayOpacity, backgroundColor: colors.overlayDark }]}
+          pointerEvents="none"
+        />
+        <Pressable
+          style={styles.backdropPress}
+          onPress={() => handleClose()}
+          accessibilityRole="button"
+          accessibilityLabel="Put the book back"
+        />
+
+        <Book3D
+          key={book.id}
+          ref={book3DRef}
+          book={book}
+          coverImageUrl={coverImageUrl}
+          isCoverLoading={isCoverLoading}
+          origin={origin}
+          stage={bookStage}
+          dimmed={isEditing}
+          onLifted={handleBookLifted}
+        />
 
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} pointerEvents="box-none" style={styles.keyboardView}>
           <Animated.View
             style={[
               styles.card,
               {
+                maxHeight: isEditing ? SHEET_MAX_HEIGHT : SHEET_VIEW_MAX_HEIGHT,
                 backgroundColor: colors.background,
                 transform: [{ translateY: cardTranslateY }],
               },
@@ -532,8 +612,8 @@ export function BookDetailModal({
             )}
 
             <ScrollView
-              style={[styles.scrollView, !isEditing && styles.scrollViewUnderHandle]}
-              contentContainerStyle={[styles.scrollContent, !isEditing && styles.scrollContentUnderHandle]}
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
               onScroll={(event) => {
@@ -627,40 +707,6 @@ export function BookDetailModal({
               ) : (
                 <>
                   <View style={styles.topSection}>
-                    <View style={styles.coverShadow}>
-                      <View style={styles.coverShell}>
-                        {coverImageUrl ? (
-                          <Image
-                            source={{ uri: coverImageUrl }}
-                            style={styles.coverImage}
-                            contentFit="cover"
-                            transition={200}
-                            onError={() => setCoverImageUrl(null)}
-                          />
-                        ) : isCoverLoading ? (
-                          <View style={[styles.coverImage, styles.thumbnailPlaceholder, { backgroundColor: bookColor }]}>
-                            <Text style={[styles.coverLoadingText, { color: colors.textOnDark }]}>Loading cover…</Text>
-                          </View>
-                        ) : (
-                          <View style={[styles.coverImage, styles.thumbnailPlaceholder, { backgroundColor: bookColor }]}>
-                            <Text style={[styles.placeholderInitial, { color: colors.textOnDark }]}>
-                              {displayTitle.charAt(0).toUpperCase()}
-                            </Text>
-                          </View>
-                        )}
-                        <LinearGradient
-                          colors={[
-                            'rgba(0, 0, 0, 0.28)',
-                            'rgba(255, 255, 255, 0.14)',
-                            'rgba(0, 0, 0, 0.16)',
-                          ]}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
-                          style={styles.spineEdge}
-                          pointerEvents="none"
-                        />
-                      </View>
-                    </View>
                     <Text style={[styles.bookTitle, { color: colors.text }]}>{displayTitle}</Text>
                     <Text style={[styles.bookAuthor, { color: colors.textSecondary }]}>by {displayAuthor}</Text>
                   </View>
@@ -735,26 +781,28 @@ export function BookDetailModal({
             </ScrollView>
           </Animated.View>
         </KeyboardAvoidingView>
-      </Animated.View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  root: {
     flex: 1,
-    justifyContent: 'flex-end',
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
   },
   backdropPress: {
     ...StyleSheet.absoluteFillObject,
   },
   keyboardView: {
+    flex: 1,
     width: '100%',
     justifyContent: 'flex-end',
   },
   card: {
     width: '100%',
-    maxHeight: SHEET_MAX_HEIGHT,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     overflow: 'hidden',
@@ -788,15 +836,6 @@ const styles = StyleSheet.create({
   scrollView: {
     flexGrow: 0,
   },
-  // In view mode the scroll view extends up under the drag handle so the
-  // cover shadow isn't clipped at the handle boundary; the extra content
-  // padding keeps the cover in the same visual spot.
-  scrollViewUnderHandle: {
-    marginTop: -SHEET_HANDLE_HEIGHT,
-  },
-  scrollContentUnderHandle: {
-    paddingTop: Spacing.md + SHEET_HANDLE_HEIGHT,
-  },
   scrollContent: {
     padding: Spacing.md,
     paddingBottom: Spacing.xl,
@@ -804,45 +843,6 @@ const styles = StyleSheet.create({
   topSection: {
     alignItems: 'center',
     marginBottom: Spacing.md,
-  },
-  coverShadow: {
-    marginBottom: Spacing.md,
-    // Shadow strength: tweak the 0.5 alpha (iOS) / elevation 8 (Android)
-    shadowColor: 'rgba(40, 20, 8, 0.5)',
-    shadowOffset: { width: 0, height: 26 },
-    shadowOpacity: 1,
-    shadowRadius: 40,
-    elevation: 8,
-  },
-  coverShell: {
-    borderTopLeftRadius: 6,
-    borderTopRightRadius: 10,
-    borderBottomRightRadius: 10,
-    borderBottomLeftRadius: 6,
-    overflow: 'hidden',
-  },
-  coverImage: {
-    width: 150,
-    height: 224,
-  },
-  spineEdge: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 9,
-  },
-  coverLoadingText: {
-    fontSize: Typography.sizes.xs,
-    textAlign: 'center',
-  },
-  thumbnailPlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  placeholderInitial: {
-    fontSize: Typography.sizes.xxxl,
-    fontFamily: getSerifFontFamily('medium'),
   },
   bookTitle: {
     fontSize: 24,

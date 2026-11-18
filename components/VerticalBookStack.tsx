@@ -11,7 +11,7 @@
  * - Edit mode support for unstacking
  */
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -21,12 +21,15 @@ import { useSpineImageUrl } from '@/hooks/useSpineImageUrl';
 import { getSpineCloth } from '@/utils/spineCloth';
 import type { Book } from '@/types';
 import { getSpineImageRef } from '@/utils/placeholderSpine';
+import { measureBookOrigin, type BookOrigin } from '@/utils/bookOrigin';
 
 interface VerticalBookStackProps {
   books: Book[]; // Books in the stack, sorted by stack_position
   stackWidth: number; // Width of each stacked book (same as bookHeight when horizontal)
   stackHeight: number; // Height of each stacked book (same as bookWidth when horizontal)
-  onBookPress: (book: Book) => void;
+  onBookPress: (book: Book, origin?: BookOrigin) => void;
+  /** Book lifted off the shelf into the 3D viewer; it is hidden in the stack */
+  hiddenBookId?: string | null;
   isEditing?: boolean;
   onUnstackBook?: (book: Book) => void;
 }
@@ -38,6 +41,7 @@ export function VerticalBookStack({
   stackWidth,
   stackHeight,
   onBookPress,
+  hiddenBookId = null,
   isEditing = false,
   onUnstackBook,
 }: VerticalBookStackProps) {
@@ -70,6 +74,7 @@ export function VerticalBookStack({
             isTopBook={isTopBook}
             isEditing={isEditing}
             onBookPress={onBookPress}
+            hidden={book.id === hiddenBookId}
             onUnstackBook={onUnstackBook}
           />
         );
@@ -87,7 +92,8 @@ interface StackedBookItemProps {
   bottomOffset: number;
   isTopBook: boolean;
   isEditing: boolean;
-  onBookPress: (book: Book) => void;
+  onBookPress: (book: Book, origin?: BookOrigin) => void;
+  hidden: boolean;
   onUnstackBook?: (book: Book) => void;
 }
 
@@ -101,9 +107,11 @@ function StackedBookItem({
   isTopBook,
   isEditing,
   onBookPress,
+  hidden,
   onUnstackBook,
 }: StackedBookItemProps) {
   const { colors } = useTheme();
+  const pressableRef = useRef<View>(null);
   const spineImageUrl = useSpineImageUrl(getSpineImageRef(book));
   const hasValidUrl = Boolean(spineImageUrl);
   const displayTitle = book.title?.trim() || 'Untitled';
@@ -113,6 +121,7 @@ function StackedBookItem({
 
   return (
     <Pressable
+      ref={pressableRef}
       style={({ pressed }) => [
         hasValidUrl ? styles.stackedBookImage : styles.stackedBook,
         {
@@ -122,8 +131,11 @@ function StackedBookItem({
           zIndex: index,
         },
         pressed && styles.pressed,
+        hidden && styles.hidden,
       ]}
-      onPress={() => onBookPress(book)}
+      onPress={() =>
+        measureBookOrigin(pressableRef.current, true, (origin) => onBookPress(book, origin))
+      }
       accessibilityRole="button"
       accessibilityLabel={`${displayTitle} by ${displayAuthor} (in stack, position ${index + 1} of ${stackCount})`}
     >
@@ -192,6 +204,9 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.9,
     transform: [{ scale: 0.98 }],
+  },
+  hidden: {
+    opacity: 0,
   },
   stackedImageContainer: {
     flex: 1,
